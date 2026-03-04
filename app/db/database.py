@@ -19,8 +19,11 @@ class Base(DeclarativeBase):
 
 
 def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
+    db = SessionLocal() # DB 세션 생성 (DB 연결)
     try:
-        yield db
+        yield db 
+        # yield를 쓰는 이유는 return과 비교하면 되는데, 
+        # return은 함수가 실행되면서 일방향으로 진행되어 종료됨. 
+        # 반면에 yield를 통해 세션을 반환하고, 받은 엔드포인트가 일을 다 끝내면 해당 함수가 이어서 실행됨.
     finally:
         db.close()
