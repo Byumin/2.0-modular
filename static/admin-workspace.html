@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>관리자 대시보드</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body data-page="admin-workspace">
+    <main class="page dashboard-page">
+      <section class="card dashboard-card">
+        <header class="dashboard-topbar">
+          <div>
+            <p class="eyebrow">ADMIN DASHBOARD</p>
+            <h1>운영 현황</h1>
+            <p class="sub">현재 운영 중인 검사와 내담자 상태를 확인하세요.</p>
+          </div>
+          <div class="row-actions top-actions">
+            <button id="logoutBtn" type="button" class="outline-btn quiet-action">로그아웃</button>
+          </div>
+        </header>
+
+        <section class="summary-grid" id="summaryCards">
+          <article class="summary-card">
+            <p class="summary-label">운영 중 검사</p>
+            <p id="sumRunningTests" class="summary-value">0</p>
+          </article>
+          <article class="summary-card">
+            <p class="summary-label">전체 내담자</p>
+            <p id="sumTotalClients" class="summary-value">0</p>
+          </article>
+          <article class="summary-card summary-card-alert">
+            <p class="summary-label">미실시 인원</p>
+            <p id="sumNotStarted" class="summary-value">0</p>
+          </article>
+          <article class="summary-card summary-card-soft">
+            <p class="summary-label">오늘 실시 수</p>
+            <p id="sumTodayAssessments" class="summary-value">0</p>
+          </article>
+        </section>
+
+        <section class="dashboard-columns">
+          <div class="dashboard-col">
+            <section class="panel-block panel-card list-panel">
+              <div class="panel-title-row">
+                <h2>생성한 검사 목록</h2>
+                <a class="icon-link" href="/admin/create" aria-label="검사 생성">+</a>
+              </div>
+              <div id="customTestsEmpty" class="info-box hidden">생성된 검사가 없습니다.</div>
+              <div class="scroll-area list-scroll">
+                <ul id="customTestsList" class="row-list"></ul>
+              </div>
+            </section>
+
+            <section id="assignmentPanel" class="panel-block panel-card">
+              <div class="panel-title-row">
+                <h2>내담자 배정</h2>
+              </div>
+              <div id="assignmentEmpty" class="info-box hidden">생성된 검사가 없습니다.</div>
+              <div class="scroll-area list-scroll">
+                <ul id="assignmentList" class="row-list assignment-list"></ul>
+              </div>
+            </section>
+          </div>
+
+          <div class="dashboard-col">
+            <section class="panel-block panel-card list-panel">
+              <div class="panel-title-row">
+                <h2>내담자 현황</h2>
+                <a class="icon-link" href="/admin/clients" aria-label="내담자 관리">+</a>
+              </div>
+              <div id="clientsEmpty" class="info-box hidden">표시할 내담자가 없습니다.</div>
+              <div class="scroll-area list-scroll">
+                <ul id="clientsOverviewList" class="row-list"></ul>
+              </div>
+            </section>
+
+            <section id="statsPanel" class="panel-block panel-card">
+              <div class="panel-title-row">
+                <h2>최근 14일 검사 실시 건수</h2>
+              </div>
+              <div id="statsEmpty" class="info-box hidden">
+                최근 14일 검사 기록이 없습니다.<br />
+                검사가 실시되면 여기서 일자별 추이를 확인할 수 있습니다.
+              </div>
+              <div id="statsChartWrap" class="chart-wrap">
+                <svg id="statsChart" viewBox="0 0 860 240" preserveAspectRatio="none"></svg>
+              </div>
+            </section>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/static/admin.js"></script>
+  </body>
+</html>

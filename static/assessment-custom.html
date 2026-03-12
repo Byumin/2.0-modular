@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>검사 실시</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body data-page="assessment-custom" class="assessment-custom-body">
+    <main class="page dashboard-page assessment-custom-page">
+      <section class="card dashboard-card assessment-shell">
+        <header class="dashboard-topbar">
+          <div>
+            <p class="eyebrow">ASSESSMENT</p>
+            <h1 id="assessmentTitle">검사 실시</h1>
+            <p id="assessmentSub" class="sub">문항에 응답 후 제출해주세요.</p>
+          </div>
+        </header>
+
+        <section class="panel-block panel-card">
+          <form id="customAssessmentForm" class="form" novalidate>
+            <section id="profileStep" class="form">
+              <article class="assessment-trust-note">
+                <p class="assessment-trust-title">안내</p>
+                <p class="assessment-trust-text">입력하신 인적정보는 검사 진행과 결과 해석 목적에만 사용됩니다.</p>
+              </article>
+              <div id="requiredProfileFieldsWrap" class="form"></div>
+              <div id="extraProfileFieldsWrap" class="form hidden"></div>
+
+              <div class="row-actions">
+                <button id="goQuestionsBtn" type="button" class="uniform-btn">다음</button>
+              </div>
+            </section>
+
+            <section id="questionStep" class="form hidden">
+              <div class="info-box">
+                <p id="profileSummaryText" class="client-result-summary-text">-</p>
+              </div>
+              <div id="customAssessmentQuestions" class="check-list"></div>
+              <div class="row-actions">
+                <button id="backToProfileBtn" type="button" class="outline-btn uniform-btn">이전</button>
+                <button id="customAssessmentSubmitBtn" type="submit" class="uniform-btn">제출</button>
+              </div>
+            </section>
+
+            <p id="customAssessmentMessage" class="message" aria-live="polite"></p>
+          </form>
+        </section>
+      </section>
+    </main>
+
+    <script src="/static/assessment-custom.js"></script>
+  </body>
+</html>
