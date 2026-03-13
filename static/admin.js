@@ -646,39 +646,52 @@ function renderScaleList(catalog, testId, subIndex, scaleListEl, selected = []) 
 function extractEligibilityText(subTestJson) {
   try {
     const parsed = JSON.parse(subTestJson || '{}');
-    const ageRange = parsed?.age_range;
-    const start = Array.isArray(ageRange?.start_inclusive) ? Number(ageRange.start_inclusive[0]) : null;
-    const endExclusive = Array.isArray(ageRange?.end_exclusive) ? Number(ageRange.end_exclusive[0]) : null;
+    const variants = Array.isArray(parsed?.sub_tests) ? parsed.sub_tests : [parsed];
+    const labels = [];
+    const seen = new Set();
 
-    let ageText = '';
-    if (Number.isFinite(start) && Number.isFinite(endExclusive)) {
-      ageText = endExclusive >= 100
-        ? `만 ${start}세 이상`
-        : `만 ${start}~${Math.max(start, endExclusive - 1)}세`;
-    }
+    variants.forEach((variant) => {
+      const ageRange = variant?.age_range;
+      const start = Array.isArray(ageRange?.start_inclusive) ? Number(ageRange.start_inclusive[0]) : null;
+      const endExclusive = Array.isArray(ageRange?.end_exclusive) ? Number(ageRange.end_exclusive[0]) : null;
 
-    const schoolRaw = parsed?.school_ages
-      || parsed?.school_age
-      || parsed?.school_grades
-      || parsed?.school_grade
-      || parsed?.grades
-      || parsed?.grade
-      || null;
-    let schoolText = '';
-    if (Array.isArray(schoolRaw) && schoolRaw.length) {
-      schoolText = schoolRaw.join(', ');
-    } else if (typeof schoolRaw === 'string' && schoolRaw.trim()) {
-      schoolText = schoolRaw.trim();
-    }
+      let ageText = '';
+      if (Number.isFinite(start) && Number.isFinite(endExclusive)) {
+        ageText = endExclusive >= 100
+          ? `만 ${start}세 이상`
+          : `만 ${start}~${Math.max(start, endExclusive - 1)}세`;
+      }
 
-    if (ageText && schoolText) {
-      return `${ageText} / ${schoolText}`;
-    }
-    if (ageText) {
-      return ageText;
-    }
-    if (schoolText) {
-      return schoolText;
+      const schoolRaw = variant?.school_ages
+        || variant?.school_age
+        || variant?.school_grades
+        || variant?.school_grade
+        || variant?.grades
+        || variant?.grade
+        || null;
+      let schoolText = '';
+      if (Array.isArray(schoolRaw) && schoolRaw.length) {
+        schoolText = schoolRaw.join(', ');
+      } else if (typeof schoolRaw === 'string' && schoolRaw.trim()) {
+        schoolText = schoolRaw.trim();
+      }
+
+      const label = ageText && schoolText
+        ? `${ageText} / ${schoolText}`
+        : (ageText || schoolText);
+      if (!label || seen.has(label)) {
+        return;
+      }
+      seen.add(label);
+      labels.push({
+        text: label,
+        ageStart: Number.isFinite(start) ? start : 9999
+      });
+    });
+
+    if (labels.length) {
+      labels.sort((a, b) => a.ageStart - b.ageStart || a.text.localeCompare(b.text));
+      return labels.map((item) => item.text).join(', ');
     }
   } catch {
     // ignore parse error
@@ -723,8 +736,8 @@ function listAllEligibilityTexts(catalog, testId, selectedScaleCodes) {
 
   (test.sub_tests || []).forEach((sub) => {
     const available = new Set((sub.scales || []).map((scale) => scale.code));
-    const isCommonRange = [...selected].every((code) => available.has(code));
-    if (!isCommonRange) {
+    const hasAnySelected = [...selected].some((code) => available.has(code));
+    if (!hasAnySelected) {
       return;
     }
     picked.push({
@@ -757,7 +770,18 @@ function renderManagedTests(listEl, emptyEl, items, catalog, selectedIds = new S
   const scaleIndex = buildScaleNameIndex(catalog);
 
   items.forEach((item) => {
-    const scaleMap = scaleIndex.get(`${item.test_id}::${item.sub_test_json}`) || new Map();
+    const scaleMap = scaleIndex.get(`${item.test_id}::${item.sub_test_json}`) || (() => {
+      const test = (catalog?.tests || []).find((it) => it.test_id === item.test_id);
+      const fallback = new Map();
+      (test?.sub_tests || []).forEach((sub) => {
+        (sub.scales || []).forEach((scale) => {
+          if (!fallback.has(scale.code)) {
+            fallback.set(scale.code, scale.name || scale.code);
+          }
+        });
+      });
+      return fallback;
+    })();
     const scales = item.selected_scale_codes
       .map((code) => `${scaleMap.get(code) || code}(${code})`)
       .join(', ');
@@ -1297,17 +1321,6 @@ async function initCreatePage() {
     return '서브';
   }
 
-  function ageStartFromSubTestJson(subTestJson) {
-    try {
-      const parsed = JSON.parse(subTestJson || '{}');
-      const ageRange = parsed?.age_range;
-      const start = Array.isArray(ageRange?.start_inclusive) ? Number(ageRange.start_inclusive[0]) : null;
-      return Number.isFinite(start) ? start : 9999;
-    } catch {
-      return 9999;
-    }
-  }
-
   function collectScalesForTests(testIds) {
     const map = new Map();
     testIds.forEach((testId) => {
@@ -1676,42 +1689,13 @@ async function initCreatePage() {
           continue;
         }
 
-        // 선택한 모든 척도가 공통으로 포함되는 서브상품만 후보로 추립니다.
-        const candidateMap = new Map();
-        selectedScales.forEach((scale) => {
-          scale.sub_products.forEach((sub) => {
-            const key = `${testId}::${sub.sub_idx}`;
-            if (!candidateMap.has(key)) {
-              candidateMap.set(key, {
-                test_id: testId,
-                sub_idx: sub.sub_idx,
-                sub_test_json: sub.sub_test_json,
-                sub_tag: sub.sub_tag,
-                count: 0
-              });
-            }
-            candidateMap.get(key).count += 1;
-          });
-        });
-
-        const candidates = [...candidateMap.values()]
-          .filter((item) => item.count === selectedScales.length)
-          .sort((a, b) => ageStartFromSubTestJson(a.sub_test_json) - ageStartFromSubTestJson(b.sub_test_json));
-
-        if (!candidates.length) {
-          throw new Error(`${testId}: 선택 척도의 공통 연령/학령 구간이 없습니다.`);
-        }
-
-        // 공통 후보가 여러 개여도 검사당 1개만 생성하도록 첫 후보만 사용합니다.
-        const picked = candidates[0];
         const selectedCodes = [...new Set(selectedScales.map((item) => item.code))];
 
         await api('/api/admin/custom-tests', {
           method: 'POST',
           body: JSON.stringify({
-            custom_test_name: selectedTests.length > 1 ? `${baseName} (${testId}-${picked.sub_tag})` : baseName,
+            custom_test_name: selectedTests.length > 1 ? `${baseName} (${testId})` : baseName,
             test_id: testId,
-            sub_test_json: picked.sub_test_json,
             selected_scale_codes: selectedCodes,
             additional_profile_fields: normalizedCustomFields
           })
@@ -1768,7 +1752,7 @@ async function initTestDetailPage() {
 
   const test = catalog.tests.find((it) => it.test_id === detail.test_id);
   const subIndex = test ? test.sub_tests.findIndex((s) => s.sub_test_json === detail.sub_test_json) : -1;
-  if (!test || subIndex < 0) {
+  if (!test) {
     msg.textContent = '원본 검사 정보를 찾을 수 없습니다.';
     msg.className = 'message error';
     detailSelectedScaleCount.textContent = '-';
@@ -1777,23 +1761,41 @@ async function initTestDetailPage() {
     return;
   }
 
-  const sub = test.sub_tests[subIndex];
   const selectedCodes = new Set(detail.selected_scale_codes || []);
-  const selectedScales = (sub.scales || []).filter((s) => selectedCodes.has(s.code));
+  const matchedSubs = subIndex >= 0
+    ? [test.sub_tests[subIndex]]
+    : (test.sub_tests || []).filter((sub) => (sub.scales || []).some((scale) => selectedCodes.has(scale.code)));
+  const selectedScaleMap = new Map();
+  matchedSubs.forEach((sub) => {
+    (sub.scales || []).forEach((scale) => {
+      if (!selectedCodes.has(scale.code)) {
+        return;
+      }
+      const current = selectedScaleMap.get(String(scale.code));
+      const nextItemIds = new Set([...(current?.item_ids || []), ...((scale.item_ids || []).map((itemId) => String(itemId)))]);
+      selectedScaleMap.set(String(scale.code), {
+        code: String(scale.code),
+        name: scale.name || scale.code,
+        item_ids: [...nextItemIds]
+      });
+    });
+  });
+  const selectedScales = [...selectedScaleMap.values()];
   const selectedItemIds = new Set();
   selectedScales.forEach((scale) => {
     (scale.item_ids || []).forEach((itemId) => selectedItemIds.add(String(itemId)));
   });
 
-  const responseOptions = Array.isArray(sub.response_options) ? sub.response_options : [];
+  const responseSub = matchedSubs.find((sub) => Array.isArray(sub.response_options) && sub.response_options.length) || matchedSubs[0] || null;
+  const responseOptions = Array.isArray(responseSub?.response_options) ? responseSub.response_options : [];
   detailSelectedScaleCount.textContent = `${selectedScales.length}개`;
   detailSelectedItemCount.textContent = `${selectedItemIds.size}문항`;
   if (responseOptions.length) {
     const pills = responseOptions
       .map((opt) => `<span class="response-pill"><span class="dot"></span>${escapeHtml(opt.label)}</span>`)
       .join('');
-    const scaleBadge = sub.response_scale_label
-      ? `<span class="response-scale">${escapeHtml(sub.response_scale_label)}</span>`
+    const scaleBadge = responseSub?.response_scale_label
+      ? `<span class="response-scale">${escapeHtml(responseSub.response_scale_label)}</span>`
       : '';
     detailResponseType.innerHTML = `${scaleBadge}${pills}`;
   } else {
@@ -1801,7 +1803,6 @@ async function initTestDetailPage() {
   }
 
   scaleList.innerHTML = '';
-  const selectedScaleMap = new Map(selectedScales.map((scale) => [String(scale.code), scale]));
   const childMap = new Map();
   selectedScales.forEach((scale) => {
     const code = String(scale.code || '');
