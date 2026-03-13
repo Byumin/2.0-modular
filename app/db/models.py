@@ -3,7 +3,7 @@ from datetime import date, datetime
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.database import Base
+from app.db.session import Base
 
 
 class AdminUser(Base):

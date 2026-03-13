@@ -148,16 +148,25 @@ function parseRequiredFromSubTestJson(subTestJson) {
   try {
     const parsed = JSON.parse(subTestJson || '{}');
     const required = [];
-    if (Array.isArray(parsed.gender) && parsed.gender.length) {
-      required.push('gender');
-    }
-    if (parsed.age_range && typeof parsed.age_range === 'object') {
-      required.push('birth_day');
-    }
-    const schoolRaw = parsed.school_ages || parsed.school_age || parsed.school_grades || parsed.school_grade || parsed.grades || parsed.grade;
-    if ((Array.isArray(schoolRaw) && schoolRaw.length) || (typeof schoolRaw === 'string' && schoolRaw.trim())) {
-      required.push('school_age');
-    }
+    const variants = Array.isArray(parsed.sub_tests) ? parsed.sub_tests : [parsed];
+    variants.forEach((variant) => {
+      if (!variant || typeof variant !== 'object') {
+        return;
+      }
+      if (!required.includes('gender') && Array.isArray(variant.gender) && variant.gender.length) {
+        required.push('gender');
+      }
+      if (!required.includes('birth_day') && variant.age_range && typeof variant.age_range === 'object') {
+        required.push('birth_day');
+      }
+      const schoolRaw = variant.school_ages || variant.school_age || variant.school_grades || variant.school_grade || variant.grades || variant.grade;
+      if (
+        !required.includes('school_age')
+        && ((Array.isArray(schoolRaw) && schoolRaw.length) || (typeof schoolRaw === 'string' && schoolRaw.trim()))
+      ) {
+        required.push('school_age');
+      }
+    });
     return required;
   } catch {
     return [];
