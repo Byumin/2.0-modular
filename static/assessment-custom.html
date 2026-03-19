@@ -19,28 +19,82 @@
 
         <section class="panel-block panel-card">
           <form id="customAssessmentForm" class="form" novalidate>
-            <section id="profileStep" class="form">
+            <section id="profileStep" class="form assessment-profile-step">
               <article class="assessment-trust-note">
                 <p class="assessment-trust-title">안내</p>
                 <p class="assessment-trust-text">입력하신 인적정보는 검사 진행과 결과 해석 목적에만 사용됩니다.</p>
               </article>
-              <div id="requiredProfileFieldsWrap" class="form"></div>
-              <div id="extraProfileFieldsWrap" class="form hidden"></div>
+              <div id="requiredProfileFieldsWrap" class="assessment-profile-required"></div>
+              <div id="extraProfileFieldsWrap" class="assessment-profile-extra hidden"></div>
 
-              <div class="row-actions">
+              <div class="row-actions assessment-profile-actions">
                 <button id="goQuestionsBtn" type="button" class="uniform-btn">다음</button>
               </div>
             </section>
 
             <section id="questionStep" class="form hidden">
-              <div class="info-box">
-                <p id="profileSummaryText" class="client-result-summary-text">-</p>
+              <div class="assessment-workspace">
+                <section class="assessment-main-column">
+                  <div class="info-box assessment-profile-summary">
+                    <p class="summary-label">인적 정보 확인</p>
+                    <p id="profileSummaryText" class="client-result-summary-text">-</p>
+                  </div>
+
+                  <div id="customAssessmentQuestions" class="assessment-question-grid"></div>
+
+                  <div class="row-actions assessment-submit-row">
+                    <button id="customAssessmentSubmitBtn" type="submit" class="uniform-btn">제출</button>
+                  </div>
+                </section>
+
+                <aside class="assessment-side-panel" aria-label="진행 및 이동 패널">
+                  <section class="assessment-side-card">
+                    <p class="assessment-side-label">진행 현황</p>
+                    <h2 id="assessmentProgressText" class="assessment-progress-title">0 / 0 문항 응답</h2>
+                    <p id="assessmentProgressMeta" class="assessment-progress-meta">모든 문항은 필수 응답입니다.</p>
+                    <div class="assessment-progress-track" aria-hidden="true">
+                      <div id="assessmentProgressFill" class="assessment-progress-fill"></div>
+                    </div>
+                  </section>
+
+                  <section class="assessment-side-card">
+                    <p class="assessment-side-label">상태 요약</p>
+                    <div class="assessment-side-status">
+                      <span id="assessmentMissingCount" class="assessment-status-badge">미응답 0</span>
+                      <p id="assessmentPageLabel" class="assessment-page-label">1 / 1 페이지</p>
+                    </div>
+                  </section>
+
+                  <section class="assessment-side-card">
+                    <p class="assessment-side-label">문항 이동</p>
+                    <div class="assessment-page-actions">
+                      <button id="questionPrevBtn" type="button" class="outline-btn uniform-btn">이전 문항</button>
+                      <button id="questionNextBtn" type="button" class="uniform-btn">다음 문항</button>
+                    </div>
+                  </section>
+
+                  <section class="assessment-side-card">
+                    <p class="assessment-side-label">응답 방식</p>
+                    <div class="assessment-view-switch" role="tablist" aria-label="문항 보기 방식 선택">
+                      <button id="viewModeCardsBtn" type="button" class="assessment-view-btn is-active" data-view-mode="cards">A안 카드형</button>
+                      <button id="viewModeStepBtn" type="button" class="assessment-view-btn" data-view-mode="step">B안 집중형</button>
+                    </div>
+                  </section>
+                </aside>
               </div>
-              <div id="customAssessmentQuestions" class="check-list"></div>
-              <div class="row-actions">
-                <button id="backToProfileBtn" type="button" class="outline-btn uniform-btn">이전</button>
-                <button id="customAssessmentSubmitBtn" type="submit" class="uniform-btn">제출</button>
-              </div>
+            </section>
+
+            <section id="completeStep" class="form hidden">
+              <section class="assessment-complete-card" aria-live="polite">
+                <div class="assessment-complete-icon" aria-hidden="true">✓</div>
+                <h2 class="assessment-complete-title">검사 실시가 완료되었습니다</h2>
+                <p class="assessment-complete-sub">응답이 정상적으로 제출되었습니다.</p>
+                <p class="assessment-complete-sub">검사에 참여해주셔서 감사합니다.</p>
+                <div class="assessment-complete-actions">
+                  <button id="completeConfirmBtn" type="button" class="uniform-btn">처음</button>
+                  <button id="completeCloseBtn" type="button" class="outline-btn uniform-btn">닫기</button>
+                </div>
+              </section>
             </section>
 
             <p id="customAssessmentMessage" class="message" aria-live="polite"></p>
