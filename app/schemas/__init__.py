@@ -4,8 +4,8 @@ from app.schemas.clients import AdminAssessmentLogIn, AdminClientIn, UpdateClien
 from app.schemas.custom_tests import (
     AdditionalProfileFieldIn,
     BulkDeleteCustomTestsIn,
-    CreateCustomTestIn,
-    CreateCustomTestWithFieldsIn,
+    CreateCustomTestBatchIn,
+    CreateCustomTestConfigIn,
     UpdateCustomTestIn,
 )
 from app.schemas.values import Gender, SchoolAge, normalize_gender_value
@@ -15,9 +15,9 @@ __all__ = [
     "SchoolAge",
     "normalize_gender_value",
     "AdminLoginIn",
-    "CreateCustomTestIn",
     "AdditionalProfileFieldIn",
-    "CreateCustomTestWithFieldsIn",
+    "CreateCustomTestConfigIn",
+    "CreateCustomTestBatchIn",
     "AdminClientIn",
     "AdminAssessmentLogIn",
     "UpdateCustomTestIn",

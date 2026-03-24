@@ -21,6 +21,47 @@
   --checkbox-size: 16px;
 }
 
+.admin-toast-root {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 3000;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.admin-toast-root.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.admin-toast {
+  min-width: 240px;
+  max-width: 420px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #d7e1ec;
+  background: #ffffff;
+  color: #2a3642;
+  font-size: 13px;
+  line-height: 1.35;
+  box-shadow: 0 12px 30px rgba(17, 26, 36, 0.16);
+}
+
+.admin-toast.is-success {
+  border-color: #cfe4d7;
+  background: #f3faf5;
+  color: #24563a;
+}
+
+.admin-toast.is-error {
+  border-color: #f0d0d0;
+  background: #fff6f6;
+  color: #8a3434;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -162,13 +203,22 @@ textarea {
   transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 
-input:focus,
+input:not([type="checkbox"]):not([type="radio"]):focus,
 select:focus,
 textarea:focus {
   outline: none;
   border-color: var(--line-strong);
   box-shadow: 0 0 0 4px rgba(20, 20, 22, 0.08);
   transform: translateY(-1px);
+}
+
+input[type="checkbox"]:focus,
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus,
+input[type="radio"]:focus-visible {
+  outline: none;
+  box-shadow: none;
+  transform: none;
 }
 
 textarea {
@@ -493,6 +543,37 @@ button:disabled:hover {
   text-align: center;
 }
 
+.row-grid-manage .cell-lines {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+}
+
+.row-grid-manage .cell-line {
+  line-height: 1.3;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.row-grid-manage .target-col .cell-line,
+.row-grid-manage .scale-col .cell-line {
+  max-width: 190px;
+  margin: 0 auto;
+}
+
+.row-grid-manage .cell-label {
+  display: inline-block;
+  min-width: 28px;
+  margin-right: 4px;
+  font-weight: 700;
+  color: #4a5a6e;
+}
+
 .row-grid-manage .row-action {
   justify-content: center;
   text-align: center;
@@ -644,10 +725,13 @@ button:disabled:hover {
   border-radius: 12px;
   padding: 10px;
   background: #fbfcff;
+  display: grid;
+  align-content: start;
+  gap: 8px;
 }
 
 .manage-root-controls {
-  margin-top: 6px;
+  margin-top: 0;
 }
 
 .manage-root-controls select {
@@ -677,6 +761,10 @@ button:disabled:hover {
 
 .root-inline input {
   flex: 1;
+}
+
+.root-inline .uniform-btn {
+  flex: 0 0 auto;
 }
 
 .root-purpose-card {
@@ -847,7 +935,23 @@ button:disabled:hover {
 .panel-title-row h2 {
   margin: 0;
   font-size: 17px;
+  line-height: 1.25;
   letter-spacing: -0.01em;
+}
+
+.manage-top-col .panel-title-row {
+  align-items: center;
+  min-height: 38px;
+  margin-bottom: 2px;
+}
+
+.manage-top-actions {
+  margin-top: 0;
+  gap: 8px;
+}
+
+.manage-top-col .form {
+  margin-top: 2px;
 }
 
 .summary-grid {
@@ -1413,7 +1517,7 @@ button:disabled:hover {
 }
 
 .create-test-modal {
-  width: min(1080px, 98vw);
+  width: min(860px, 94vw);
   max-height: calc(100vh - 24px);
   display: grid;
   gap: 10px;
@@ -1487,6 +1591,86 @@ button:disabled:hover {
 .create-test-form .check-item {
   background: #fff;
   border-color: #e2e7ef;
+}
+
+.test-scale-group {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 8px;
+}
+
+.test-scale-group-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.test-scale-group .check-item {
+  margin: 0;
+}
+
+.test-scale-parent-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+}
+
+.test-scale-parent-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.test-scale-parent-text {
+  min-width: 0;
+}
+
+.test-scale-toggle-icon {
+  display: inline-flex;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border: 1px solid #d3dce9;
+  border-radius: 999px;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  color: #4a6077;
+  background: #ffffff;
+  cursor: pointer;
+  user-select: none;
+}
+
+.test-scale-toggle-icon:hover {
+  background: #f0f5fb;
+}
+
+.test-scale-children {
+  display: grid;
+  gap: 6px;
+  padding-left: 14px;
+}
+
+.test-scale-children.hidden {
+  display: none;
+}
+
+.check-item-scale-child {
+  border-style: dashed;
+  background: #ffffff;
+}
+
+.test-scale-group.is-all-selected .check-item-scale-child {
+  opacity: 0.75;
 }
 
 .custom-field-list {
@@ -1793,12 +1977,12 @@ button:disabled:hover {
 
 .assessment-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 900px) minmax(250px, 290px);
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
   gap: 16px;
   justify-content: center;
   align-items: start;
   width: 100%;
-  max-width: 1240px;
+  max-width: 1360px;
   margin: 0 auto;
 }
 
@@ -1913,6 +2097,7 @@ button:disabled:hover {
 }
 
 .assessment-status-badge {
+  appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1924,6 +2109,13 @@ button:disabled:hover {
   font-size: 12px;
   font-weight: 700;
   border: 1px solid #f0d4c0;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.assessment-status-badge:disabled {
+  cursor: default;
 }
 
 .assessment-status-badge.is-complete {
@@ -2318,6 +2510,137 @@ button:disabled:hover {
   font-weight: 600;
 }
 
+.assessment-option-label.is-empty {
+  color: transparent;
+  user-select: none;
+}
+
+.assessment-bipolar-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) minmax(260px, 2fr) minmax(120px, 1.2fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.assessment-bipolar-anchor {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #3b4a59;
+}
+
+.assessment-bipolar-anchor--left {
+  text-align: right;
+}
+
+.assessment-bipolar-anchor--right {
+  text-align: left;
+}
+
+.assessment-bipolar-anchor.is-hidden {
+  visibility: hidden;
+}
+
+.assessment-bipolar-scale {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(34px, 1fr));
+  gap: 8px;
+  align-items: center;
+}
+
+.assessment-option-card--bipolar {
+  min-height: 44px;
+  padding: 6px;
+  justify-items: center;
+  align-items: center;
+}
+
+.assessment-option-card--bipolar .assessment-option-value {
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+}
+
+.assessment-question-card--labels-only .assessment-question-head {
+  margin-bottom: 2px;
+}
+
+.assessment-question-card--labels-only .assessment-bipolar-anchor {
+  font-size: 13px;
+}
+
+.assessment-question-card--matrix .assessment-question-text {
+  margin-bottom: 10px;
+}
+
+.assessment-matrix-table {
+  display: grid;
+  gap: 8px;
+}
+
+.assessment-matrix-header {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.4fr) minmax(360px, 2fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.assessment-matrix-header-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(34px, 1fr));
+  gap: 8px;
+  align-items: center;
+}
+
+.assessment-matrix-header-cell {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.assessment-matrix-body {
+  display: grid;
+  gap: 8px;
+}
+
+.assessment-matrix-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.4fr) minmax(360px, 2fr);
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid #e1e8ef;
+  border-radius: 10px;
+}
+
+.assessment-matrix-row-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #2a3540;
+}
+
+.assessment-matrix-row-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(34px, 1fr));
+  gap: 8px;
+  align-items: center;
+}
+
+.assessment-option-card--matrix {
+  min-height: 42px;
+  padding: 6px;
+  justify-items: center;
+  align-items: center;
+}
+
+.assessment-option-card--matrix .assessment-option-value {
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+}
+
 .assessment-text-answer {
   min-height: 50px;
   font-size: 14px;
@@ -2336,6 +2659,18 @@ button:disabled:hover {
   padding: 0 18px;
   font-size: 13px;
   font-weight: 700;
+}
+
+.assessment-submit-side-card #customAssessmentSubmitBtn {
+  width: 100%;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.assessment-submit-side-card #customAssessmentSubmitBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .assessment-profile-actions {

@@ -5,7 +5,7 @@ def fetch_parent_scale_rows_by_test(test_id: str):
     with engine.connect() as conn:
         return conn.exec_driver_sql(
             """
-            SELECT sub_test_json, scale_struct
+            SELECT test_id, sub_test_json, scale_struct
             FROM parent_scale
             WHERE test_id = ?
             ORDER BY sub_test_json
@@ -36,7 +36,8 @@ def fetch_parent_catalog_rows():
                 i.item_json AS item_json,
                 i.meta_json AS item_meta_json,
                 s.scale_struct,
-                c.item_template AS item_template
+                c.item_template AS item_template,
+                c.render_rules_json AS render_rules_json
             FROM parent_item i
             JOIN parent_scale s
               ON s.test_id = i.test_id
@@ -48,7 +49,7 @@ def fetch_parent_catalog_rows():
             """
         ).fetchall()
 
-
+# test_id와 sub_test_json에 해당하는 item_json, meta_json, scale_struct, item_template을 가져오는 함수
 def fetch_parent_item_bundle(test_id: str, sub_test_json: str):
     with engine.connect() as conn:
         return conn.exec_driver_sql(
@@ -57,7 +58,8 @@ def fetch_parent_item_bundle(test_id: str, sub_test_json: str):
                 i.item_json AS item_json,
                 i.meta_json AS item_meta_json,
                 s.scale_struct AS scale_struct,
-                c.item_template AS item_template
+                c.item_template AS item_template,
+                c.render_rules_json AS render_rules_json
             FROM parent_item i
             JOIN parent_scale s
               ON s.test_id = i.test_id

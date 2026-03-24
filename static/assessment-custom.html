@@ -13,7 +13,7 @@
           <div>
             <p class="eyebrow">ASSESSMENT</p>
             <h1 id="assessmentTitle">검사 실시</h1>
-            <p id="assessmentSub" class="sub">문항에 응답 후 제출해주세요.</p>
+            <p id="assessmentSub" class="sub"></p>
           </div>
         </header>
 
@@ -41,10 +41,6 @@
                   </div>
 
                   <div id="customAssessmentQuestions" class="assessment-question-grid"></div>
-
-                  <div class="row-actions assessment-submit-row">
-                    <button id="customAssessmentSubmitBtn" type="submit" class="uniform-btn">제출</button>
-                  </div>
                 </section>
 
                 <aside class="assessment-side-panel" aria-label="진행 및 이동 패널">
@@ -60,7 +56,7 @@
                   <section class="assessment-side-card">
                     <p class="assessment-side-label">상태 요약</p>
                     <div class="assessment-side-status">
-                      <span id="assessmentMissingCount" class="assessment-status-badge">미응답 0</span>
+                      <button id="assessmentMissingCount" type="button" class="assessment-status-badge">미응답 0</button>
                       <p id="assessmentPageLabel" class="assessment-page-label">1 / 1 페이지</p>
                     </div>
                   </section>
@@ -79,6 +75,11 @@
                       <button id="viewModeCardsBtn" type="button" class="assessment-view-btn is-active" data-view-mode="cards">A안 카드형</button>
                       <button id="viewModeStepBtn" type="button" class="assessment-view-btn" data-view-mode="step">B안 집중형</button>
                     </div>
+                  </section>
+
+                  <section class="assessment-side-card assessment-submit-side-card">
+                    <p class="assessment-side-label">최종 제출</p>
+                    <button id="customAssessmentSubmitBtn" type="submit" class="uniform-btn" disabled>제출</button>
                   </section>
                 </aside>
               </div>
