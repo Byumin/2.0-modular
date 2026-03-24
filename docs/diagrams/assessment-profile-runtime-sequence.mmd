@@ -1,0 +1,65 @@
+sequenceDiagram
+    autonumber
+    actor U as User(실시자)
+    participant B as Browser\nstatic/assessment-custom.js
+    participant R1 as Router\nassessment_link_router
+    participant S1 as Service\nassessment_links
+    participant CR as Repo\ncustom_test_repository
+    participant CL as Service\nclients
+    participant CLR as Repo\nclient_repository
+    participant PR as Repo\nparent_test_repository
+
+    rect rgb(240,248,255)
+    Note over U,B: 1) 페이지 진입 + 인적사항 입력 화면 준비
+    U->>B: /assessment/custom/{access_token} 진입
+    B->>R1: GET /api/assessment-links/{token}
+    R1->>S1: get_custom_test_by_access_link(db, token)
+    S1->>CR: get_active_access_link_by_token(token)
+    S1->>CR: get_custom_test_by_id_and_admin(custom_test_id, admin_user_id)
+    S1->>S1: build_custom_assessment_profile_payload(custom_test)
+    S1-->>B: required_profile_fields + additional_profile_fields + test_configs
+    B-->>U: 인적사항 입력 폼 렌더
+    end
+
+    rect rgb(245,255,245)
+    Note over U,B: 2) 인적정보 제출 -> 실시 구간 판별 -> 문항/템플릿 로드
+    U->>B: 다음 버튼 클릭(프로필 입력 완료)
+    B->>R1: POST /api/assessment-links/{token}/validate-profile\n{ profile }
+    R1->>S1: validate_custom_test_profile_by_access_link(db, token, profile)
+
+    S1->>CR: get_active_access_link_by_token(token)
+    S1->>CR: get_custom_test_by_id_and_admin(link.admin_custom_test_id, link.admin_user_id)
+
+    S1->>CL: find_assigned_client_for_profile(admin_user_id, custom_test_id, profile)
+    CL->>CLR: get_assigned_clients_for_profile(admin_user_id, custom_test_id)
+    CLR-->>CL: assigned_clients[]
+    CL-->>S1: (matched_client, error_message)
+
+    alt 배정 불일치
+        S1-->>R1: HTTP 403(detail=error_message)
+        R1-->>B: 403
+        B-->>U: 배정 불일치 메시지 표시
+    else 배정 일치
+        S1->>S1: build_custom_assessment_question_payload(custom_test, profile)
+        S1->>S1: load_custom_test_configs(custom_test)
+        S1->>S1: _resolve_active_variants(test_configs, profile)
+        S1->>S1: _select_sub_test_variant_for_profile(variants, profile)
+        S1->>S1: _profile_matches_sub_test(profile, sub_test_json)
+
+        loop 선택된 variant마다
+            S1->>PR: fetch_parent_item_bundle(test_id, sub_test_json)
+            PR-->>S1: item_json + scale_struct + item_template + render_rules_json
+            S1->>S1: _load_question_bundle(...)
+            S1->>S1: _parse_item_response_options(item_template)
+            S1->>S1: _parse_render_rules(render_rules_json)
+            S1->>S1: _build_variant_items_and_scales(...)
+            S1->>S1: _append_items_as_render_parts(...)
+        end
+
+        S1-->>R1: { assessment_payload: { parts, items, selected_sub_tests, response_options... } }
+        R1-->>B: 200 OK
+        B->>B: applyAssessmentPayload(payload)
+        B->>B: renderQuestionCards(...)
+        B-->>U: 해당 실시 구간 문항/템플릿으로 검사 화면 표시
+    end
+    end

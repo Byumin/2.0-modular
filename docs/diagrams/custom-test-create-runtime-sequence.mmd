@@ -1,0 +1,53 @@
+sequenceDiagram
+    autonumber
+    actor Admin as Admin User
+    participant UI as Browser\nstatic/admin.js
+    participant Router as Router\ncustom_test_router
+    participant Service as Service\ncustom_tests
+    participant ParentRepo as Repo\nparent_test_repository
+    participant Common as Service\ncommon
+    participant DB as DB\nchild_test table
+
+    rect rgb(240,248,255)
+    Note over Admin,UI: 1) 생성 화면에서 payload 조립
+    Admin->>UI: 신규 검사 생성 폼 입력\n(검사명/검사 선택/척도/추가 인적사항)
+    UI->>UI: sanitizeAndValidateCustomFields()
+    UI->>UI: selectedTests + selectedScaleKeys -> test_configs 생성
+    UI->>Router: POST /api/admin/custom-tests\n{ custom_test_name, test_configs, additional_profile_fields }
+    end
+
+    rect rgb(245,255,245)
+    Note over Router,Service: 2) 백엔드 생성 처리
+    Router->>Router: CreateCustomTestBatchIn 검증
+    Router->>Service: create_admin_custom_test_batch(db, admin_session, payload)
+
+    Service->>Service: get_current_admin(db, admin_session)
+    Service->>Common: normalize_additional_profile_fields(payload.additional_profile_fields)
+    Common-->>Service: normalized_fields
+
+    loop payload.test_configs 각 항목
+        Service->>Service: _resolve_sub_test_variant_configs(test_id, selected_scale_codes)
+        Service->>ParentRepo: fetch_parent_scale_rows_by_test(test_id)
+        ParentRepo-->>Service: rows(test_id, sub_test_json, scale_struct)
+        Service->>Service: scale_struct 파싱 + variant 후보 생성
+    end
+
+    Service->>Service: selected_scales_struct_json 구성
+    Service->>Service: _build_merged_sub_test_json(flattened_variants)
+    Service->>Common: serialize_additional_profile_payload(normalized_fields)
+    Common-->>Service: additional_profile_fields_json
+
+    Service->>DB: INSERT child_test(AdminCustomTest)
+    Service->>Service: db.flush()
+    Service->>Service: commit(db)
+    Service-->>Router: { message, created_count, ids }
+    Router-->>UI: 200 OK
+    end
+
+    rect rgb(255,250,240)
+    Note over UI,Admin: 3) 생성 후 후속 동작
+    UI->>UI: form reset + modal close
+    UI->>Router: GET /api/admin/custom-tests/management (refreshManagedTests)
+    Router-->>UI: 최신 목록
+    UI-->>Admin: 생성된 검사 목록 갱신
+    end
