@@ -1,0 +1,29 @@
+flowchart TD
+    A[POST custom-tests payload] --> B[create_admin_custom_test_batch]
+    B --> C[get_current_admin]
+    C --> D[normalize_additional_profile_fields]
+    D --> E{정규화 길이 == 입력 길이?}
+    E -- 아니오 --> E1[400 Invalid additional profile fields]
+    E -- 예 --> F[resolved_test_configs/flattened_variants 초기화]
+
+    F --> G{payload.test_configs 반복}
+    G --> H[_resolve_sub_test_variant_configs]
+    H --> I[fetch_parent_scale_rows_by_test]
+    I --> J{rows 존재?}
+    J -- 아니오 --> J1[404 선택한 검사 데이터 없음]
+    J -- 예 --> K[scale_struct 파싱 + candidate 생성]
+    K --> L{candidate 존재?}
+    L -- 아니오 --> L1[400 사용 가능한 문항 구간 없음]
+    L -- 예 --> M[variant 정렬 후 반환]
+    M --> N[resolved_test_configs append\nflattened_variants extend]
+    N --> G
+
+    G --> O[sys_test_ids 집합 생성]
+    O --> P[selected_scales_struct_json 구성]
+    P --> Q[_build_merged_sub_test_json]
+    Q --> R[serialize_additional_profile_payload]
+    R --> S[AdminCustomTest row 생성]
+    S --> T[db.add]
+    T --> U[db.flush]
+    U --> V[commit]
+    V --> W[response: message + created_count + ids]
