@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Runtime Flow Diagrams</title>
+    <style>
+      :root {
+        --bg: #f5f8fc;
+        --card: #ffffff;
+        --text: #1f2937;
+        --muted: #6b7280;
+        --line: #d9e1ec;
+      }
+      body {
+        margin: 0;
+        font-family: "Noto Sans KR", "Pretendard", sans-serif;
+        background: linear-gradient(120deg, #eef5ff 0%, #f7fbff 100%);
+        color: var(--text);
+      }
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 28px;
+      }
+      p {
+        margin: 0 0 20px;
+        color: var(--muted);
+      }
+      .panel {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+        margin-bottom: 18px;
+      }
+      .panel h2 {
+        margin: 0 0 10px;
+        font-size: 18px;
+      }
+      .panel a {
+        color: #1d4ed8;
+        text-decoration: none;
+      }
+      .panel a:hover {
+        text-decoration: underline;
+      }
+      img {
+        width: 100%;
+        height: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Runtime Flow Diagrams</h1>
+      <p>커스텀 검사 생성과 인적사항 기반 문항 로딩 흐름을 정리한 다이어그램 모음입니다.</p>
+
+      <section class="panel">
+        <h2>1) Runtime Sequence</h2>
+        <p>
+          원본: <a href="./assessment-profile-runtime-sequence.mmd">assessment-profile-runtime-sequence.mmd</a>
+          | SVG: <a href="./assessment-profile-runtime-sequence.svg">assessment-profile-runtime-sequence.svg</a>
+        </p>
+        <img src="./assessment-profile-runtime-sequence.svg" alt="Runtime sequence diagram" />
+      </section>
+
+      <section class="panel">
+        <h2>2) Validate Profile Flow</h2>
+        <p>
+          원본: <a href="./assessment-profile-validate-flow.mmd">assessment-profile-validate-flow.mmd</a>
+          | SVG: <a href="./assessment-profile-validate-flow.svg">assessment-profile-validate-flow.svg</a>
+        </p>
+        <img src="./assessment-profile-validate-flow.svg" alt="Validate profile flow diagram" />
+      </section>
+
+      <section class="panel">
+        <h2>3) Custom Test Create Sequence</h2>
+        <p>
+          원본: <a href="./custom-test-create-runtime-sequence.mmd">custom-test-create-runtime-sequence.mmd</a>
+          | SVG: <a href="./custom-test-create-runtime-sequence.svg">custom-test-create-runtime-sequence.svg</a>
+        </p>
+        <img src="./custom-test-create-runtime-sequence.svg" alt="Custom test create runtime sequence diagram" />
+      </section>
+
+      <section class="panel">
+        <h2>4) Custom Test Create Service Flow</h2>
+        <p>
+          원본: <a href="./custom-test-create-service-flow.mmd">custom-test-create-service-flow.mmd</a>
+          | SVG: <a href="./custom-test-create-service-flow.svg">custom-test-create-service-flow.svg</a>
+        </p>
+        <img src="./custom-test-create-service-flow.svg" alt="Custom test create service flow diagram" />
+      </section>
+    </main>
+  </body>
+</html>

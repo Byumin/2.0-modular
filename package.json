@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "diagram:render:sequence": "mmdc -i docs/diagrams/assessment-profile-runtime-sequence.mmd -o docs/diagrams/assessment-profile-runtime-sequence.svg -b transparent",
+    "diagram:render:flow": "mmdc -i docs/diagrams/assessment-profile-validate-flow.mmd -o docs/diagrams/assessment-profile-validate-flow.svg -b transparent",
+    "diagram:render:create-sequence": "mmdc -i docs/diagrams/custom-test-create-runtime-sequence.mmd -o docs/diagrams/custom-test-create-runtime-sequence.svg -b transparent",
+    "diagram:render:create-flow": "mmdc -i docs/diagrams/custom-test-create-service-flow.mmd -o docs/diagrams/custom-test-create-service-flow.svg -b transparent",
+    "diagram:render": "npm run diagram:render:sequence && npm run diagram:render:flow && npm run diagram:render:create-sequence && npm run diagram:render:create-flow"
   },
   "repository": {
     "type": "git",
@@ -18,6 +23,7 @@
   },
   "homepage": "https://github.com/Byumin/2.0-modular#readme",
   "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.12.0",
     "playwright": "^1.58.2"
   }
 }

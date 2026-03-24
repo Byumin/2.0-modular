@@ -1,0 +1,38 @@
+flowchart TD
+    A[사용자 입력 profile] --> B[POST validate-profile API]
+    B --> C[validate_custom_test_profile_by_access_link]
+
+    C --> D[get_active_access_link_by_token]
+    D --> E{link 존재?}
+    E -- 아니오 --> E1[404 유효하지 않은 검사 URL]
+    E -- 예 --> F[get_custom_test_by_id_and_admin]
+
+    F --> G{custom_test 존재?}
+    G -- 아니오 --> G1[404 검사를 찾을 수 없음]
+    G -- 예 --> H[find_assigned_client_for_profile]
+
+    H --> H1[get_assigned_clients_for_profile]
+    H1 --> I{배정된 내담자 + 입력 profile 일치?}
+    I -- 아니오 --> I1[403 배정 불일치]
+    I -- 예 --> J[build_custom_assessment_question_payload]
+
+    J --> K[load_custom_test_configs]
+    K --> L[_resolve_active_variants]
+    L --> M[_select_sub_test_variant_for_profile]
+    M --> N[_profile_matches_sub_test]
+    N --> O{일치 variant 존재?}
+    O -- 아니오 --> O1[400 일치 구간 없음]
+    O -- 예 --> P[for each variant: _load_question_bundle]
+
+    P --> Q[fetch_parent_item_bundle from parent tables]
+    Q --> R[_parse_item_response_options]
+    R --> S[_parse_render_rules]
+    S --> T[_build_variant_items_and_scales]
+    T --> U[_append_items_as_render_parts]
+    U --> V{items 존재?}
+    V -- 아니오 --> V1[400 표시할 문항 없음]
+    V -- 예 --> W[assessment_payload 반환]
+
+    W --> X[프론트 applyAssessmentPayload]
+    X --> Y[프론트 renderQuestionCards]
+    Y --> Z[실시 구간에 맞는 문항/템플릿 화면 표시]
