@@ -11,7 +11,7 @@ from app.services.admin.assessment_links import (
 
 router = APIRouter()
 
-
+# URL 인적사항 화면 렌더용 라우터
 @router.get("/api/assessment-links/{access_token}")
 def get_assessment_link_payload(
     access_token: str,

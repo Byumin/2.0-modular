@@ -21,9 +21,10 @@ from app.services.admin.common import (
     _derive_required_profile_fields,
     _normalize_item_map,
     _parse_response_options,
-    extract_sub_test_variant_configs,
-    extract_sub_test_variants,
+    flatten_custom_test_variant_configs,
+    load_custom_test_configs,
     normalize_additional_profile_fields,
+    summarize_custom_test_ids,
 )
 
 
@@ -108,33 +109,16 @@ def _profile_matches_sub_test(profile: dict[str, Any], sub_test_json: str) -> bo
 
     return True
 
+def _select_sub_test_variant_for_profile(variants: list[dict], profile: dict[str, Any]) -> dict:
+    if not variants:
+        raise HTTPException(status_code=400, detail="실시 가능한 검사 구간이 없습니다.")
 
-def _resolve_sub_test_variants(custom_test_row: AdminCustomTest) -> list[str]:
-    raw_payload = json.loads(getattr(custom_test_row, "additional_profile_fields_json", "[]") or "[]")
-    variant_configs = extract_sub_test_variant_configs(raw_payload)
-    if variant_configs:
-        return [item["sub_test_json"] for item in variant_configs]
-    variants = extract_sub_test_variants(raw_payload)
-    return variants or [custom_test_row.sub_test_json]
-
-
-def _resolve_sub_test_variant_configs(custom_test_row: AdminCustomTest) -> list[dict]:
-    raw_payload = json.loads(getattr(custom_test_row, "additional_profile_fields_json", "[]") or "[]")
-    variant_configs = extract_sub_test_variant_configs(raw_payload)
-    if variant_configs:
-        return variant_configs
-    return [
-        {
-            "sub_test_json": custom_test_row.sub_test_json,
-            "available_scale_codes": [],
-            "selected_scale_codes": [str(x) for x in json.loads(custom_test_row.selected_scales_json)],
-        }
-    ]
-
-
-def _select_sub_test_json_for_profile(custom_test_row: AdminCustomTest, profile: dict[str, Any]) -> str:
-    variants = [item["sub_test_json"] for item in _resolve_sub_test_variant_configs(custom_test_row)]
-    matches = [sub_test_json for sub_test_json in variants if _profile_matches_sub_test(profile, sub_test_json)]
+    # variants가 리스트 안에 딕셔너리들이 있는 형태
+    # 리스트의 딕셔너리 원소들을 sub_test_json을 키로 하고 딕셔너리 원소 전체를 값으로 하는 딕셔너리로 변환
+    variant_by_json = {item["sub_test_json"]: item for item in variants if item.get("sub_test_json")}
+    variant_jsons = list(variant_by_json.keys()) # sub_test_json 문자열들의 리스트
+    # sub_test_json 문자열들 중에서 프로필과 일치하는 것들만 뽑아서 리스트로 만듦
+    matches = [sub_test_json for sub_test_json in variant_jsons if _profile_matches_sub_test(profile, sub_test_json)]
     if not matches:
         raise HTTPException(status_code=400, detail="입력한 인적정보와 일치하는 검사 구간이 없습니다.")
 
@@ -150,86 +134,451 @@ def _select_sub_test_json_for_profile(custom_test_row: AdminCustomTest, profile:
         return 9999
 
     matches.sort(key=lambda value: (age_start_from_json(value), value))
-    return matches[0]
+    return variant_by_json[matches[0]]
 
-
-def _required_profile_fields_for_variants(custom_test_row: AdminCustomTest) -> list[str]:
+# 여러 sub_test_json을 포함하는 test_configs에서 필요한 인적사항 필드들을 추출해서 리스트로 반환
+def _required_profile_fields_for_variants(test_configs: list[dict]) -> list[str]:
     required: list[str] = []
-    for sub_test_json in [item["sub_test_json"] for item in _resolve_sub_test_variant_configs(custom_test_row)]:
+    variant_configs = flatten_custom_test_variant_configs(test_configs)
+    for sub_test_json in [item["sub_test_json"] for item in variant_configs]:
         for key in _derive_required_profile_fields(sub_test_json):
             if key not in required:
                 required.append(key)
     return required
 
 
-def build_custom_assessment_payload(custom_test_row: AdminCustomTest, profile: dict[str, Any] | None = None) -> dict:
-    variant_configs = _resolve_sub_test_variant_configs(custom_test_row)
-    selected_sub_test_json = (
-        _select_sub_test_json_for_profile(custom_test_row, profile or {})
-        if profile
-        else custom_test_row.sub_test_json
-    )
-    active_variant = next(
-        (item for item in variant_configs if item["sub_test_json"] == selected_sub_test_json),
-        None,
-    )
-    row = fetch_parent_item_bundle(custom_test_row.test_id, selected_sub_test_json)
+def _build_custom_assessment_profile_meta(custom_test_row: AdminCustomTest, test_configs: list[dict]) -> dict:
+    test_ids, test_id_text = summarize_custom_test_ids(test_configs, custom_test_row.test_id)
+    raw_additional_payload = json.loads(getattr(custom_test_row, "additional_profile_fields_json", "[]") or "[]")
+    additional_profile_fields = normalize_additional_profile_fields(raw_additional_payload)
+    return {
+        "custom_test_id": custom_test_row.id,
+        "custom_test_name": custom_test_row.custom_test_name,
+        "test_id": test_id_text or custom_test_row.test_id,
+        "test_ids": test_ids,
+        "display_name": custom_test_row.custom_test_name,
+        "required_profile_fields": _required_profile_fields_for_variants(test_configs),
+        "additional_profile_fields": additional_profile_fields,
+        "sub_test_variant_count": len(flatten_custom_test_variant_configs(test_configs)),
+        "test_configs": test_configs,
+    }
+
+# custom_test_row 정규화 및 이상한 경우 오류 처리
+def build_custom_assessment_profile_payload(custom_test_row: AdminCustomTest) -> dict:
+    test_configs = load_custom_test_configs(custom_test_row)
+    if not test_configs:
+        raise HTTPException(status_code=404, detail="검사 구성 정보를 찾을 수 없습니다.")
+    return _build_custom_assessment_profile_meta(custom_test_row, test_configs)
+
+def _resolve_active_variants(test_configs: list[dict], profile: dict[str, Any]) -> list[dict]:
+    resolved: list[dict] = []
+    for config in test_configs:
+        test_id = str(config.get("test_id", "")).strip()
+        variants = config.get("sub_test_variants", [])
+        if not test_id or not variants:
+            continue
+        active_variant = _select_sub_test_variant_for_profile(variants, profile or {})
+        selected_sub_test_json = str(active_variant.get("sub_test_json", "")).strip()
+        if not selected_sub_test_json:
+            continue
+        resolved.append(
+            {
+                "test_id": test_id,
+                "sub_test_json": selected_sub_test_json,
+                "selected_scale_codes": [str(x) for x in active_variant.get("selected_scale_codes", [])],
+            }
+        )
+    return resolved
+
+
+def _load_question_bundle(test_id: str, sub_test_json: str) -> dict:
+    row = fetch_parent_item_bundle(test_id, sub_test_json)
     if row is None:
         raise HTTPException(status_code=404, detail="검사 원본 데이터를 찾을 수 없습니다.")
 
     item_json = json.loads(row.item_json)
-    item_meta = json.loads(row.item_meta_json)
+    try:
+        item_meta = json.loads(row.item_meta_json)
+    except json.JSONDecodeError:
+        item_meta = {}
+    if not isinstance(item_meta, dict):
+        item_meta = {}
     scale_struct = json.loads(row.scale_struct)
-    item_map = _normalize_item_map(item_json)
-    selected_codes = (
-        {str(x) for x in active_variant.get("selected_scale_codes", [])}
-        if active_variant is not None
-        else {str(x) for x in json.loads(custom_test_row.selected_scales_json)}
-    )
+    if not isinstance(scale_struct, dict):
+        raise HTTPException(status_code=404, detail="척도 구조 데이터를 찾을 수 없습니다.")
+    item_map, matrix_row_meta = _build_item_text_and_matrix_meta(item_json)
+    response_options = _parse_response_options(row.item_template)
+    item_response_options_map = _parse_item_response_options(row.item_template)
+    render_rules = _parse_render_rules(getattr(row, "render_rules_json", "[]"))
+    if not response_options and item_response_options_map:
+        first_key = next(iter(item_response_options_map.keys()), "")
+        response_options = item_response_options_map.get(first_key, [])
+    return {
+        "item_map": item_map,
+        "matrix_row_meta": matrix_row_meta,
+        "item_meta": item_meta,
+        "scale_struct": scale_struct,
+        "response_options": response_options,
+        "item_response_options_map": item_response_options_map,
+        "render_rules": render_rules,
+        "response_key": json.dumps(response_options, ensure_ascii=False, sort_keys=True),
+    }
 
-    selected_scales = []
-    selected_item_ids: set[str] = set()
-    for code, value in scale_struct.items():
-        if str(code) not in selected_codes:
+
+def _build_item_text_and_matrix_meta(item_json: Any) -> tuple[dict[str, str], dict[str, dict]]:
+    item_map: dict[str, str] = {}
+    matrix_row_meta: dict[str, dict] = {}
+
+    if isinstance(item_json, dict):
+        matrix_group_order = 0
+        for outer_key, outer_value in item_json.items():
+            outer_key_text = str(outer_key)
+            if isinstance(outer_value, dict):
+                matrix_group_order += 1
+                row_keys = sorted(
+                    [str(k) for k in outer_value.keys()],
+                    key=lambda x: (0, int(x)) if x.isdigit() else (1, x),
+                )
+                for row_idx, row_key in enumerate(row_keys, start=1):
+                    row_text = str(outer_value.get(row_key, "") or "").strip()
+                    if not row_text:
+                        continue
+                    item_map[row_key] = row_text
+                    matrix_row_meta[row_key] = {
+                        "group_key": outer_key_text,
+                        "group_prompt": outer_key_text,
+                        "group_order": matrix_group_order,
+                        "row_order": row_idx,
+                    }
+                continue
+            value_text = str(outer_value or "").strip()
+            if not value_text:
+                continue
+            item_map[outer_key_text] = value_text
+        return item_map, matrix_row_meta
+
+    return _normalize_item_map(item_json), matrix_row_meta
+
+
+def _parse_item_response_options(item_template: str | None) -> dict[str, list[dict]]:
+    if not item_template:
+        return {}
+    try:
+        parsed = json.loads(item_template)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+
+    item_options: dict[str, list[dict]] = {}
+    for item_id, raw_options in parsed.items():
+        if not isinstance(raw_options, dict):
+            continue
+        options: list[dict] = []
+        for raw_value, raw_label in raw_options.items():
+            value = str(raw_value).strip()
+            if not value:
+                continue
+            options.append(
+                {
+                    "value": value,
+                    "label": str(raw_label or "").strip(),
+                }
+            )
+        if not options:
+            continue
+        options.sort(key=lambda x: (0, int(x["value"])) if x["value"].isdigit() else (1, x["value"]))
+        item_options[str(item_id)] = options
+    return item_options
+
+
+def _parse_render_rules(render_rules_json: str | None) -> list[dict]:
+    if not render_rules_json:
+        return []
+    try:
+        parsed = json.loads(render_rules_json)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+
+    normalized: list[dict] = []
+    for raw in parsed:
+        if not isinstance(raw, dict):
+            continue
+        render_type = str(raw.get("render_type", "")).strip()
+        if not render_type:
+            continue
+        try:
+            start_item_id = int(str(raw.get("start_item_id")))
+            end_item_id = int(str(raw.get("end_item_id")))
+        except (TypeError, ValueError):
+            continue
+        if start_item_id > end_item_id:
+            start_item_id, end_item_id = end_item_id, start_item_id
+        config = raw.get("config")
+        normalized.append(
+            {
+                "start_item_id": start_item_id,
+                "end_item_id": end_item_id,
+                "render_type": render_type,
+                "config": config if isinstance(config, dict) else {},
+            }
+        )
+    return normalized
+
+
+def _resolve_render_rule_for_item(item_id: str, render_rules: list[dict]) -> dict | None:
+    try:
+        numeric_item_id = int(str(item_id))
+    except (TypeError, ValueError):
+        return None
+    for rule in render_rules:
+        if int(rule["start_item_id"]) <= numeric_item_id <= int(rule["end_item_id"]):
+            return rule
+    return None
+
+
+def _infer_response_style(options: list[dict]) -> str:
+    if not options:
+        return "free_text"
+    non_empty = sum(1 for option in options if str(option.get("label", "")).strip())
+    blank = len(options) - non_empty
+    if len(options) >= 5 and non_empty >= 2 and blank > 0:
+        return "bipolar"
+    return "likert"
+
+
+def _collect_choice_score_item_ids(raw: Any) -> set[str]:
+    item_ids: set[str] = set()
+    if isinstance(raw, dict):
+        choice_score = raw.get("choice_score")
+        if isinstance(choice_score, dict):
+            item_ids.update(str(item_id) for item_id in choice_score.keys())
+        for key, child in raw.items():
+            if key == "choice_score":
+                continue
+            item_ids.update(_collect_choice_score_item_ids(child))
+    elif isinstance(raw, list):
+        for child in raw:
+            item_ids.update(_collect_choice_score_item_ids(child))
+    return item_ids
+
+
+def _resolve_scale_item_ids(scale_struct: dict, selected_codes: set[str]) -> dict[str, list[str]]:
+    resolved: dict[str, list[str]] = {}
+    for code, raw_scale in scale_struct.items():
+        code_text = str(code)
+        if selected_codes and code_text not in selected_codes:
             continue
         item_ids = sorted(
-            [str(item_id) for item_id in value.get("choice_score", {}).keys()],
+            _collect_choice_score_item_ids(raw_scale),
             key=lambda x: (0, int(x)) if x.isdigit() else (1, x),
         )
+        if item_ids:
+            resolved[code_text] = item_ids
+    return resolved
+
+
+def _resolve_item_render_type(item: dict[str, Any]) -> str:
+    render_type = str(item.get("render_type", "")).strip()
+    if render_type:
+        return render_type
+    if str(item.get("response_style", "")).strip() == "bipolar":
+        return "bipolar"
+    return "likert"
+
+
+def _build_variant_items_and_scales(
+    *,
+    test_id: str,
+    sub_test_json: str,
+    selected_scale_codes: list[str],
+    bundle: dict,
+    default_display_name: str,
+) -> tuple[list[dict], list[dict], dict]:
+    selected_codes = {str(code) for code in selected_scale_codes}
+    item_map = bundle["item_map"]
+    scale_struct = bundle["scale_struct"]
+    item_response_options_map: dict[str, list[dict]] = bundle.get("item_response_options_map", {})
+    matrix_row_meta: dict[str, dict] = bundle.get("matrix_row_meta", {})
+    render_rules: list[dict] = bundle.get("render_rules", [])
+    display_name = bundle["item_meta"].get("name", default_display_name)
+
+    resolved_scale_item_ids = _resolve_scale_item_ids(scale_struct, selected_codes)
+    selected_item_ids: set[str] = set()
+    selected_scales: list[dict] = []
+    for code, item_ids in resolved_scale_item_ids.items():
+        raw_scale = scale_struct.get(code, {}) if isinstance(scale_struct, dict) else {}
         selected_item_ids.update(item_ids)
         selected_scales.append(
             {
-                "code": str(code),
-                "name": str(value.get("name", code)),
-                "item_ids": item_ids,
+                "test_id": test_id,
+                "sub_test_json": sub_test_json,
+                "code": code,
+                "name": str(raw_scale.get("name", code)) if isinstance(raw_scale, dict) else code,
+                "item_ids": [f"{test_id}::{sub_test_json}::{item_id}" for item_id in item_ids],
             }
         )
 
     sorted_item_ids = sorted(selected_item_ids, key=lambda x: (0, int(x)) if x.isdigit() else (1, x))
-    items = [
-        {"id": item_id, "text": item_map.get(item_id, "")}
-        for item_id in sorted_item_ids
-        if item_map.get(item_id)
-    ]
-
-    response_options = _parse_response_options(row.item_template)
-    raw_additional_payload = json.loads(getattr(custom_test_row, "additional_profile_fields_json", "[]") or "[]")
-    additional_profile_fields = normalize_additional_profile_fields(raw_additional_payload)
-
-    return {
-        "custom_test_id": custom_test_row.id,
-        "custom_test_name": custom_test_row.custom_test_name,
-        "test_id": custom_test_row.test_id,
-        "sub_test_json": selected_sub_test_json,
-        "display_name": item_meta.get("name", custom_test_row.custom_test_name),
-        "required_profile_fields": _required_profile_fields_for_variants(custom_test_row),
-        "additional_profile_fields": additional_profile_fields,
+    items: list[dict] = []
+    for item_id in sorted_item_ids:
+        text = item_map.get(item_id, "")
+        response_options = item_response_options_map.get(item_id, bundle["response_options"])
+        matched_rule = _resolve_render_rule_for_item(item_id, render_rules)
+        render_type = matched_rule["render_type"] if matched_rule else ""
+        # bipolar_labels_only는 문항 본문 없이도 렌더되므로 빈 텍스트 문항을 제외하지 않는다.
+        if not text and render_type != "bipolar_labels_only":
+            continue
+        row_meta = matrix_row_meta.get(item_id, {})
+        items.append(
+            {
+                "id": f"{test_id}::{sub_test_json}::{item_id}",
+                "item_id": item_id,
+                "test_id": test_id,
+                "sub_test_json": sub_test_json,
+                "display_name": display_name,
+                "text": text,
+                "response_options": response_options,
+                "response_style": _infer_response_style(response_options),
+                "render_type": render_type,
+                "render_config": matched_rule["config"] if matched_rule else {},
+                "matrix_group_key": row_meta.get("group_key", ""),
+                "matrix_group_prompt": row_meta.get("group_prompt", ""),
+                "matrix_group_order": row_meta.get("group_order", 0),
+                "matrix_row_order": row_meta.get("row_order", 0),
+            }
+        )
+    selected_sub_test = {
+        "test_id": test_id,
+        "sub_test_json": sub_test_json,
+        "display_name": display_name,
         "selected_scale_codes": sorted(selected_codes),
+    }
+    return items, selected_scales, selected_sub_test
+
+
+def _assemble_parts(parts_buffer: list[dict]) -> list[dict]:
+    parts: list[dict] = []
+    for part_idx, part in enumerate(parts_buffer):
+        if not part["items"]:
+            continue
+        parts.append(
+            {
+                "part_id": f"part_{part_idx + 1}",
+                "part_index": part_idx,
+                "title": f"파트 {part_idx + 1}",
+                "response_options": part["response_options"],
+                "response_scale_label": part["response_scale_label"],
+                "render_type": part["render_type"],
+                "items": part["items"],
+                "item_count": len(part["items"]),
+                "selected_sub_tests": part["selected_sub_tests"],
+            }
+        )
+    return parts
+
+
+def _append_items_as_render_parts(
+    parts_buffer: list[dict],
+    *,
+    items: list[dict],
+    response_options: list[dict],
+    selected_sub_test: dict,
+) -> None:
+    if not items:
+        return
+    response_key = json.dumps(response_options, ensure_ascii=False, sort_keys=True)
+    segment_start = 0
+    segment_render_type = _resolve_item_render_type(items[0])
+
+    def flush_segment(start_idx: int, end_idx: int, render_type: str) -> None:
+        segment_items = items[start_idx:end_idx]
+        if not segment_items:
+            return
+        can_merge = (
+            bool(parts_buffer)
+            and parts_buffer[-1]["response_key"] == response_key
+            and parts_buffer[-1]["render_type"] == render_type
+        )
+        if can_merge:
+            parts_buffer[-1]["items"].extend(segment_items)
+            parts_buffer[-1]["selected_sub_tests"].append(selected_sub_test)
+            return
+        parts_buffer.append(
+            {
+                "response_key": response_key,
+                "response_options": response_options,
+                "response_scale_label": f"{len(response_options)}점 척도" if response_options else "응답형식 정보 없음",
+                "render_type": render_type,
+                "items": list(segment_items),
+                "selected_sub_tests": [selected_sub_test],
+            }
+        )
+
+    for idx in range(1, len(items)):
+        current_type = _resolve_item_render_type(items[idx])
+        if current_type == segment_render_type:
+            continue
+        flush_segment(segment_start, idx, segment_render_type)
+        segment_start = idx
+        segment_render_type = current_type
+    flush_segment(segment_start, len(items), segment_render_type)
+
+
+def build_custom_assessment_question_payload(custom_test_row: AdminCustomTest, profile: dict[str, Any]) -> dict:
+    test_configs = load_custom_test_configs(custom_test_row)
+    if not test_configs:
+        raise HTTPException(status_code=404, detail="검사 구성 정보를 찾을 수 없습니다.")
+
+    base_payload = _build_custom_assessment_profile_meta(custom_test_row, test_configs)
+    resolved_variants = _resolve_active_variants(test_configs, profile or {})
+
+    parts_buffer: list[dict] = []
+    selected_scales: list[dict] = []
+    all_items: list[dict] = []
+    selected_sub_tests: list[dict] = []
+
+    for variant in resolved_variants:
+        test_id = variant["test_id"]
+        sub_test_json = variant["sub_test_json"]
+        bundle = _load_question_bundle(test_id, sub_test_json)
+        response_options = bundle["response_options"]
+
+        part_items, variant_scales, selected_sub_test = _build_variant_items_and_scales(
+            test_id=test_id,
+            sub_test_json=sub_test_json,
+            selected_scale_codes=variant["selected_scale_codes"],
+            bundle=bundle,
+            default_display_name=custom_test_row.custom_test_name,
+        )
+        _append_items_as_render_parts(
+            parts_buffer,
+            items=part_items,
+            response_options=response_options,
+            selected_sub_test=selected_sub_test,
+        )
+        all_items.extend(part_items)
+        selected_scales.extend(variant_scales)
+        selected_sub_tests.append(selected_sub_test)
+
+    if not all_items:
+        raise HTTPException(status_code=400, detail="표시할 문항이 없습니다.")
+
+    parts = _assemble_parts(parts_buffer)
+    primary_sub_test_json = selected_sub_tests[0]["sub_test_json"] if selected_sub_tests else custom_test_row.sub_test_json
+    return {
+        **base_payload,
+        "sub_test_json": primary_sub_test_json,
+        "selected_scale_codes": sorted({scale["code"] for scale in selected_scales}),
         "selected_scales": selected_scales,
-        "items": items,
-        "item_count": len(items),
-        "response_options": response_options,
-        "sub_test_variant_count": len(variant_configs),
+        "items": all_items,
+        "item_count": len(all_items),
+        "response_options": parts[0]["response_options"] if parts else [],
+        "selected_sub_tests": selected_sub_tests,
+        "parts": parts,
+        "part_count": len(parts),
     }
 
 
@@ -263,22 +612,22 @@ def generate_custom_test_access_link(db: Session, admin_session: str | None, cus
         "assessment_url": f"/assessment/custom/{link.access_token}",
     }
 
-
+# access token으로 링크 조회, 해당 링크의 custom_test row 조회, 인적사항 화면 payload 반환
 def get_custom_test_by_access_link(db: Session, access_token: str) -> dict:
-    link = get_active_access_link_by_token(db, access_token)
+    link = get_active_access_link_by_token(db, access_token) # access token으로 링크 조회
     if link is None:
         raise HTTPException(status_code=404, detail="유효하지 않은 검사 URL입니다.")
 
-    custom_test = get_custom_test_by_id_and_admin(
+    custom_test = get_custom_test_by_id_and_admin( # 해당 링크의 custom_test row 조회
         db,
-        custom_test_id=link.admin_custom_test_id,
-        admin_user_id=link.admin_user_id,
-    )
+        custom_test_id=link.admin_custom_test_id, # 링크의 custom_test_id
+        admin_user_id=link.admin_user_id, # 링크의 admin_user_id(생성한 사람)
+    ) # child_test 테이블에서 row 반환
     if custom_test is None:
         raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
 
-    payload = build_custom_assessment_payload(custom_test)
-    payload["access_token"] = access_token
+    payload = build_custom_assessment_profile_payload(custom_test) # 인적사항 입력 화면용 payload 빌드
+    payload["access_token"] = access_token # 응답에 access_token 포함
     return payload
 
 
@@ -304,7 +653,7 @@ def validate_custom_test_profile_by_access_link(db: Session, access_token: str, 
     if error_message:
         raise HTTPException(status_code=403, detail=error_message)
 
-    assessment_payload = build_custom_assessment_payload(custom_test, profile or {})
+    assessment_payload = build_custom_assessment_question_payload(custom_test, profile or {})
     return {
         "message": "배정된 내담자 확인이 완료되었습니다.",
         "assessment_payload": assessment_payload,
@@ -341,7 +690,7 @@ def submit_custom_test_by_access_link(
 
     clean_profile: dict[str, Any] = {str(k): sanitize_profile_value(v) for k, v in (profile or {}).items()}
 
-    assessment_payload = build_custom_assessment_payload(custom_test, clean_profile)
+    assessment_payload = build_custom_assessment_question_payload(custom_test, clean_profile)
     valid_item_ids = {item["id"] for item in assessment_payload["items"]}
     if not valid_item_ids:
         raise HTTPException(status_code=400, detail="문항 데이터가 없습니다.")

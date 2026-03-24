@@ -1,0 +1,14 @@
+
+.venv/
+node_modules/
+.playwright-browsers/
+artifacts/
+logs/
+__pycache__/
+*.pyc
+playwright-report/
+test-results/
+*.log
+*.tmp
+*.sqlite
+*.db

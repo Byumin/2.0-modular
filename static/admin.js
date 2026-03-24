@@ -15,6 +15,52 @@ function escapeHtml(text) {
     .replaceAll("'", '&#039;');
 }
 
+const SCHOOL_AGE_LABELS = [
+  '미취학',
+  '초등 1학년',
+  '초등 2학년',
+  '초등 3학년',
+  '초등 4학년',
+  '초등 5학년',
+  '초등 6학년',
+  '초등학교 졸업생',
+  '중등 1학년',
+  '중등 2학년',
+  '중등 3학년',
+  '중학교 졸업생',
+  '고등 1학년',
+  '고등 2학년',
+  '고등 3학년',
+  '고등학교 졸업생',
+  '대학생 신입생',
+  '대학생 재학생',
+  '대학생 졸업생',
+  '대학원 신입생',
+  '대학원 재학생',
+  '대학원 졸업생'
+];
+
+function schoolAgeLabelFromIndex(index) {
+  if (!Number.isFinite(index)) {
+    return '';
+  }
+  const normalized = Math.max(0, Math.floor(index));
+  return SCHOOL_AGE_LABELS[normalized] || '';
+}
+
+function formatSchoolAgeRangeText(start, endExclusive) {
+  const startLabel = schoolAgeLabelFromIndex(start);
+  if (!startLabel) {
+    return '';
+  }
+  if (!Number.isFinite(endExclusive) || endExclusive >= SCHOOL_AGE_LABELS.length) {
+    return `학령 ${startLabel} 이상`;
+  }
+  const endIndex = Math.max(Math.floor(start), Math.floor(endExclusive - 1));
+  const endLabel = schoolAgeLabelFromIndex(endIndex) || startLabel;
+  return `학령 ${startLabel}~${endLabel}`;
+}
+
 async function api(url, options = {}) {
   const response = await fetch(url, {
     credentials: 'same-origin',
@@ -37,6 +83,57 @@ async function api(url, options = {}) {
   }
 
   return data;
+}
+
+let adminToastTimer = null;
+
+function showAdminToast(message, kind = 'info') {
+  let root = document.getElementById('adminToastRoot');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'adminToastRoot';
+    root.className = 'admin-toast-root';
+    document.body.appendChild(root);
+  }
+  const toast = document.createElement('div');
+  toast.className = `admin-toast is-${kind}`;
+  toast.textContent = String(message || '').trim();
+  root.innerHTML = '';
+  root.appendChild(toast);
+  root.classList.add('is-visible');
+  if (adminToastTimer) {
+    window.clearTimeout(adminToastTimer);
+    adminToastTimer = null;
+  }
+  adminToastTimer = window.setTimeout(() => {
+    root.classList.remove('is-visible');
+  }, 1800);
+}
+
+async function copyTextToClipboard(text) {
+  const value = String(text || '');
+  if (!value) {
+    return false;
+  }
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    try {
+      const input = document.createElement('textarea');
+      input.value = value;
+      input.setAttribute('readonly', '');
+      input.style.position = 'fixed';
+      input.style.left = '-9999px';
+      document.body.appendChild(input);
+      input.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(input);
+      return Boolean(copied);
+    } catch {
+      return false;
+    }
+  }
 }
 
 async function ensureAdmin() {
@@ -643,6 +740,32 @@ function renderScaleList(catalog, testId, subIndex, scaleListEl, selected = []) 
   });
 }
 
+function parseEligibilityRange(variant) {
+  const ageRange = variant?.age_range;
+  const schoolAgeRange = variant?.school_age_range;
+  const hasAgeRange = ageRange && typeof ageRange === 'object';
+  const hasSchoolAgeRange = schoolAgeRange && typeof schoolAgeRange === 'object';
+  const range = hasAgeRange ? ageRange : (hasSchoolAgeRange ? schoolAgeRange : null);
+  const start = Array.isArray(range?.start_inclusive) ? Number(range.start_inclusive[0]) : null;
+  const endExclusive = Array.isArray(range?.end_exclusive) ? Number(range.end_exclusive[0]) : null;
+  if (!Number.isFinite(start) || !Number.isFinite(endExclusive)) {
+    return { text: '', start: 9999 };
+  }
+  if (hasAgeRange) {
+    return {
+      text: endExclusive >= 100
+        ? `만 ${start}세 이상`
+        : `만 ${start}~${Math.max(start, endExclusive - 1)}세`,
+      start
+    };
+  }
+  const schoolRangeText = formatSchoolAgeRangeText(start, endExclusive);
+  return {
+    text: schoolRangeText,
+    start
+  };
+}
+
 function extractEligibilityText(subTestJson) {
   try {
     const parsed = JSON.parse(subTestJson || '{}');
@@ -651,16 +774,8 @@ function extractEligibilityText(subTestJson) {
     const seen = new Set();
 
     variants.forEach((variant) => {
-      const ageRange = variant?.age_range;
-      const start = Array.isArray(ageRange?.start_inclusive) ? Number(ageRange.start_inclusive[0]) : null;
-      const endExclusive = Array.isArray(ageRange?.end_exclusive) ? Number(ageRange.end_exclusive[0]) : null;
-
-      let ageText = '';
-      if (Number.isFinite(start) && Number.isFinite(endExclusive)) {
-        ageText = endExclusive >= 100
-          ? `만 ${start}세 이상`
-          : `만 ${start}~${Math.max(start, endExclusive - 1)}세`;
-      }
+      const rangeMeta = parseEligibilityRange(variant);
+      const ageText = rangeMeta.text;
 
       const schoolRaw = variant?.school_ages
         || variant?.school_age
@@ -685,7 +800,7 @@ function extractEligibilityText(subTestJson) {
       seen.add(label);
       labels.push({
         text: label,
-        ageStart: Number.isFinite(start) ? start : 9999
+        ageStart: rangeMeta.start
       });
     });
 
@@ -714,13 +829,124 @@ function buildScaleNameIndex(catalog) {
   return index;
 }
 
+function getSelectedScaleLabelsFromConfigs(catalog, testConfigs) {
+  const scaleIndex = buildScaleNameIndex(catalog);
+  const labels = [];
+  const seen = new Set();
+
+  (Array.isArray(testConfigs) ? testConfigs : []).forEach((config) => {
+    const testId = String(config?.test_id || '');
+    (config?.sub_test_variants || []).forEach((variant) => {
+      const subTestJson = typeof variant?.sub_test_json === 'string'
+        ? variant.sub_test_json
+        : JSON.stringify(variant?.sub_test_json || {});
+      const scaleMap = scaleIndex.get(`${testId}::${subTestJson}`) || new Map();
+      (variant?.selected_scale_codes || []).forEach((code) => {
+        const key = `${testId}::${code}`;
+        if (seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        labels.push(`${testId} - ${scaleMap.get(code) || code}(${code})`);
+      });
+    });
+  });
+
+  return labels;
+}
+
+function getSelectedScaleLinesByTest(catalog, testConfigs) {
+  const scaleIndex = buildScaleNameIndex(catalog);
+  const byTest = new Map();
+
+  (Array.isArray(testConfigs) ? testConfigs : []).forEach((config) => {
+    const testId = String(config?.test_id || '').trim();
+    if (!testId) {
+      return;
+    }
+    if (!byTest.has(testId)) {
+      byTest.set(testId, new Map());
+    }
+    const selectedMap = byTest.get(testId);
+    (config?.sub_test_variants || []).forEach((variant) => {
+      const subTestJson = typeof variant?.sub_test_json === 'string'
+        ? variant.sub_test_json
+        : JSON.stringify(variant?.sub_test_json || {});
+      const scaleMap = scaleIndex.get(`${testId}::${subTestJson}`) || new Map();
+      (variant?.selected_scale_codes || []).forEach((code) => {
+        const key = String(code || '').trim();
+        if (!key || selectedMap.has(key)) {
+          return;
+        }
+        const name = String(scaleMap.get(key) || key);
+        selectedMap.set(key, `${name}(${key})`);
+      });
+    });
+  });
+
+  return [...byTest.entries()].map(([testId, selectedMap]) => {
+    const scales = [...selectedMap.values()];
+    return `${testId} - ${scales.length ? scales.join(', ') : '선택 척도 없음'}`;
+  });
+}
+
+function splitEligibilityLines(eligibilityTexts) {
+  const ageSet = new Set();
+  const schoolSet = new Set();
+  const schoolPattern = /(학령|유치|초등|중등|중학교|고등|고교|학년)/;
+
+  (Array.isArray(eligibilityTexts) ? eligibilityTexts : [])
+    .flatMap((text) => String(text || '').split(',').map((part) => part.trim()).filter(Boolean))
+    .forEach((part) => {
+      if (part.includes('/')) {
+        const [left, right] = part.split('/').map((x) => String(x || '').trim()).filter(Boolean);
+        if (left) {
+          ageSet.add(left);
+        }
+        if (right) {
+          schoolSet.add(right);
+        }
+        return;
+      }
+      if (schoolPattern.test(part)) {
+        schoolSet.add(part);
+      } else {
+        ageSet.add(part);
+      }
+    });
+
+  return {
+    age: [...ageSet],
+    school: [...schoolSet],
+  };
+}
+
+function getEligibilityTextsFromConfigs(testConfigs) {
+  const labels = [];
+  const seen = new Set();
+
+  (Array.isArray(testConfigs) ? testConfigs : []).forEach((config) => {
+    (config?.sub_test_variants || []).forEach((variant) => {
+      const subTestJson = typeof variant?.sub_test_json === 'string'
+        ? variant.sub_test_json
+        : JSON.stringify(variant?.sub_test_json || {});
+      const text = extractEligibilityText(subTestJson);
+      if (!text || seen.has(text)) {
+        return;
+      }
+      seen.add(text);
+      labels.push(text);
+    });
+  });
+
+  return labels;
+}
+
 function listAllEligibilityTexts(catalog, testId, selectedScaleCodes) {
   function ageStartFromJson(subTestJson) {
     try {
       const parsed = JSON.parse(subTestJson || '{}');
-      const ageRange = parsed?.age_range;
-      const start = Array.isArray(ageRange?.start_inclusive) ? Number(ageRange.start_inclusive[0]) : null;
-      return Number.isFinite(start) ? start : 9999;
+      return parseEligibilityRange(parsed).start;
     } catch {
       return 9999;
     }
@@ -767,28 +993,22 @@ function renderManagedTests(listEl, emptyEl, items, catalog, selectedIds = new S
   }
   emptyEl.classList.add('hidden');
   listEl.innerHTML = '';
-  const scaleIndex = buildScaleNameIndex(catalog);
-
   items.forEach((item) => {
-    const scaleMap = scaleIndex.get(`${item.test_id}::${item.sub_test_json}`) || (() => {
-      const test = (catalog?.tests || []).find((it) => it.test_id === item.test_id);
-      const fallback = new Map();
-      (test?.sub_tests || []).forEach((sub) => {
-        (sub.scales || []).forEach((scale) => {
-          if (!fallback.has(scale.code)) {
-            fallback.set(scale.code, scale.name || scale.code);
-          }
-        });
-      });
-      return fallback;
-    })();
-    const scales = item.selected_scale_codes
-      .map((code) => `${scaleMap.get(code) || code}(${code})`)
-      .join(', ');
-    const allEligibility = listAllEligibilityTexts(catalog, item.test_id, item.selected_scale_codes);
-    const eligibility = allEligibility.length
-      ? allEligibility.join(', ')
-      : extractEligibilityText(item.sub_test_json);
+    const scaleLines = getSelectedScaleLinesByTest(catalog, item.test_configs || []);
+    const allEligibility = getEligibilityTextsFromConfigs(item.test_configs || []);
+    const eligibilitySource = allEligibility.length ? allEligibility : [extractEligibilityText(item.sub_test_json)];
+    const eligibilityLines = splitEligibilityLines(eligibilitySource);
+    const ageLineText = `연령 ${eligibilityLines.age.join(', ') || '-'}`;
+    const schoolLineText = `학령 ${eligibilityLines.school.join(', ') || '-'}`;
+    const eligibilityHtml = `
+      <div class="cell-lines">
+        <div class="cell-line" title="${escapeHtml(ageLineText)}"><span class="cell-label">연령</span> ${escapeHtml(eligibilityLines.age.join(', ') || '-')}</div>
+        <div class="cell-line" title="${escapeHtml(schoolLineText)}"><span class="cell-label">학령</span> ${escapeHtml(eligibilityLines.school.join(', ') || '-')}</div>
+      </div>
+    `;
+    const scalesHtml = scaleLines.length
+      ? `<div class="cell-lines">${scaleLines.map((line) => `<div class="cell-line" title="${escapeHtml(line)}">${escapeHtml(line)}</div>`).join('')}</div>`
+      : '<div class="cell-lines"><div class="cell-line">-</div></div>';
     const li = document.createElement('li');
     li.className = 'row-item';
     const checked = selectedIds.has(item.id) ? 'checked' : '';
@@ -797,8 +1017,8 @@ function renderManagedTests(listEl, emptyEl, items, catalog, selectedIds = new S
         <div class="row-col select-col"><input type="checkbox" data-role="select-test" value="${item.id}" ${checked} aria-label="검사 선택" /></div>
         <div class="row-col main-col"><strong>${escapeHtml(item.custom_test_name)}</strong></div>
         <div class="row-col root-col">${escapeHtml(item.test_id)}</div>
-        <div class="row-col target-col">${escapeHtml(eligibility)}</div>
-        <div class="row-col scale-col">${escapeHtml(scales)}</div>
+        <div class="row-col target-col">${eligibilityHtml}</div>
+        <div class="row-col scale-col">${scalesHtml}</div>
         <div class="row-col">${item.assigned_count} / ${item.assessed_count}</div>
         <div class="row-col"><span class="badge ${item.progress_status === '종료' ? 'badge-done' : (item.progress_status === '실시' ? 'badge-live' : 'badge-wait')}">${item.progress_status}</span></div>
         <div class="row-col row-action item-actions">
@@ -1196,14 +1416,14 @@ async function initCreatePage() {
         method: 'POST'
       });
       const fullUrl = `${window.location.origin}${data.assessment_url}`;
-      try {
-        await navigator.clipboard.writeText(fullUrl);
-        window.alert(`검사 URL이 복사되었습니다.\n${fullUrl}`);
-      } catch {
-        window.prompt('아래 URL을 복사해서 사용하세요.', fullUrl);
+      const copied = await copyTextToClipboard(fullUrl);
+      if (copied) {
+        showAdminToast('URL 주소가 복사되었습니다.', 'success');
+      } else {
+        showAdminToast('URL 복사에 실패했습니다. 다시 시도해주세요.', 'error');
       }
     } catch (error) {
-      window.alert(error.message || 'URL 생성 중 오류가 발생했습니다.');
+      showAdminToast(error.message || 'URL 생성 중 오류가 발생했습니다.', 'error');
     } finally {
       linkBtn.disabled = false;
       linkBtn.textContent = originalText;
@@ -1287,16 +1507,7 @@ async function initCreatePage() {
   function extractAgeText(subTest) {
     try {
       const parsed = JSON.parse(subTest.sub_test_json || '{}');
-      const ageRange = parsed?.age_range;
-      const start = Array.isArray(ageRange?.start_inclusive) ? Number(ageRange.start_inclusive[0]) : null;
-      const endExclusive = Array.isArray(ageRange?.end_exclusive) ? Number(ageRange.end_exclusive[0]) : null;
-      if (Number.isFinite(start) && Number.isFinite(endExclusive)) {
-        if (endExclusive >= 100) {
-          return `만 ${start}세 이상`;
-        } else {
-          return `만 ${start}~${Math.max(start, endExclusive - 1)}세`;
-        }
-      }
+      return parseEligibilityRange(parsed).text;
     } catch {
       return '';
     }
@@ -1307,13 +1518,24 @@ async function initCreatePage() {
     try {
       const parsed = JSON.parse(subTest.sub_test_json || '{}');
       const ageRange = parsed?.age_range;
-      const start = Array.isArray(ageRange?.start_inclusive) ? Number(ageRange.start_inclusive[0]) : null;
-      const endExclusive = Array.isArray(ageRange?.end_exclusive) ? Number(ageRange.end_exclusive[0]) : null;
+      const schoolAgeRange = parsed?.school_age_range;
+      const range = ageRange && typeof ageRange === 'object'
+        ? ageRange
+        : (schoolAgeRange && typeof schoolAgeRange === 'object' ? schoolAgeRange : null);
+      const start = Array.isArray(range?.start_inclusive) ? Number(range.start_inclusive[0]) : null;
+      const endExclusive = Array.isArray(range?.end_exclusive) ? Number(range.end_exclusive[0]) : null;
       if (Number.isFinite(start) && Number.isFinite(endExclusive)) {
         if (endExclusive >= 100) {
-          return `${start}세+`;
+          return ageRange ? `${start}세+` : `${schoolAgeLabelFromIndex(start) || `학령${start}`}+`;
         }
-        return `${start}-${Math.max(start, endExclusive - 1)}세`;
+        if (!ageRange) {
+          const startLabel = schoolAgeLabelFromIndex(start) || `학령${start}`;
+          const endLabel = schoolAgeLabelFromIndex(Math.max(start, endExclusive - 1)) || `학령${Math.max(start, endExclusive - 1)}`;
+          return `${startLabel}~${endLabel}`;
+        }
+        return ageRange
+          ? `${start}-${Math.max(start, endExclusive - 1)}세`
+          : `${start}-${Math.max(start, endExclusive - 1)}세`;
       }
     } catch {
       // pass
@@ -1321,45 +1543,167 @@ async function initCreatePage() {
     return '서브';
   }
 
+  function collectScaleGroupsForTests(testIds) {
+    return testIds
+      .map((testId) => {
+        const test = catalog.tests.find((it) => it.test_id === testId);
+        if (!test || !test.sub_tests?.length) {
+          return null;
+        }
+        const map = new Map();
+        test.sub_tests.forEach((subTest, subIdx) => {
+          const scales = subTest.scales || [];
+          scales.forEach((scale) => {
+            const key = `${testId}::${scale.code}`;
+            if (!map.has(key)) {
+              map.set(key, {
+                key,
+                test_id: testId,
+                code: scale.code,
+                name: scale.name,
+                sub_products: [],
+                age_set: new Set()
+              });
+            }
+            const item = map.get(key);
+            item.sub_products.push({
+              sub_idx: subIdx,
+              sub_test_json: subTest.sub_test_json,
+              sub_tag: shortSubTag(subTest)
+            });
+            const ageText = extractAgeText(subTest);
+            item.age_set.add(ageText || '연령 정보 없음');
+          });
+        });
+        const scales = [...map.values()]
+          .sort((a, b) => String(a.code).localeCompare(String(b.code)))
+          .map((item) => ({
+            key: item.key,
+            test_id: item.test_id,
+            code: item.code,
+            sub_products: item.sub_products,
+            label: `${item.name} (${item.code}) - ${[...item.age_set].join(', ')}`
+          }));
+        return { test_id: testId, scales };
+      })
+      .filter(Boolean);
+  }
+
   function collectScalesForTests(testIds) {
-    const map = new Map();
-    testIds.forEach((testId) => {
-      const test = catalog.tests.find((it) => it.test_id === testId);
-      if (!test || !test.sub_tests?.length) {
+    return collectScaleGroupsForTests(testIds).flatMap((group) => group.scales);
+  }
+
+  function snapshotScaleTreeState() {
+    const state = new Map();
+    [...scaleListEl.querySelectorAll('[data-role="scale-test-group"]')].forEach((groupEl) => {
+      const testId = String(groupEl.dataset.testId || '');
+      if (!testId) {
         return;
       }
-      test.sub_tests.forEach((subTest, subIdx) => {
-        const scales = subTest.scales || [];
-        scales.forEach((scale) => {
-          const key = `${testId}::${scale.code}`;
-          if (!map.has(key)) {
-            map.set(key, {
-              key,
-              test_id: testId,
-              code: scale.code,
-              name: scale.name,
-              sub_products: [],
-              age_set: new Set()
-            });
-          }
-          const item = map.get(key);
-          item.sub_products.push({
-            sub_idx: subIdx,
-            sub_test_json: subTest.sub_test_json,
-            sub_tag: shortSubTag(subTest)
-          });
-          const ageText = extractAgeText(subTest);
-          item.age_set.add(ageText || '연령 정보 없음');
-        });
+      const testToggle = groupEl.querySelector('input[data-role="select_test_scale_all"]');
+      const scaleChecks = [...groupEl.querySelectorAll('input[name="selected_scale_key"]')];
+      state.set(testId, {
+        allSelected: testToggle instanceof HTMLInputElement ? testToggle.checked : false,
+        expanded: !groupEl.querySelector('[data-role="scale-test-children"]')?.classList.contains('hidden'),
+        selectedKeys: new Set(
+          scaleChecks
+            .filter((el) => el instanceof HTMLInputElement && el.checked)
+            .map((el) => el.value)
+        )
       });
     });
-    return [...map.values()].map((item) => ({
-      key: item.key,
-      test_id: item.test_id,
-      code: item.code,
-      sub_products: item.sub_products,
-      label: `${item.name} (${item.code}) - ${[...item.age_set].join(', ')}`
-    }));
+    return state;
+  }
+
+  function applyScaleGroupState(groupEl) {
+    const testToggle = groupEl.querySelector('input[data-role="select_test_scale_all"]');
+    const childrenWrap = groupEl.querySelector('[data-role="scale-test-children"]');
+    const toggleIcon = groupEl.querySelector('[data-role="toggle_test_scale_children"]');
+    const childChecks = [...groupEl.querySelectorAll('input[name="selected_scale_key"]')];
+    const isAllSelected = testToggle instanceof HTMLInputElement ? testToggle.checked : false;
+    if (!(childrenWrap instanceof HTMLElement)) {
+      return;
+    }
+    function setArrowByHidden(hidden) {
+      if (!(toggleIcon instanceof HTMLElement)) {
+        return;
+      }
+      toggleIcon.textContent = hidden ? '▲' : '▼';
+      toggleIcon.setAttribute('aria-expanded', String(!hidden));
+      toggleIcon.setAttribute('aria-label', hidden ? '척도 펼치기' : '척도 숨기기');
+      toggleIcon.setAttribute('title', hidden ? '척도 펼치기' : '척도 숨기기');
+    }
+    groupEl.classList.toggle('is-all-selected', isAllSelected);
+    if (isAllSelected) {
+      childChecks.forEach((el) => {
+        if (el instanceof HTMLInputElement) {
+          el.checked = true;
+          el.disabled = true;
+        }
+      });
+      childrenWrap.classList.add('hidden');
+      setArrowByHidden(true);
+      return;
+    }
+    childChecks.forEach((el) => {
+      if (el instanceof HTMLInputElement) {
+        el.disabled = false;
+      }
+    });
+    setArrowByHidden(childrenWrap.classList.contains('hidden'));
+  }
+
+  function renderScaleTreeForSelectedTests() {
+    const previousState = snapshotScaleTreeState();
+    const scaleGroups = collectScaleGroupsForTests(selectedTestIds());
+    scaleListEl.innerHTML = '';
+    if (!scaleGroups.length) {
+      const empty = document.createElement('div');
+      empty.className = 'info-box';
+      empty.textContent = '먼저 검사 선택에서 검사 항목을 체크해주세요.';
+      scaleListEl.appendChild(empty);
+      return;
+    }
+    scaleGroups.forEach((group) => {
+      const prev = previousState.get(group.test_id);
+      const allScaleKeys = group.scales.map((scale) => scale.key);
+      const selectedKeys = prev?.selectedKeys?.size ? prev.selectedKeys : new Set(allScaleKeys);
+      const allSelected = typeof prev?.allSelected === 'boolean' ? prev.allSelected : true;
+      const isExpanded = typeof prev?.expanded === 'boolean' ? prev.expanded : !allSelected;
+
+      const groupEl = document.createElement('section');
+      groupEl.className = 'test-scale-group';
+      groupEl.dataset.role = 'scale-test-group';
+      groupEl.dataset.testId = group.test_id;
+      const parentToggleId = `scale-all-${String(group.test_id).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      groupEl.innerHTML = `
+        <div class="test-scale-group-head">
+          <div class="check-item test-scale-parent-item">
+            <label class="test-scale-parent-main" for="${parentToggleId}">
+              <input id="${parentToggleId}" type="checkbox" data-role="select_test_scale_all" ${allSelected ? 'checked' : ''} />
+              <span class="test-scale-parent-text"><strong>${escapeHtml(group.test_id)}</strong> 전체 척도 선택</span>
+            </label>
+            <span class="test-scale-toggle-icon" data-role="toggle_test_scale_children" aria-expanded="${String(isExpanded)}" aria-label="${isExpanded ? '척도 숨기기' : '척도 펼치기'}" title="${isExpanded ? '척도 숨기기' : '척도 펼치기'}">${isExpanded ? '▼' : '▲'}</span>
+          </div>
+        </div>
+        <div class="test-scale-children${isExpanded ? '' : ' hidden'}" data-role="scale-test-children"></div>
+      `;
+      const childrenWrap = groupEl.querySelector('[data-role="scale-test-children"]');
+      if (childrenWrap instanceof HTMLElement) {
+        group.scales.forEach((scale) => {
+          const checked = allSelected || selectedKeys.has(scale.key);
+          const label = document.createElement('label');
+          label.className = 'check-item check-item-scale-child';
+          label.innerHTML = `
+            <input type="checkbox" name="selected_scale_key" value="${scale.key}" ${checked ? 'checked' : ''} />
+            <span>${escapeHtml(scale.label)}</span>
+          `;
+          childrenWrap.appendChild(label);
+        });
+      }
+      applyScaleGroupState(groupEl);
+      scaleListEl.appendChild(groupEl);
+    });
   }
 
   function renderTestCheckboxes() {
@@ -1375,19 +1719,59 @@ async function initCreatePage() {
     });
 
     testCheckboxList.addEventListener('change', () => {
-      const scales = collectScalesForTests(selectedTestIds());
-      scaleListEl.innerHTML = '';
-      scales.forEach((scale) => {
-        const label = document.createElement('label');
-        label.className = 'check-item';
-        label.innerHTML = `
-          <input type="checkbox" name="selected_scale_key" value="${scale.key}" />
-          <span>${scale.label}</span>
-        `;
-        scaleListEl.appendChild(label);
-      });
+      renderScaleTreeForSelectedTests();
     });
   }
+
+  scaleListEl.addEventListener('change', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+    const groupEl = target.closest('[data-role="scale-test-group"]');
+    if (!(groupEl instanceof HTMLElement)) {
+      return;
+    }
+    if (target.dataset.role === 'select_test_scale_all') {
+      const childrenWrap = groupEl.querySelector('[data-role="scale-test-children"]');
+      if (target.checked) {
+        childrenWrap?.classList.add('hidden');
+      } else {
+        childrenWrap?.classList.remove('hidden');
+      }
+      applyScaleGroupState(groupEl);
+    }
+  });
+
+  scaleListEl.addEventListener('click', (event) => {
+    const toggleIcon = event.target.closest('[data-role="toggle_test_scale_children"]');
+    if (!(toggleIcon instanceof HTMLElement)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const groupEl = toggleIcon.closest('[data-role="scale-test-group"]');
+    if (!(groupEl instanceof HTMLElement)) {
+      return;
+    }
+    const childrenWrap = groupEl.querySelector('[data-role="scale-test-children"]');
+    if (!(childrenWrap instanceof HTMLElement)) {
+      return;
+    }
+    const isHidden = childrenWrap.classList.toggle('hidden');
+    toggleIcon.textContent = isHidden ? '▲' : '▼';
+    toggleIcon.setAttribute('aria-expanded', String(!isHidden));
+    toggleIcon.setAttribute('aria-label', isHidden ? '척도 펼치기' : '척도 숨기기');
+    toggleIcon.setAttribute('title', isHidden ? '척도 펼치기' : '척도 숨기기');
+  });
+
+  scaleListEl.addEventListener('mousedown', (event) => {
+    const toggleIcon = event.target.closest('[data-role="toggle_test_scale_children"]');
+    if (!(toggleIcon instanceof HTMLElement)) {
+      return;
+    }
+    event.preventDefault();
+  });
 
   function createDefaultFieldState() {
     return {
@@ -1640,6 +2024,7 @@ async function initCreatePage() {
   });
 
   renderTestCheckboxes();
+  renderScaleTreeForSelectedTests();
   renderCustomFieldEditors();
 
   form.addEventListener('submit', async (event) => {
@@ -1681,26 +2066,32 @@ async function initCreatePage() {
     createBtn.disabled = true;
     createBtn.textContent = '생성 중...';
     try {
-      for (const testId of selectedTests) {
-        const selectedScales = selectedScaleKeys
-          .map((key) => scaleMap.get(key))
-          .filter((item) => item && item.test_id === testId);
-        if (!selectedScales.length) {
-          continue;
-        }
-
-        const selectedCodes = [...new Set(selectedScales.map((item) => item.code))];
-
-        await api('/api/admin/custom-tests', {
-          method: 'POST',
-          body: JSON.stringify({
-            custom_test_name: selectedTests.length > 1 ? `${baseName} (${testId})` : baseName,
+      const test_configs = selectedTests
+        .map((testId) => {
+          const selectedScales = selectedScaleKeys
+            .map((key) => scaleMap.get(key))
+            .filter((item) => item && item.test_id === testId);
+          const selectedCodes = [...new Set(selectedScales.map((item) => item.code))];
+          return {
             test_id: testId,
-            selected_scale_codes: selectedCodes,
-            additional_profile_fields: normalizedCustomFields
-          })
-        });
+            selected_scale_codes: selectedCodes
+          };
+        })
+        .filter((config) => config.selected_scale_codes.length > 0);
+
+      if (!test_configs.length) {
+        throw new Error('검사별로 최소 1개 이상의 척도를 선택해주세요.');
       }
+
+      await api('/api/admin/custom-tests', {
+        method: 'POST',
+        body: JSON.stringify({
+          custom_test_name: baseName,
+          test_configs,
+          additional_profile_fields: normalizedCustomFields
+        })
+      });
+
       createBtn.disabled = false;
       createBtn.textContent = '생성';
       form.reset();
@@ -1749,10 +2140,7 @@ async function initTestDetailPage() {
 
   nameInput.value = detail.custom_test_name;
   detailMeta.textContent = `기반 검사: ${detail.test_id} | 현재 척도 수: ${detail.scale_count}개`;
-
-  const test = catalog.tests.find((it) => it.test_id === detail.test_id);
-  const subIndex = test ? test.sub_tests.findIndex((s) => s.sub_test_json === detail.sub_test_json) : -1;
-  if (!test) {
+  if (!Array.isArray(detail.test_configs) || !detail.test_configs.length) {
     msg.textContent = '원본 검사 정보를 찾을 수 없습니다.';
     msg.className = 'message error';
     detailSelectedScaleCount.textContent = '-';
@@ -1761,32 +2149,27 @@ async function initTestDetailPage() {
     return;
   }
 
-  const selectedCodes = new Set(detail.selected_scale_codes || []);
-  const matchedSubs = subIndex >= 0
-    ? [test.sub_tests[subIndex]]
-    : (test.sub_tests || []).filter((sub) => (sub.scales || []).some((scale) => selectedCodes.has(scale.code)));
-  const selectedScaleMap = new Map();
-  matchedSubs.forEach((sub) => {
-    (sub.scales || []).forEach((scale) => {
-      if (!selectedCodes.has(scale.code)) {
+  const selectedScales = getSelectedScaleLabelsFromConfigs(catalog, detail.test_configs || []);
+  const selectedItemIds = new Set();
+  const responseSubs = [];
+  (detail.test_configs || []).forEach((config) => {
+    const test = catalog.tests.find((it) => it.test_id === config.test_id);
+    (config.sub_test_variants || []).forEach((variant) => {
+      const matched = (test?.sub_tests || []).find((sub) => sub.sub_test_json === variant.sub_test_json);
+      if (!matched) {
         return;
       }
-      const current = selectedScaleMap.get(String(scale.code));
-      const nextItemIds = new Set([...(current?.item_ids || []), ...((scale.item_ids || []).map((itemId) => String(itemId)))]);
-      selectedScaleMap.set(String(scale.code), {
-        code: String(scale.code),
-        name: scale.name || scale.code,
-        item_ids: [...nextItemIds]
+      responseSubs.push(matched);
+      (matched.scales || []).forEach((scale) => {
+        if (!(variant.selected_scale_codes || []).includes(scale.code)) {
+          return;
+        }
+        (scale.item_ids || []).forEach((itemId) => selectedItemIds.add(String(itemId)));
       });
     });
   });
-  const selectedScales = [...selectedScaleMap.values()];
-  const selectedItemIds = new Set();
-  selectedScales.forEach((scale) => {
-    (scale.item_ids || []).forEach((itemId) => selectedItemIds.add(String(itemId)));
-  });
 
-  const responseSub = matchedSubs.find((sub) => Array.isArray(sub.response_options) && sub.response_options.length) || matchedSubs[0] || null;
+  const responseSub = responseSubs.find((sub) => Array.isArray(sub.response_options) && sub.response_options.length) || responseSubs[0] || null;
   const responseOptions = Array.isArray(responseSub?.response_options) ? responseSub.response_options : [];
   detailSelectedScaleCount.textContent = `${selectedScales.length}개`;
   detailSelectedItemCount.textContent = `${selectedItemIds.size}문항`;
@@ -1803,73 +2186,12 @@ async function initTestDetailPage() {
   }
 
   scaleList.innerHTML = '';
-  const childMap = new Map();
-  selectedScales.forEach((scale) => {
-    const code = String(scale.code || '');
-    if (!code.includes('-')) {
-      return;
-    }
-    const parentCode = code.split('-')[0];
-    if (!childMap.has(parentCode)) {
-      childMap.set(parentCode, []);
-    }
-    childMap.get(parentCode).push(scale);
+  selectedScales.forEach((labelText) => {
+    const label = document.createElement('label');
+    label.className = 'check-item';
+    label.innerHTML = `<span>${escapeHtml(labelText)}</span>`;
+    scaleList.appendChild(label);
   });
-
-  const parentOrStandalone = [];
-  const orphanChildren = [];
-  selectedScales.forEach((scale) => {
-    const code = String(scale.code || '');
-    if (!code.includes('-')) {
-      parentOrStandalone.push(scale);
-      return;
-    }
-    const parentCode = code.split('-')[0];
-    if (!selectedScaleMap.has(parentCode)) {
-      orphanChildren.push(scale);
-    }
-  });
-
-  parentOrStandalone
-    .sort((a, b) => String(a.code).localeCompare(String(b.code)))
-    .forEach((scale) => {
-      const code = String(scale.code);
-      const children = (childMap.get(code) || []).sort((a, b) => String(a.code).localeCompare(String(b.code)));
-      if (!children.length) {
-        const label = document.createElement('label');
-        label.className = 'check-item';
-        label.innerHTML = `<span>${escapeHtml(scale.name || scale.code)} (${escapeHtml(scale.code)})</span>`;
-        scaleList.appendChild(label);
-        return;
-      }
-
-      const block = document.createElement('div');
-      block.className = 'detail-scale-group';
-      const childId = `detail-scale-children-${code}`.replace(/[^a-zA-Z0-9_-]/g, '_');
-      block.innerHTML = `
-        <div class="detail-scale-group-head">
-          <span>${escapeHtml(scale.name || scale.code)} (${escapeHtml(scale.code)})</span>
-          <button type="button" class="detail-scale-toggle" data-role="toggle-scale-children" data-target="${childId}">
-            <span class="arrow">▼</span>
-          </button>
-        </div>
-        <ul id="${childId}" class="detail-scale-children hidden">
-          ${children
-            .map((child) => `<li>${escapeHtml(child.name || child.code)} (${escapeHtml(child.code)})</li>`)
-            .join('')}
-        </ul>
-      `;
-      scaleList.appendChild(block);
-    });
-
-  orphanChildren
-    .sort((a, b) => String(a.code).localeCompare(String(b.code)))
-    .forEach((scale) => {
-      const label = document.createElement('label');
-      label.className = 'check-item';
-      label.innerHTML = `<span>${escapeHtml(scale.name || scale.code)} (${escapeHtml(scale.code)})</span>`;
-      scaleList.appendChild(label);
-    });
 
   scaleList.addEventListener('click', (event) => {
     const toggleBtn = event.target.closest('[data-role="toggle-scale-children"]');

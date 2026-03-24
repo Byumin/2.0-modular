@@ -6,13 +6,13 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.custom_tests import (
     BulkDeleteCustomTestsIn,
-    CreateCustomTestWithFieldsIn,
+    CreateCustomTestBatchIn,
     UpdateCustomTestIn,
 )
 from app.services.admin.assessment_links import generate_custom_test_access_link
 from app.services.admin.custom_tests import (
     bulk_delete_admin_custom_tests,
-    create_admin_custom_test,
+    create_admin_custom_test_batch,
     get_admin_custom_test,
     get_admin_test_catalog,
     list_admin_custom_tests,
@@ -61,13 +61,13 @@ def list_custom_tests_for_management(
 # 커스텀 검사 생성 라우터
 @router.post("/api/admin/custom-tests")
 def create_custom_test(
-    payload: CreateCustomTestWithFieldsIn, # 스키마
+    payload: CreateCustomTestBatchIn, # 스키마
     db: Session = Depends(get_db),
     admin_session: str | None = Cookie(default=None),
 ) -> dict:
-    return create_admin_custom_test(db, admin_session, payload) # 검사 생성 서비스 함수 호출
+    return create_admin_custom_test_batch(db, admin_session, payload)
 
-
+# 이미 만들어진 커스텀 검사 조회 라우터
 @router.get("/api/admin/custom-tests/{custom_test_id}")
 def get_custom_test(
     custom_test_id: int,

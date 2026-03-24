@@ -43,12 +43,21 @@ function schoolAgeOptions() {
     '초등 4학년',
     '초등 5학년',
     '초등 6학년',
+    '초등학교 졸업생',
     '중등 1학년',
     '중등 2학년',
     '중등 3학년',
+    '중학교 졸업생',
     '고등 1학년',
     '고등 2학년',
-    '고등 3학년'
+    '고등 3학년',
+    '고등학교 졸업생',
+    '대학생 신입생',
+    '대학생 재학생',
+    '대학생 졸업생',
+    '대학원 신입생',
+    '대학원 재학생',
+    '대학원 졸업생'
   ];
 }
 
@@ -125,10 +134,133 @@ function questionInputName(itemId) {
   return `q_${itemId}`;
 }
 
+function resolveRenderMode(item) {
+  const renderType = String(item?.render_type || '').trim();
+  if (renderType === 'likert') {
+    return 'likert';
+  }
+  if (renderType.startsWith('bipolar')) {
+    return 'bipolar';
+  }
+
+  const fallbackStyle = String(item?.response_style || '').trim();
+  if (fallbackStyle === 'bipolar') {
+    return 'bipolar';
+  }
+  return 'likert';
+}
+
+function resolveRenderType(item) {
+  const renderType = String(item?.render_type || '').trim();
+  if (renderType) {
+    return renderType;
+  }
+  const fallbackStyle = String(item?.response_style || '').trim();
+  if (fallbackStyle === 'bipolar') {
+    return 'bipolar';
+  }
+  return 'likert';
+}
+
 function renderQuestionCards(container, pageItems, options, answerState) {
   container.innerHTML = '';
 
   pageItems.forEach((item, idx) => {
+    const renderType = resolveRenderType(item);
+    const matrixGroupKey = String(item?.matrix_group_key || '').trim();
+    const hideEmptyLabels = Boolean(item?.render_config?.hide_empty_labels);
+
+    if (renderType === 'likert_matrix' && matrixGroupKey) {
+      const prev = idx > 0 ? pageItems[idx - 1] : null;
+      const prevIsSameGroup = prev
+        && resolveRenderType(prev) === 'likert_matrix'
+        && String(prev?.matrix_group_key || '').trim() === matrixGroupKey;
+      if (prevIsSameGroup) {
+        return;
+      }
+
+      const groupItems = [];
+      for (let cursor = idx; cursor < pageItems.length; cursor += 1) {
+        const candidate = pageItems[cursor];
+        const candidateType = resolveRenderType(candidate);
+        const candidateKey = String(candidate?.matrix_group_key || '').trim();
+        if (candidateType !== 'likert_matrix' || candidateKey !== matrixGroupKey) {
+          break;
+        }
+        groupItems.push(candidate);
+      }
+      if (!groupItems.length) {
+        return;
+      }
+
+      const first = groupItems[0];
+      const absoluteIndex = Number(first.order_index || idx + 1);
+      const groupPrompt = String(first?.matrix_group_prompt || first?.text || '').trim();
+      const groupOptions = Array.isArray(first?.response_options) && first.response_options.length
+        ? first.response_options
+        : options;
+
+      const matrixCard = document.createElement('article');
+      matrixCard.className = 'assessment-question-card assessment-question-card--matrix';
+      matrixCard.id = `question-card-${first.id}`;
+      matrixCard.tabIndex = -1;
+
+      const headerCells = groupOptions.map((opt) => {
+        const label = String(opt.label || '').trim();
+        const shouldHide = hideEmptyLabels && !label;
+        const safeLabel = label ? escapeHtml(label) : '&nbsp;';
+        return `
+          <div class="assessment-matrix-header-cell">
+            <span class="assessment-option-value">${escapeHtml(opt.value)}</span>
+            <span class="assessment-option-label${label ? '' : ' is-empty'}${shouldHide ? ' is-hidden' : ''}">${safeLabel}</span>
+          </div>
+        `;
+      }).join('');
+
+      const rowsHtml = groupItems.map((rowItem) => {
+        const rowAnswer = answerState[String(rowItem.id)] ?? '';
+        const rowAnsweredClass = String(rowAnswer).trim() ? ' is-answered' : '';
+        return `
+          <div class="assessment-matrix-row${rowAnsweredClass}" data-item-id="${escapeHtml(rowItem.id)}" id="question-card-${escapeHtml(rowItem.id)}">
+            <p class="assessment-matrix-row-text">${escapeHtml(rowItem.text)}</p>
+            <div class="assessment-matrix-row-options" role="radiogroup" aria-label="문항 ${escapeHtml(rowItem.order_index || '')} 응답">
+              ${groupOptions
+                .map((opt, optionIdx) => {
+                  const checked = String(rowAnswer) === String(opt.value);
+                  return `
+                    <label class="assessment-option-card assessment-option-card--matrix${checked ? ' is-selected' : ''}" tabindex="0" role="radio" aria-checked="${checked ? 'true' : 'false'}" data-item-id="${escapeHtml(rowItem.id)}" data-option-index="${optionIdx}">
+                      <input type="radio" name="${questionInputName(escapeHtml(rowItem.id))}" value="${escapeHtml(opt.value)}" ${checked ? 'checked' : ''} />
+                      <span class="assessment-option-value">${escapeHtml(opt.value)}</span>
+                    </label>
+                  `;
+                })
+                .join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      matrixCard.innerHTML = `
+        <div class="assessment-question-head">
+          <span class="assessment-question-number">Q${absoluteIndex}</span>
+        </div>
+        <p class="assessment-question-text">${escapeHtml(groupPrompt)}</p>
+        <section class="assessment-matrix-table">
+          <header class="assessment-matrix-header">
+            <div class="assessment-matrix-header-spacer" aria-hidden="true"></div>
+            <div class="assessment-matrix-header-options">${headerCells}</div>
+          </header>
+          <div class="assessment-matrix-body">${rowsHtml}</div>
+        </section>
+      `;
+      const answeredRows = groupItems.filter((rowItem) => String(answerState[String(rowItem.id)] || '').trim()).length;
+      if (answeredRows > 0) {
+        matrixCard.classList.add('is-answered');
+      }
+      container.appendChild(matrixCard);
+      return;
+    }
+
     const card = document.createElement('article');
     card.className = 'assessment-question-card';
     card.dataset.itemId = String(item.id);
@@ -137,28 +269,102 @@ function renderQuestionCards(container, pageItems, options, answerState) {
 
     const answerValue = answerState[String(item.id)] ?? '';
     const absoluteIndex = Number(item.order_index || idx + 1);
+    const itemOptions = Array.isArray(item?.response_options) && item.response_options.length
+      ? item.response_options
+      : options;
+    const renderMode = resolveRenderMode(item);
 
-    if (options.length) {
+    if (itemOptions.length) {
+      if (renderType === 'bipolar_with_prompt') {
+        const leftOpt = itemOptions[0] || { value: '', label: '' };
+        const rightOpt = itemOptions[itemOptions.length - 1] || { value: '', label: '' };
+        const leftLabel = String(leftOpt.label || '').trim();
+        const rightLabel = String(rightOpt.label || '').trim();
+        const leftText = leftLabel || '&nbsp;';
+        const rightText = rightLabel || '&nbsp;';
+        const leftHiddenClass = hideEmptyLabels && !leftLabel ? ' is-hidden' : '';
+        const rightHiddenClass = hideEmptyLabels && !rightLabel ? ' is-hidden' : '';
+
+        card.innerHTML = `
+          <div class="assessment-question-head">
+            <span class="assessment-question-number">Q${absoluteIndex}</span>
+          </div>
+          <p class="assessment-question-text">${escapeHtml(item.text)}</p>
+          <div class="assessment-bipolar-row">
+            <p class="assessment-bipolar-anchor assessment-bipolar-anchor--left${leftHiddenClass}">${leftText}</p>
+            <div class="assessment-bipolar-scale" role="radiogroup" aria-label="문항 ${absoluteIndex} 응답">
+              ${itemOptions
+                .map((opt, optionIdx) => {
+                  const checked = String(answerValue) === String(opt.value);
+                  return `
+                    <label class="assessment-option-card assessment-option-card--bipolar${checked ? ' is-selected' : ''}" tabindex="0" role="radio" aria-checked="${checked ? 'true' : 'false'}" data-item-id="${escapeHtml(item.id)}" data-option-index="${optionIdx}">
+                      <input type="radio" name="${questionInputName(escapeHtml(item.id))}" value="${escapeHtml(opt.value)}" ${checked ? 'checked' : ''} />
+                      <span class="assessment-option-value">${escapeHtml(opt.value)}</span>
+                    </label>
+                  `;
+                })
+                .join('')}
+            </div>
+            <p class="assessment-bipolar-anchor assessment-bipolar-anchor--right${rightHiddenClass}">${rightText}</p>
+          </div>
+        `;
+      } else if (renderType === 'bipolar_labels_only') {
+        const leftOpt = itemOptions[0] || { value: '', label: '' };
+        const rightOpt = itemOptions[itemOptions.length - 1] || { value: '', label: '' };
+        const leftLabel = String(leftOpt.label || '').trim();
+        const rightLabel = String(rightOpt.label || '').trim();
+        const leftText = leftLabel || '&nbsp;';
+        const rightText = rightLabel || '&nbsp;';
+        const leftHiddenClass = hideEmptyLabels && !leftLabel ? ' is-hidden' : '';
+        const rightHiddenClass = hideEmptyLabels && !rightLabel ? ' is-hidden' : '';
+
+        card.classList.add('assessment-question-card--labels-only');
+        card.innerHTML = `
+          <div class="assessment-question-head">
+            <span class="assessment-question-number">Q${absoluteIndex}</span>
+          </div>
+          <div class="assessment-bipolar-row">
+            <p class="assessment-bipolar-anchor assessment-bipolar-anchor--left${leftHiddenClass}">${leftText}</p>
+            <div class="assessment-bipolar-scale" role="radiogroup" aria-label="문항 ${absoluteIndex} 응답">
+              ${itemOptions
+                .map((opt, optionIdx) => {
+                  const checked = String(answerValue) === String(opt.value);
+                  return `
+                    <label class="assessment-option-card assessment-option-card--bipolar${checked ? ' is-selected' : ''}" tabindex="0" role="radio" aria-checked="${checked ? 'true' : 'false'}" data-item-id="${escapeHtml(item.id)}" data-option-index="${optionIdx}">
+                      <input type="radio" name="${questionInputName(escapeHtml(item.id))}" value="${escapeHtml(opt.value)}" ${checked ? 'checked' : ''} />
+                      <span class="assessment-option-value">${escapeHtml(opt.value)}</span>
+                    </label>
+                  `;
+                })
+                .join('')}
+            </div>
+            <p class="assessment-bipolar-anchor assessment-bipolar-anchor--right${rightHiddenClass}">${rightText}</p>
+          </div>
+        `;
+      } else {
       card.innerHTML = `
         <div class="assessment-question-head">
           <span class="assessment-question-number">Q${absoluteIndex}</span>
         </div>
         <p class="assessment-question-text">${escapeHtml(item.text)}</p>
         <div class="assessment-option-grid" role="radiogroup" aria-label="문항 ${absoluteIndex} 응답">
-          ${options
+          ${itemOptions
             .map((opt, optionIdx) => {
               const checked = String(answerValue) === String(opt.value);
+              const optionLabel = String(opt.label || '').trim();
+              const safeLabel = optionLabel ? escapeHtml(optionLabel) : '&nbsp;';
               return `
-                <label class="assessment-option-card${checked ? ' is-selected' : ''}" tabindex="0" role="radio" aria-checked="${checked ? 'true' : 'false'}" data-item-id="${escapeHtml(item.id)}" data-option-index="${optionIdx}">
+                <label class="assessment-option-card${checked ? ' is-selected' : ''}${renderMode === 'bipolar' ? ' is-bipolar' : ''}" tabindex="0" role="radio" aria-checked="${checked ? 'true' : 'false'}" data-item-id="${escapeHtml(item.id)}" data-option-index="${optionIdx}">
                   <input type="radio" name="${questionInputName(escapeHtml(item.id))}" value="${escapeHtml(opt.value)}" ${checked ? 'checked' : ''} />
                   <span class="assessment-option-value">${escapeHtml(opt.value)}</span>
-                  <span class="assessment-option-label">${escapeHtml(opt.label)}</span>
+                  <span class="assessment-option-label${optionLabel ? '' : ' is-empty'}">${safeLabel}</span>
                 </label>
               `;
             })
             .join('')}
         </div>
       `;
+      }
     } else {
       card.innerHTML = `
         <div class="assessment-question-head">
@@ -209,7 +415,7 @@ function renderQuestionNav(container, items, currentPage, answerState, onSelect,
 }
 
 function setQuestionCardState(container, itemId, { answered = false, missing = false } = {}) {
-  const card = container.querySelector(`[data-item-id="${itemId}"]`);
+  const card = document.getElementById(`question-card-${itemId}`);
   if (!card) {
     return;
   }
@@ -321,6 +527,7 @@ function completionStorageKey(token) {
   const viewModeStepBtn = document.getElementById('viewModeStepBtn');
   const completeConfirmBtn = document.getElementById('completeConfirmBtn');
   const completeCloseBtn = document.getElementById('completeCloseBtn');
+  const defaultSubText = String(subEl?.textContent || '').trim();
 
   if (!token) {
     messageEl.textContent = '유효하지 않은 접근입니다.';
@@ -341,14 +548,17 @@ function completionStorageKey(token) {
   }
 
   titleEl.textContent = payload.custom_test_name || '검사 실시';
+  const questionParts = [];
   const questionItems = [];
   const questionOptions = [];
   const answerState = {};
+  let currentPartIndex = 0;
   let currentQuestionPage = 0;
   let currentLayoutMode = 'cards';
   let shouldCenterOnRender = false;
   let isSubmitting = false;
   let isCompleted = false;
+  let pendingAutoAdvanceTimer = null;
 
   const requiredFieldKeys = Array.isArray(payload.required_profile_fields) && payload.required_profile_fields.length
     ? payload.required_profile_fields.map((x) => String(x))
@@ -364,22 +574,85 @@ function completionStorageKey(token) {
   const additionalProfileFields = normalizeAdditionalProfileFields(payload.additional_profile_fields)
     .filter((field) => !requiredLabelSet.has(field.label.toLowerCase()));
 
-  function applyAssessmentPayload(nextPayload) {
-    const nextItems = (nextPayload?.items || []).map((item, idx) => ({
-      ...item,
-      order_index: idx + 1
-    }));
-    const nextOptions = Array.isArray(nextPayload?.response_options) ? nextPayload.response_options : [];
+  function totalQuestionCount() {
+    return questionParts.reduce((sum, part) => sum + (Array.isArray(part.items) ? part.items.length : 0), 0);
+  }
 
+  function answeredCount() {
+    return questionParts.reduce(
+      (sum, part) => sum + (Array.isArray(part.items) ? part.items.filter((item) => String(answerState[String(item.id)] || '').trim()).length : 0),
+      0
+    );
+  }
+
+  function activePart() {
+    return questionParts[currentPartIndex] || null;
+  }
+
+  function buildPartCountSummaryText() {
+    if (!questionParts.length) {
+      return defaultSubText;
+    }
+    return questionParts
+      .map((part, idx) => {
+        const title = String(part?.title || `파트 ${idx + 1}`).trim();
+        const count = Array.isArray(part?.items) ? part.items.length : 0;
+        return `${title}·${count}문항`;
+      })
+      .join(' / ');
+  }
+
+  function applyAssessmentPayload(nextPayload) {
+    const nextParts = Array.isArray(nextPayload?.parts) && nextPayload.parts.length
+      ? nextPayload.parts
+      : [{
+        part_id: 'part_1',
+        part_index: 0,
+        title: '파트 1',
+        response_options: Array.isArray(nextPayload?.response_options) ? nextPayload.response_options : [],
+        items: Array.isArray(nextPayload?.items) ? nextPayload.items : [],
+        item_count: Number(nextPayload?.item_count || 0)
+      }];
+
+    questionParts.splice(0, questionParts.length, ...nextParts.map((part, partIdx) => ({
+      ...part,
+      part_index: partIdx,
+      title: part?.title || `파트 ${partIdx + 1}`,
+      items: [...(part?.items || [])]
+    })));
+
+    let globalOrderIndex = 1;
+    questionParts.forEach((part) => {
+      part.items = (part.items || []).map((item, idx) => ({
+        ...item,
+        order_index: idx + 1,
+        global_order_index: globalOrderIndex++
+      }));
+    });
+
+    const firstPart = questionParts[0] || null;
+    const nextItems = firstPart?.items || [];
+    const nextOptions = Array.isArray(firstPart?.response_options) ? firstPart.response_options : [];
     questionItems.splice(0, questionItems.length, ...nextItems);
     questionOptions.splice(0, questionOptions.length, ...nextOptions);
 
     Object.keys(answerState).forEach((key) => {
       delete answerState[key];
     });
+    currentPartIndex = 0;
     currentQuestionPage = 0;
     shouldCenterOnRender = true;
-    subEl.textContent = `총 ${nextPayload?.item_count || nextItems.length}문항`;
+    subEl.textContent = buildPartCountSummaryText();
+  }
+
+  function syncActivePartState() {
+    const part = activePart();
+    const nextItems = part?.items || [];
+    const nextOptions = Array.isArray(part?.response_options) ? part.response_options : [];
+    questionItems.splice(0, questionItems.length, ...nextItems);
+    questionOptions.splice(0, questionOptions.length, ...nextOptions);
+    currentQuestionPage = 0;
+    shouldCenterOnRender = true;
   }
 
   function createProfileFieldBlock({ id, label, required = false, span = 'half' }) {
@@ -613,14 +886,53 @@ function completionStorageKey(token) {
 
   renderRequiredProfileFields();
   renderAdditionalProfileFields();
-  applyAssessmentPayload(payload);
-
-  function answeredCount() {
-    return questionItems.filter((item) => String(answerState[String(item.id)] || '').trim()).length;
-  }
 
   function firstMissingIndex() {
     return questionItems.findIndex((item) => !String(answerState[String(item.id)] || '').trim());
+  }
+
+  function activePartFirstMissingIndex() {
+    const part = activePart();
+    if (!part) {
+      return -1;
+    }
+    return (part.items || []).findIndex((item) => !String(answerState[String(item.id)] || '').trim());
+  }
+
+  function firstIncompletePartIndex() {
+    return questionParts.findIndex((part) => (part.items || []).some((item) => !String(answerState[String(item.id)] || '').trim()));
+  }
+
+  function firstMissingLocationAcrossParts() {
+    for (let partIndex = 0; partIndex < questionParts.length; partIndex += 1) {
+      const items = questionParts[partIndex]?.items || [];
+      for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
+        const item = items[itemIndex];
+        if (!String(answerState[String(item.id)] || '').trim()) {
+          return { partIndex, itemIndex, item };
+        }
+      }
+    }
+    return null;
+  }
+
+  function allQuestionsAnswered() {
+    return firstIncompletePartIndex() < 0 && totalQuestionCount() > 0;
+  }
+
+  function clearAutoAdvanceTimer() {
+    if (pendingAutoAdvanceTimer !== null) {
+      window.clearTimeout(pendingAutoAdvanceTimer);
+      pendingAutoAdvanceTimer = null;
+    }
+  }
+
+  function scheduleAutoAdvance(callback) {
+    clearAutoAdvanceTimer();
+    pendingAutoAdvanceTimer = window.setTimeout(() => {
+      pendingAutoAdvanceTimer = null;
+      callback();
+    }, 140);
   }
 
   function syncViewModeButtons() {
@@ -630,12 +942,77 @@ function completionStorageKey(token) {
     viewModeStepBtn.setAttribute('aria-pressed', String(currentLayoutMode === 'step'));
   }
 
+  function isMatrixGroupItem(item) {
+    return resolveRenderType(item) === 'likert_matrix' && String(item?.matrix_group_key || '').trim();
+  }
+
+  function buildCardPageBundles() {
+    const bundles = [];
+    let index = 0;
+    while (index < questionItems.length) {
+      const current = questionItems[index];
+      if (isMatrixGroupItem(current)) {
+        const key = String(current.matrix_group_key).trim();
+        const startIndex = index;
+        const grouped = [];
+        while (index < questionItems.length) {
+          const candidate = questionItems[index];
+          if (!isMatrixGroupItem(candidate) || String(candidate.matrix_group_key).trim() !== key) {
+            break;
+          }
+          grouped.push(candidate);
+          index += 1;
+        }
+        bundles.push({
+          items: grouped,
+          startIndex,
+          endIndex: index - 1,
+        });
+        continue;
+      }
+
+      const startIndex = index;
+      const grouped = [];
+      while (index < questionItems.length && grouped.length < QUESTION_PAGE_SIZE) {
+        const candidate = questionItems[index];
+        if (isMatrixGroupItem(candidate)) {
+          break;
+        }
+        grouped.push(candidate);
+        index += 1;
+      }
+      if (grouped.length) {
+        bundles.push({
+          items: grouped,
+          startIndex,
+          endIndex: index - 1,
+        });
+      }
+    }
+    return bundles;
+  }
+
+  function cardPageIndexForItemIndex(itemIndex) {
+    const bundles = buildCardPageBundles();
+    for (let idx = 0; idx < bundles.length; idx += 1) {
+      if (itemIndex >= bundles[idx].startIndex && itemIndex <= bundles[idx].endIndex) {
+        return idx;
+      }
+    }
+    return 0;
+  }
+
+  function stepIndexForCardPage(pageIndex) {
+    const bundles = buildCardPageBundles();
+    return bundles[pageIndex]?.startIndex ?? 0;
+  }
+
   function getCurrentPageItems() {
     if (currentLayoutMode === 'step') {
       return [questionItems[currentQuestionPage]].filter(Boolean);
     }
-    const pages = chunkQuestions(questionItems);
-    return pages[currentQuestionPage] || [];
+    const bundles = buildCardPageBundles();
+    return bundles[currentQuestionPage]?.items || [];
   }
 
   function centerQuestionCard(itemId, { focus = false } = {}) {
@@ -696,8 +1073,8 @@ function completionStorageKey(token) {
   }
 
   function renderQuestionWorkspace() {
-    const pages = chunkQuestions(questionItems);
-    const safePageCount = Math.max(1, pages.length);
+    const cardBundles = buildCardPageBundles();
+    const safePageCount = Math.max(1, cardBundles.length);
     const maxIndex = currentLayoutMode === 'step'
       ? Math.max(questionItems.length - 1, 0)
       : safePageCount - 1;
@@ -706,7 +1083,7 @@ function completionStorageKey(token) {
 
     const currentItems = currentLayoutMode === 'step'
       ? [questionItems[currentQuestionPage]].filter(Boolean)
-      : (pages[currentQuestionPage] || []);
+      : (cardBundles[currentQuestionPage]?.items || []);
     if (currentLayoutMode === 'step') {
       const activeItem = currentItems[0] || questionItems[0];
       renderStepQuestion(questionsEl, activeItem, questionOptions, answerState, questionItems.length);
@@ -718,7 +1095,7 @@ function completionStorageKey(token) {
     renderQuestionNav(questionNavEl, questionItems, currentQuestionPage, answerState, (questionIndex) => {
       currentQuestionPage = currentLayoutMode === 'step'
         ? questionIndex
-        : Math.floor(questionIndex / QUESTION_PAGE_SIZE);
+        : cardPageIndexForItemIndex(questionIndex);
       renderQuestionWorkspace();
       const targetCard = document.getElementById(`question-card-${questionItems[questionIndex].id}`);
       targetCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -726,28 +1103,34 @@ function completionStorageKey(token) {
     }, currentLayoutMode);
 
     const answered = answeredCount();
-    const total = questionItems.length;
+    const total = totalQuestionCount();
     const percent = total ? Math.round((answered / total) * 100) : 0;
     const missing = total - answered;
+    const part = activePart();
+    subEl.textContent = buildPartCountSummaryText();
 
     progressTextEl.textContent = `${answered} / ${total} 문항 응답`;
     progressMetaEl.textContent = missing === 0
       ? '모든 문항 응답이 완료되었습니다.'
-      : `현재 ${percent}% 완료, 미응답 ${missing}문항 남음`;
+      : `${part?.title || '파트'} 진행 중, 현재 ${percent}% 완료`;
     progressFillEl.style.width = `${percent}%`;
     missingCountEl.textContent = `미응답 ${missing}`;
     missingCountEl.classList.toggle('is-complete', missing === 0);
+    missingCountEl.disabled = missing === 0;
     pageLabelEl.textContent = currentLayoutMode === 'step'
-      ? `${currentQuestionPage + 1} / ${questionItems.length} 문항`
-      : `${currentQuestionPage + 1} / ${safePageCount} 페이지`;
-    questionPrevBtn.disabled = currentQuestionPage === 0;
-    questionNextBtn.disabled = currentQuestionPage >= (currentLayoutMode === 'step' ? questionItems.length - 1 : safePageCount - 1);
-    questionPrevBtn.textContent = '이전 문항';
-    questionNextBtn.textContent = '다음 문항';
+      ? `${part?.title || '파트'} · ${currentQuestionPage + 1} / ${questionItems.length} 문항`
+      : `${part?.title || '파트'} · ${currentQuestionPage + 1} / ${safePageCount} 페이지`;
+    questionPrevBtn.disabled = currentQuestionPage === 0 && currentPartIndex === 0;
     const maxPage = currentLayoutMode === 'step' ? questionItems.length - 1 : safePageCount - 1;
     const isLastPage = currentQuestionPage >= maxPage;
-    submitBtn.textContent = isLastPage ? '제출' : '다음';
-    submitBtn.dataset.action = isLastPage ? 'submit' : 'next';
+    const isLastPart = currentPartIndex >= questionParts.length - 1;
+    questionNextBtn.disabled = isLastPage && isLastPart;
+    questionPrevBtn.textContent = currentPartIndex > 0 && currentQuestionPage === 0 ? '이전 파트' : '이전 문항';
+    questionNextBtn.textContent = isLastPage
+      ? (isLastPart ? '다음 없음' : '다음 파트')
+      : '다음 문항';
+    submitBtn.textContent = '제출';
+    submitBtn.disabled = isSubmitting || isCompleted || !allQuestionsAnswered();
 
     (currentLayoutMode === 'step' ? [questionItems[currentQuestionPage]].filter(Boolean) : currentItems).forEach((item) => {
       const value = String(answerState[String(item.id)] || '').trim();
@@ -775,7 +1158,7 @@ function completionStorageKey(token) {
 
     currentQuestionPage = currentLayoutMode === 'step'
       ? missingIndex
-      : Math.floor(missingIndex / QUESTION_PAGE_SIZE);
+      : cardPageIndexForItemIndex(missingIndex);
     shouldCenterOnRender = true;
     renderQuestionWorkspace();
 
@@ -787,24 +1170,70 @@ function completionStorageKey(token) {
     return true;
   }
 
+  function moveToFirstMissingAcrossParts({ emphasize = false, focus = false } = {}) {
+    const location = firstMissingLocationAcrossParts();
+    if (!location) {
+      return false;
+    }
+    if (currentPartIndex !== location.partIndex) {
+      currentPartIndex = location.partIndex;
+      syncActivePartState();
+    }
+    currentQuestionPage = currentLayoutMode === 'step'
+      ? location.itemIndex
+      : cardPageIndexForItemIndex(location.itemIndex);
+    shouldCenterOnRender = true;
+    renderQuestionWorkspace();
+    if (emphasize) {
+      setQuestionCardState(questionsEl, String(location.item.id), { answered: false, missing: true });
+    }
+    centerQuestionCard(String(location.item.id), { focus });
+    return true;
+  }
+
   questionPrevBtn.addEventListener('click', () => {
+    clearAutoAdvanceTimer();
+    if (currentQuestionPage === 0 && currentPartIndex > 0) {
+      currentPartIndex = Math.max(0, currentPartIndex - 1);
+      syncActivePartState();
+      currentQuestionPage = currentLayoutMode === 'step'
+        ? Math.max(questionItems.length - 1, 0)
+        : Math.max(buildCardPageBundles().length - 1, 0);
+      renderQuestionWorkspace();
+      return;
+    }
     currentQuestionPage = Math.max(0, currentQuestionPage - 1);
     shouldCenterOnRender = true;
     renderQuestionWorkspace();
   });
 
   questionNextBtn.addEventListener('click', () => {
-    const maxPage = currentLayoutMode === 'step' ? questionItems.length - 1 : chunkQuestions(questionItems).length - 1;
+    clearAutoAdvanceTimer();
+    const maxPage = currentLayoutMode === 'step' ? questionItems.length - 1 : buildCardPageBundles().length - 1;
+    if (currentQuestionPage >= maxPage && currentPartIndex < questionParts.length - 1) {
+      currentPartIndex = Math.min(questionParts.length - 1, currentPartIndex + 1);
+      syncActivePartState();
+      renderQuestionWorkspace();
+      return;
+    }
     currentQuestionPage = Math.min(maxPage, currentQuestionPage + 1);
     shouldCenterOnRender = true;
     renderQuestionWorkspace();
+  });
+
+  missingCountEl.addEventListener('click', () => {
+    clearAutoAdvanceTimer();
+    if (firstIncompletePartIndex() < 0) {
+      return;
+    }
+    moveToFirstMissingAcrossParts({ emphasize: true, focus: true });
   });
 
   viewModeCardsBtn.addEventListener('click', () => {
     if (currentLayoutMode === 'cards') {
       return;
     }
-    currentQuestionPage = Math.floor(currentQuestionPage / QUESTION_PAGE_SIZE);
+    currentQuestionPage = cardPageIndexForItemIndex(currentQuestionPage);
     currentLayoutMode = 'cards';
     shouldCenterOnRender = true;
     renderQuestionWorkspace();
@@ -814,7 +1243,7 @@ function completionStorageKey(token) {
     if (currentLayoutMode === 'step') {
       return;
     }
-    currentQuestionPage = Math.min(currentQuestionPage * QUESTION_PAGE_SIZE, Math.max(questionItems.length - 1, 0));
+    currentQuestionPage = Math.min(stepIndexForCardPage(currentQuestionPage), Math.max(questionItems.length - 1, 0));
     currentLayoutMode = 'step';
     shouldCenterOnRender = true;
     renderQuestionWorkspace();
@@ -859,11 +1288,11 @@ function completionStorageKey(token) {
     }
 
     if (/^[1-9]$/.test(event.key)) {
-      const questionCard = target.closest('.assessment-question-card');
-      if (!(questionCard instanceof HTMLElement)) {
+      const responseScope = target.closest('.assessment-matrix-row, .assessment-question-card');
+      if (!(responseScope instanceof HTMLElement)) {
         return;
       }
-      const optionInputs = [...questionCard.querySelectorAll('.assessment-option-card input[type="radio"]')];
+      const optionInputs = [...responseScope.querySelectorAll('.assessment-option-card input[type="radio"]')];
       const targetIndex = Number(event.key) - 1;
       if (targetIndex >= 0 && targetIndex < optionInputs.length) {
         event.preventDefault();
@@ -881,6 +1310,14 @@ function completionStorageKey(token) {
       return;
     }
     if (isSubmitting || isCompleted) {
+      return;
+    }
+    if (event.defaultPrevented) {
+      return;
+    }
+    const eventTarget = event.target;
+    if (eventTarget instanceof Node && questionsEl.contains(eventTarget)) {
+      // Question area already handles keyboard interactions; avoid double-processing at document level.
       return;
     }
     if (!/^[1-9]$/.test(event.key)) {
@@ -917,31 +1354,50 @@ function completionStorageKey(token) {
       answerState[itemId] = String(target.value || '');
       setQuestionCardState(questionsEl, itemId, { answered: true, missing: false });
       if (currentLayoutMode === 'cards') {
-        const pages = chunkQuestions(questionItems);
-        const currentItems = pages[currentQuestionPage] || [];
+        const pages = buildCardPageBundles();
+        const currentItems = pages[currentQuestionPage]?.items || [];
         const pageAllAnswered = currentItems.length > 0
           && currentItems.every((item) => String(answerState[String(item.id)] || '').trim());
         const maxPage = Math.max(pages.length - 1, 0);
         if (pageAllAnswered && currentQuestionPage < maxPage) {
-          window.setTimeout(() => {
+          scheduleAutoAdvance(() => {
             currentQuestionPage = Math.min(maxPage, currentQuestionPage + 1);
             shouldCenterOnRender = true;
             renderQuestionWorkspace();
-          }, 140);
+          });
           return;
         }
+        if (pageAllAnswered && currentQuestionPage >= maxPage && currentPartIndex < questionParts.length - 1) {
+          scheduleAutoAdvance(() => {
+            currentPartIndex = Math.min(questionParts.length - 1, currentPartIndex + 1);
+            syncActivePartState();
+            renderQuestionWorkspace();
+          });
+          return;
+        }
+        clearAutoAdvanceTimer();
       }
       renderQuestionWorkspace();
       if (currentLayoutMode === 'cards') {
         const nextMissing = findNextMissingInCurrentPage(itemId);
         if (nextMissing) {
-          centerQuestionCard(String(nextMissing.id));
+          centerQuestionCard(String(nextMissing.id), { focus: true });
         }
       }
       if (currentLayoutMode === 'step' && currentQuestionPage < questionItems.length - 1) {
         window.setTimeout(() => {
           currentQuestionPage = Math.min(questionItems.length - 1, currentQuestionPage + 1);
           shouldCenterOnRender = true;
+          renderQuestionWorkspace();
+        }, 140);
+      } else if (
+        currentLayoutMode === 'step'
+        && currentQuestionPage >= questionItems.length - 1
+        && currentPartIndex < questionParts.length - 1
+      ) {
+        window.setTimeout(() => {
+          currentPartIndex = Math.min(questionParts.length - 1, currentPartIndex + 1);
+          syncActivePartState();
           renderQuestionWorkspace();
         }, 140);
       }
@@ -1123,6 +1579,7 @@ function completionStorageKey(token) {
   }
 
   goQuestionsBtn.addEventListener('click', async () => {
+    clearAutoAdvanceTimer();
     if (isCompleted) {
       return;
     }
@@ -1163,6 +1620,7 @@ function completionStorageKey(token) {
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    clearAutoAdvanceTimer();
     if (questionStep.classList.contains('hidden')) {
       return;
     }
@@ -1170,15 +1628,6 @@ function completionStorageKey(token) {
       return;
     }
     messageEl.textContent = '';
-    const maxPage = currentLayoutMode === 'step'
-      ? questionItems.length - 1
-      : chunkQuestions(questionItems).length - 1;
-    if (currentQuestionPage < maxPage) {
-      currentQuestionPage = Math.min(maxPage, currentQuestionPage + 1);
-      shouldCenterOnRender = true;
-      renderQuestionWorkspace();
-      return;
-    }
 
     const profile = collectProfileFromForm();
     const missing = validateProfile(profile);
@@ -1189,21 +1638,26 @@ function completionStorageKey(token) {
       return;
     }
 
-    const answers = {};
-    const missingIndex = firstMissingIndex();
-    questionItems.forEach((item) => {
-      const value = String(answerState[String(item.id)] || '').trim();
-      if (value) {
-        answers[String(item.id)] = value;
-      }
-    });
-
-    if (missingIndex >= 0) {
+    const missingPartIndex = firstIncompletePartIndex();
+    if (missingPartIndex >= 0) {
       messageEl.textContent = '모든 문항에 응답해주세요.';
       messageEl.className = 'message error';
+      currentPartIndex = missingPartIndex;
+      syncActivePartState();
       moveToFirstMissing({ emphasize: true });
+      renderQuestionWorkspace();
       return;
     }
+
+    const answers = {};
+    questionParts.forEach((part) => {
+      (part.items || []).forEach((item) => {
+        const value = String(answerState[String(item.id)] || '').trim();
+        if (value) {
+          answers[String(item.id)] = value;
+        }
+      });
+    });
 
     isSubmitting = true;
     submitBtn.disabled = true;

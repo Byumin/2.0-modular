@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from app.db.models import AdminClient
+from app.db.models import AdminClient, AdminCustomTest
 from app.repositories.custom_test_repository import (
     get_assessed_counts_by_admin,
     get_assignment_counts_by_admin,
@@ -104,13 +104,13 @@ def _derive_required_profile_fields(sub_test_json: str) -> list[str]:
         or parsed.get("school_grade")
         or parsed.get("grades")
         or parsed.get("grade")
+        or parsed.get("school_age_range")
     )
-    if (isinstance(school_raw, list) and school_raw) or (isinstance(school_raw, str) and school_raw.strip()):
+    if (isinstance(school_raw, dict) and school_raw) or (isinstance(school_raw, str) and school_raw.strip()):
         required.append("school_age")
-
     return required
 
-
+# 추가 프로필 필드의 라벨이 문자열이 아닌 경우나, 옵션이 리스트가 아닌 경우 등 다양한 형태의 입력에 대해 최대한 유연하게 처리하여, 관리자 페이지에서 추가 프로필 필드를 설정할 때 발생할 수 있는 오류를 최소화한다.
 def normalize_additional_profile_fields(raw: Any) -> list[dict]:
     if isinstance(raw, dict):
         raw = raw.get("fields", [])
@@ -204,30 +204,6 @@ def normalize_additional_profile_fields(raw: Any) -> list[dict]:
     return normalized
 
 
-def extract_sub_test_variants(raw: Any) -> list[str]:
-    if not isinstance(raw, dict):
-        return []
-    variants_raw = raw.get("sub_test_variants")
-    if not isinstance(variants_raw, list):
-        return []
-
-    variants: list[str] = []
-    seen: set[str] = set()
-    for item in variants_raw:
-        sub_test_json = ""
-        if isinstance(item, str):
-            sub_test_json = item.strip()
-        elif isinstance(item, dict):
-            sub_test_json = str(item.get("sub_test_json", "")).strip()
-        if not sub_test_json:
-            continue
-        if sub_test_json in seen:
-            continue
-        seen.add(sub_test_json)
-        variants.append(sub_test_json)
-    return variants
-
-
 def extract_sub_test_variant_configs(raw: Any) -> list[dict]:
     if not isinstance(raw, dict):
         return []
@@ -278,57 +254,175 @@ def extract_sub_test_variant_configs(raw: Any) -> list[dict]:
     return normalized
 
 
-def serialize_additional_profile_payload(fields: list[dict], sub_test_variants: list[Any]) -> str:
-    variant_configs: list[dict] = []
-    seen: set[str] = set()
-    for item in sub_test_variants:
-        if isinstance(item, str):
-            sub_test_json = item.strip()
+def _safe_json_loads(raw: Any) -> Any:
+    if isinstance(raw, (dict, list)): # 딕셔너리거나 리스트면 그대로 반환
+        return raw
+    text = str(raw or "").strip() # 문자열 변환 후 공백 제거
+    if not text:
+        return None
+    try:
+        return json.loads(text) # JSON 파싱 시도 (문자열을 받아서 파이썬 객체로 변환)
+        # test가 배열이면 리스트가 되고, 객체면 딕셔너리가 됨
+    except json.JSONDecodeError:
+        return None
+
+
+def _normalize_scale_codes(raw: Any) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    return sorted({str(code).strip() for code in raw if str(code).strip()})
+
+
+def _normalize_sub_test_json(raw: Any) -> str:
+    if isinstance(raw, dict):
+        return json.dumps(raw, ensure_ascii=False)
+    return str(raw or "").strip()
+
+
+def _normalize_selected_scale_test_configs(raw: Any) -> list[dict]:
+    # raw는 selected_scales_json을 JSON 문자열로 파싱한 결과
+    if not isinstance(raw, dict):
+        return []
+
+    normalized: list[dict] = []
+    for test_id_raw, variants_raw in raw.items(): # test_id와 해당하는 sub_test_variants(실시구간들과 선택 척도들)
+        test_id = str(test_id_raw or "").strip()
+        if not test_id or not isinstance(variants_raw, list):
+            continue
+
+        variants: list[dict] = []
+        seen: set[str] = set()
+        for item in variants_raw: # 하나의 test_id에 여러 sub_test_variant가 있을 수 있음
+            if not isinstance(item, dict):
+                continue
+            sub_test_json = _normalize_sub_test_json(item.get("sub_test_json"))
             if not sub_test_json or sub_test_json in seen:
                 continue
             seen.add(sub_test_json)
-            variant_configs.append(
+            variable = item.get("variable", {}) if isinstance(item.get("variable"), dict) else {}
+            available_codes = _normalize_scale_codes(
+                item.get("available_scale_codes", variable.get("available_scale_codes", []))
+            )
+            selected_codes = _normalize_scale_codes(
+                item.get("selected_scale_codes", variable.get("selected_scale_codes", []))
+            )
+            variants.append(
                 {
                     "sub_test_json": sub_test_json,
-                    "available_scale_codes": [],
-                    "selected_scale_codes": [],
+                    "available_scale_codes": available_codes,
+                    "selected_scale_codes": selected_codes,
                 }
             )
-            continue
 
-        if not isinstance(item, dict):
-            continue
+        if variants:
+            normalized.append({"test_id": test_id, "sub_test_variants": variants})
+    # 기존 sub_test_json과 variable가 row에서 분리되어 있었지만,
+    # 이걸 하나의 딕셔너리에 담아서 normalized 변수에 정규화함
+    return normalized
 
-        sub_test_json = str(item.get("sub_test_json", "")).strip()
-        if not sub_test_json or sub_test_json in seen:
-            continue
-        seen.add(sub_test_json)
-        available_codes = sorted(
-            {
-                str(code).strip()
-                for code in item.get("available_scale_codes", [])
-                if str(code).strip()
-            }
-        )
-        selected_codes = sorted(
-            {
-                str(code).strip()
-                for code in item.get("selected_scale_codes", [])
-                if str(code).strip()
-            }
-        )
-        variant_configs.append(
-            {
-                "sub_test_json": sub_test_json,
-                "available_scale_codes": available_codes,
-                "selected_scale_codes": selected_codes,
-            }
-        )
 
+def parse_custom_test_configs(
+    *,
+    test_id: str | None,
+    sub_test_json: str | None,
+    selected_scales_json: str | None,
+) -> list[dict]:
+    selected_raw = _safe_json_loads(selected_scales_json) # selected_scales_json을 JSON 문자열이면 파싱해서 파이썬 객체로 반환
+    selected_configs = _normalize_selected_scale_test_configs(selected_raw) # 실시구간 정보와 선택된 척도 코드들을 정규화해서 리스트(딕셔너리)로 반환
+    if selected_configs:
+        return selected_configs
+    # selected_scales_json 구조가 이상한 경우 아래와 같이 처리됨
+    fallback_test_id = str(test_id or "").strip()
+    fallback_sub_test_json = str(sub_test_json or "").strip()
+    fallback_selected_codes = _normalize_scale_codes(selected_raw)
+    if not fallback_test_id or not fallback_sub_test_json:
+        return []
+
+    return [
+        {
+            "test_id": fallback_test_id,
+            "sub_test_variants": [
+                {
+                    "sub_test_json": fallback_sub_test_json,
+                    "available_scale_codes": [],
+                    "selected_scale_codes": fallback_selected_codes,
+                }
+            ],
+        }
+    ]
+
+# child_test 테이블의 row에서 정보 파싱해서, parse_custom_test_configs 넘기는?
+def load_custom_test_configs(row: AdminCustomTest) -> list[dict]:
+    return parse_custom_test_configs(
+        test_id=getattr(row, "test_id", ""),
+        sub_test_json=getattr(row, "sub_test_json", ""),
+        selected_scales_json=getattr(row, "selected_scales_json", "[]"),
+    )
+
+# 
+def flatten_custom_test_variant_configs(test_configs: list[dict]) -> list[dict]:
+    flattened: list[dict] = []
+    for config in test_configs:
+        test_id = str(config.get("test_id", "")).strip()
+        for variant in config.get("sub_test_variants", []):
+            sub_test_json = str(variant.get("sub_test_json", "")).strip()
+            if not test_id or not sub_test_json:
+                continue
+            flattened.append(
+                {
+                    "test_id": test_id,
+                    "sub_test_json": sub_test_json,
+                    "available_scale_codes": _normalize_scale_codes(variant.get("available_scale_codes", [])),
+                    "selected_scale_codes": _normalize_scale_codes(variant.get("selected_scale_codes", [])),
+                }
+            )
+    return flattened
+
+# test_configs에서 test_id들을 추출해서 리스트와 문자열로 반환, 중복 제거, 정렬, fallback 처리 등
+def summarize_custom_test_ids(test_configs: list[dict], fallback: str | None = None) -> tuple[list[str], str]:
+    # test_configs 향테 : [{test_id : id, sub_test_varints : [{sub_test_json, available_scale_codes, selected_scale_codes}, ...]
+    # fallback 형태 : [test_id] 또는 test_id 문자열
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for config in test_configs: # test_id 별로 순환
+        test_id = str(config.get("test_id", "")).strip() # test_id 추출해서 공백 제거
+        if not test_id or test_id in seen: # test_id가 없거나 이미 본 test_id면 건너뜀
+            continue
+        seen.add(test_id)
+        ordered.append(test_id)
+
+    if ordered:
+        return ordered, ", ".join(ordered) # 중복 제거된 test_id 리스트와, 쉼표로 구분된 문자열 반환
+        # 예를 들어 GOLDEN, STS면 (["GOLDEN", "STS"], "GOLDEN, STS") 반환
+
+    fallback_text = str(fallback or "").strip()
+    parsed_fallback = _safe_json_loads(fallback_text)
+    if isinstance(parsed_fallback, list):
+        fallback_ids = [str(item).strip() for item in parsed_fallback if str(item).strip()]
+        if fallback_ids:
+            return fallback_ids, ", ".join(fallback_ids)
+    if fallback_text:
+        return [fallback_text], fallback_text
+    return [], ""
+
+
+def flatten_selected_scale_pairs(test_configs: list[dict]) -> list[tuple[str, str]]:
+    pairs: set[tuple[str, str]] = set()
+    for config in test_configs:
+        test_id = str(config.get("test_id", "")).strip()
+        for variant in config.get("sub_test_variants", []):
+            for code in _normalize_scale_codes(variant.get("selected_scale_codes", [])):
+                if test_id:
+                    pairs.add((test_id, code))
+    return sorted(pairs)
+
+
+def serialize_additional_profile_payload(
+    fields: list[dict],
+) -> str:
     payload = {
         "schema_version": 2,
         "fields": fields,
-        "sub_test_variants": variant_configs,
     }
     return json.dumps(payload, ensure_ascii=False)
 
@@ -340,7 +434,10 @@ def build_custom_test_items(db, admin_id: int) -> list[dict]:
 
     items = []
     for row in rows:
-        selected_scale_codes = json.loads(row.selected_scales_json)
+        test_configs = load_custom_test_configs(row)
+        test_ids, test_id_text = summarize_custom_test_ids(test_configs, row.test_id)
+        selected_scale_pairs = flatten_selected_scale_pairs(test_configs)
+        selected_scale_codes = [code for _, code in selected_scale_pairs]
         additional_profile_fields = normalize_additional_profile_fields(
             json.loads(getattr(row, "additional_profile_fields_json", "[]") or "[]")
         )
@@ -351,11 +448,13 @@ def build_custom_test_items(db, admin_id: int) -> list[dict]:
             {
                 "id": row.id,
                 "custom_test_name": row.custom_test_name,
-                "test_id": row.test_id,
+                "test_id": test_id_text or row.test_id,
+                "test_ids": test_ids,
                 "sub_test_json": row.sub_test_json,
+                "test_configs": test_configs,
                 "selected_scale_codes": selected_scale_codes,
                 "additional_profile_fields": additional_profile_fields,
-                "scale_count": len(selected_scale_codes),
+                "scale_count": len(selected_scale_pairs),
                 "assigned_count": assigned_count,
                 "assessed_count": assessed_count,
                 "progress_status": progress_status,

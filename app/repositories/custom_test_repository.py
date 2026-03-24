@@ -162,7 +162,7 @@ def create_access_link(
     db.refresh(row)
     return row
 
-
+# access token으로 링크 조회, is_active=True인 경우만
 def get_active_access_link_by_token(db: Session, access_token: str) -> AdminCustomTestAccessLink | None:
     return (
         db.query(AdminCustomTestAccessLink)
