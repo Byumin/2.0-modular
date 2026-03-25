@@ -390,6 +390,61 @@ def _resolve_item_render_type(item: dict[str, Any]) -> str:
     return "likert"
 
 
+def _build_structured_answers(
+    *,
+    raw_answers: dict[str, str],
+    assessment_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    item_meta_by_id: dict[str, dict[str, Any]] = {}
+    ordered_item_ids: list[str] = []
+    for order, item in enumerate(assessment_items, start=1):
+        answer_key = str(item.get("id", "")).strip()
+        if not answer_key:
+            continue
+        ordered_item_ids.append(answer_key)
+        item_meta_by_id[answer_key] = {
+            "order": order,
+            "test_id": str(item.get("test_id", "")).strip(),
+            "sub_test_json": str(item.get("sub_test_json", "")).strip(),
+            "parent_item_id": str(item.get("item_id", "")).strip(),
+        }
+
+    grouped_items: dict[tuple[str, str], list[dict[str, str | int]]] = {}
+    for answer_key, raw_value in (raw_answers or {}).items():
+        key = str(answer_key).strip()
+        meta = item_meta_by_id.get(key)
+        if meta is None:
+            continue
+        group_key = (meta["test_id"], meta["sub_test_json"])
+        grouped_items.setdefault(group_key, []).append(
+            {
+                "order": int(meta["order"]),
+                "parent_item_id": meta["parent_item_id"],
+                "answer_value": str(raw_value),
+            }
+        )
+
+    structured_answers: list[dict[str, Any]] = []
+    for answer_key in ordered_item_ids:
+        meta = item_meta_by_id.get(answer_key)
+        if meta is None:
+            continue
+        group_key = (meta["test_id"], meta["sub_test_json"])
+        items = grouped_items.get(group_key)
+        if not items:
+            continue
+        if structured_answers and structured_answers[-1]["test_id"] == meta["test_id"] and structured_answers[-1]["sub_test_json"] == meta["sub_test_json"]:
+            continue
+        structured_answers.append(
+            {
+                "test_id": meta["test_id"],
+                "sub_test_json": meta["sub_test_json"],
+                "items": sorted(items, key=lambda x: int(x["order"])),
+            }
+        )
+    return structured_answers
+
+
 def _build_variant_items_and_scales(
     *,
     test_id: str,
@@ -692,7 +747,11 @@ def submit_custom_test_by_access_link(
     clean_profile: dict[str, Any] = {str(k): sanitize_profile_value(v) for k, v in (profile or {}).items()}
 
     assessment_payload = build_custom_assessment_question_payload(custom_test, clean_profile)
-    valid_item_ids = {item["id"] for item in assessment_payload["items"]}
+    valid_item_ids = {
+        str(item.get("id", "")).strip()
+        for item in assessment_payload["items"]
+        if str(item.get("id", "")).strip()
+    }
     if not valid_item_ids:
         raise HTTPException(status_code=400, detail="문항 데이터가 없습니다.")
 
@@ -724,7 +783,16 @@ def submit_custom_test_by_access_link(
         custom_test_id=custom_test.id,
         access_token=access_token,
         responder_name=final_responder_name,
-        answers_json=json.dumps({"profile": clean_profile, "answers": cleaned_answers}, ensure_ascii=False),
+        answers_json=json.dumps(
+            {
+                "profile": clean_profile,
+                "answers": _build_structured_answers(
+                    raw_answers=cleaned_answers,
+                    assessment_items=assessment_payload["items"],
+                ),
+            },
+            ensure_ascii=False,
+        ),
     )
 
     return {"message": "검사가 제출되었습니다.", "submitted_item_count": len(cleaned_answers)}
