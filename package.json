@@ -9,7 +9,9 @@
     "diagram:render:flow": "mmdc -i docs/diagrams/assessment-profile-validate-flow.mmd -o docs/diagrams/assessment-profile-validate-flow.svg -b transparent",
     "diagram:render:create-sequence": "mmdc -i docs/diagrams/custom-test-create-runtime-sequence.mmd -o docs/diagrams/custom-test-create-runtime-sequence.svg -b transparent",
     "diagram:render:create-flow": "mmdc -i docs/diagrams/custom-test-create-service-flow.mmd -o docs/diagrams/custom-test-create-service-flow.svg -b transparent",
-    "diagram:render": "npm run diagram:render:sequence && npm run diagram:render:flow && npm run diagram:render:create-sequence && npm run diagram:render:create-flow"
+    "diagram:render:scoring-sequence": "mmdc -i docs/diagrams/scoring-runtime-sequence.mmd -o docs/diagrams/scoring-runtime-sequence.svg -b transparent",
+    "diagram:render:scoring-flow": "mmdc -i docs/diagrams/scoring-service-flow.mmd -o docs/diagrams/scoring-service-flow.svg -b transparent",
+    "diagram:render": "npm run diagram:render:sequence && npm run diagram:render:flow && npm run diagram:render:create-sequence && npm run diagram:render:create-flow && npm run diagram:render:scoring-sequence && npm run diagram:render:scoring-flow"
   },
   "repository": {
     "type": "git",

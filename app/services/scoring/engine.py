@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Iterable
 
 from app.services.scoring.base import ScoringContext, ScoringResult
-from app.services.scoring.scorers.registry import get_scorer_for_test
+from app.services.scoring.tests.registry import get_scorer_for_test
 
 
 class ScoringEngine:

@@ -14,7 +14,7 @@ class AdminUser(Base):
     password_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
-
+# child_test 테이블의 row 조회
 class AdminCustomTest(Base):
     __tablename__ = "child_test"
 
