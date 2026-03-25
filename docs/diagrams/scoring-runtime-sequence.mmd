@@ -1,0 +1,46 @@
+sequenceDiagram
+    autonumber
+    actor C as Caller\n상위 호출자(미연결)
+    participant E as Service\nengine.py\nscore_tests
+    participant R as Service\ntests/registry.py\nget_scorer_for_test
+    participant STS as Service\ntests/sts.py\nStsScorer.score
+    participant G as Service\ntests/golden.py\nGoldenScorer.score
+    participant U as Service\nbase.py\nUnsupportedScorer.score
+
+    rect rgb(240,248,255)
+    Note over C,E: 1) scoring 실행 시작\n입력: test_ids + ScoringContext\nScoringContext = { custom_test_id, custom_test_name, profile, answers, assessment_payload }
+    C->>E: score_tests(test_ids, context)
+    E->>E: results = {}
+    end
+
+    rect rgb(245,255,245)
+    Note over E,R: 2) test_id 정규화 + scorer 선택 + score 호출
+    loop 각 raw_test_id
+        E->>E: raw_test_id -> str(...).strip().upper()
+        alt test_id가 빈 값
+            E->>E: continue
+        else 유효한 test_id
+            E->>R: get_scorer_for_test(test_id)
+            R->>R: normalized = str(test_id).strip().upper()
+            alt normalized == STS
+                R-->>E: StsScorer()
+                E->>STS: score(context)
+                STS-->>E: ScoringResult\n{ status: not_implemented, test_id: STS, scales: {}, meta.message }
+            else normalized == GOLDEN
+                R-->>E: GoldenScorer()
+                E->>G: score(context)
+                G-->>E: ScoringResult\n{ status: not_implemented, test_id: GOLDEN, scales: {}, meta.message }
+            else 기타 test_id
+                R-->>E: UnsupportedScorer(test_id)
+                E->>U: score(context)
+                U-->>E: ScoringResult\n{ status: skipped, test_id, scales: {}, meta.reason=unsupported_test_id }
+            end
+            E->>E: results[test_id] = result
+        end
+    end
+    end
+
+    rect rgb(255,250,240)
+    Note over E,C: 3) 결과 반환\n출력: dict[str, ScoringResult]
+    E-->>C: { [test_id]: ScoringResult }
+    end

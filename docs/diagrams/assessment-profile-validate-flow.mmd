@@ -1,38 +1,55 @@
+%%{init: {'flowchart': {'nodeSpacing': 18, 'rankSpacing': 28}}}%%
 flowchart TD
-    A[사용자 입력 profile] --> B[POST validate-profile API]
-    B --> C[validate_custom_test_profile_by_access_link]
+    A["입력 profile 예시\n(static/assessment-custom.js)\n{ name, birth_date, gender, school_age }"] --> B["POST /api/assessment-links/{token}/validate-profile\n(app/router/assessment_link_router.py)"]
+    B --> C["validate_custom_test_profile_by_access_link\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: 링크/검사/배정 검증 후 문항 payload 반환</span>"]
+    C -.-> C_SIDE["함수 내부 순서\n1) link 조회\n2) custom_test 조회\n3) 배정 내담자 검증\n4) build_custom_assessment_question_payload 호출"]
 
-    C --> D[get_active_access_link_by_token]
-    D --> E{link 존재?}
+    C --> D["get_active_access_link_by_token\n(app/repositories/custom_test_repository.py)<br/><span style='color:#6c757d'>목적: access_token으로 활성 링크 조회</span>"]
+    D --> E{"link 존재?\n(분기 함수: validate_custom_test_profile_by_access_link\napp/services/admin/assessment_links.py)"}
     E -- 아니오 --> E1[404 유효하지 않은 검사 URL]
-    E -- 예 --> F[get_custom_test_by_id_and_admin]
+    E -- 예 --> F["get_custom_test_by_id_and_admin\n(app/repositories/custom_test_repository.py)<br/><span style='color:#6c757d'>목적: admin 범위 custom_test 1건 조회</span>"]
 
-    F --> G{custom_test 존재?}
+    F --> G{"custom_test 존재?\n(분기 함수: validate_custom_test_profile_by_access_link\napp/services/admin/assessment_links.py)"}
     G -- 아니오 --> G1[404 검사를 찾을 수 없음]
-    G -- 예 --> H[find_assigned_client_for_profile]
+    G -- 예 --> H["find_assigned_client_for_profile\n(app/services/admin/clients.py)<br/><span style='color:#6c757d'>목적: 입력 profile-배정 내담자 일치 검증</span>"]
 
-    H --> H1[get_assigned_clients_for_profile]
-    H1 --> I{배정된 내담자 + 입력 profile 일치?}
+    H --> H1["get_assigned_clients_for_profile\n(app/repositories/client_repository.py)<br/><span style='color:#6c757d'>목적: 검사 배정 내담자 목록 조회</span>"]
+    H1 --> I{"배정된 내담자 + 입력 profile 일치?\n(분기 함수: validate_custom_test_profile_by_access_link\napp/services/admin/assessment_links.py)"}
     I -- 아니오 --> I1[403 배정 불일치]
-    I -- 예 --> J[build_custom_assessment_question_payload]
+    I -- 예 --> J["build_custom_assessment_question_payload\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: profile 맞춤 실시구간 문항 payload 조합</span>"]
+    J -.-> J_SIDE["함수 내부 순서\n1) test_configs 로드\n2) if not test_configs -> 404\n3) meta/variants 계산\n4) variant loop 처리\n5) if not all_items -> 400\n6) payload 반환"]
 
-    J --> K[load_custom_test_configs]
-    K --> L[_resolve_active_variants]
-    L --> M[_select_sub_test_variant_for_profile]
-    M --> N[_profile_matches_sub_test]
-    N --> O{일치 variant 존재?}
+    J --> K["load_custom_test_configs\n(app/services/admin/common.py)<br/><span style='color:#6c757d'>목적: custom_test row에서 검사 구성 로드</span>"]
+    K --> K1["parse_custom_test_configs\n(app/services/admin/common.py)<br/><span style='color:#6c757d'>목적: selected_scales_json을 config로 파싱</span>"]
+    K1 -.-> K1_SIDE["함수 내부 처리\n1) _safe_json_loads(selected_scales_json) 로 selected_raw 생성\n2) _normalize_selected_scale_test_configs(selected_raw) 로 selected_configs 생성\n3) selected_configs 있으면 그대로 return\n4) 없으면 fallback selected_scale_codes 정규화 후 fallback config 또는 [] return"]
+    K1 --> K6{"selected_configs 존재?\n(분기 함수: parse_custom_test_configs\napp/services/admin/common.py)"}
+    K6 -- 예 --> KR1["parse_custom_test_configs return: selected_configs"]
+    K6 -- 아니오 --> K8{"fallback test_id/sub_test_json 유효?\n(분기 함수: parse_custom_test_configs\napp/services/admin/common.py)"}
+    K8 -- 아니오 --> KR0["parse_custom_test_configs return: []"]
+    K8 -- 예 --> K10["fallback config 1건 생성\n[{ test_id, sub_test_variants[] }]<br/><span style='color:#6c757d'>목적: fallback 최소 config 1건 생성</span>"]
+    K10 --> KR2["parse_custom_test_configs return: fallback config"]
+    KR1 --> K_RET["load_custom_test_configs 반환값\n-> test_configs 변수 저장\n(build_custom_assessment_question_payload)"]
+    KR2 --> K_RET
+    KR0 --> K_RET
+    K_RET --> K_RET_CHK{"if not test_configs?\n(분기 함수: build_custom_assessment_question_payload\napp/services/admin/assessment_links.py)"}
+    K_RET_CHK -- 예 --> K9["404 검사 구성 정보를 찾을 수 없습니다."]
+    K_RET_CHK -- 아니오 --> KB1["_build_custom_assessment_profile_meta(custom_test_row, test_configs)"]
+    KB1 --> L["_resolve_active_variants(test_configs, profile or {})\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: profile 조건 활성 variant 결정</span>"]
+    L --> M["_select_sub_test_variant_for_profile\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: test_id 내 profile 일치 variant 선택</span>"]
+    M --> N["_profile_matches_sub_test\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: sub_test 조건과 profile 일치 판정</span>"]
+    N --> O{"일치 variant 존재?\n(분기 함수: _select_sub_test_variant_for_profile\napp/services/admin/assessment_links.py)"}
     O -- 아니오 --> O1[400 일치 구간 없음]
-    O -- 예 --> P[for each variant: _load_question_bundle]
+    O -- 예 --> P["for each variant: _load_question_bundle\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: variant별 문항 번들 반복 로드</span>"]
 
-    P --> Q[fetch_parent_item_bundle from parent tables]
-    Q --> R[_parse_item_response_options]
-    R --> S[_parse_render_rules]
-    S --> T[_build_variant_items_and_scales]
-    T --> U[_append_items_as_render_parts]
-    U --> V{items 존재?}
+    P --> Q["fetch_parent_item_bundle\n(app/repositories/parent_test_repository.py)<br/><span style='color:#6c757d'>목적: parent test 원본 문항/척도 조회</span>"]
+    Q --> R["_parse_item_response_options\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: 문항 응답 옵션 렌더 구조 변환</span>"]
+    R --> S["_parse_render_rules\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: 렌더 규칙 파싱</span>"]
+    S --> T["_build_variant_items_and_scales\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: 표시 items/scales 조립</span>"]
+    T --> U["_append_items_as_render_parts\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: items를 parts 단위로 구성</span>"]
+    U --> V{"items 존재?\n(분기 함수: build_custom_assessment_question_payload\napp/services/admin/assessment_links.py)"}
     V -- 아니오 --> V1[400 표시할 문항 없음]
-    V -- 예 --> W[assessment_payload 반환]
+    V -- 예 --> W["출력 assessment_payload 예시\n{ title, profile, parts[], scales[] }"]
 
-    W --> X[프론트 applyAssessmentPayload]
-    X --> Y[프론트 renderQuestionCards]
+    W --> X["프론트 applyAssessmentPayload\n(static/assessment-custom.js)<br/><span style='color:#6c757d'>목적: 서버 payload를 프론트 상태에 반영</span>"]
+    X --> Y["프론트 renderQuestionCards\n(static/assessment-custom.js)<br/><span style='color:#6c757d'>목적: 현재 parts/items 문항 카드 렌더</span>"]
     Y --> Z[실시 구간에 맞는 문항/템플릿 화면 표시]

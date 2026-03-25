@@ -320,7 +320,8 @@ def _normalize_selected_scale_test_configs(raw: Any) -> list[dict]:
     # 이걸 하나의 딕셔너리에 담아서 normalized 변수에 정규화함
     return normalized
 
-
+# selected_scales_json이 JSON 문자열이 아닌 경우에도 최대한 유연하게 처리하여,
+# 검사 구성 정보를 파싱할 때 발생할 수 있는 오류를 최소화한다.
 def parse_custom_test_configs(
     *,
     test_id: str | None,
@@ -351,7 +352,8 @@ def parse_custom_test_configs(
         }
     ]
 
-# child_test 테이블의 row에서 정보 파싱해서, parse_custom_test_configs 넘기는?
+# AdminCustomTest orm 모델을 통해 child_test 테이블의 row에서 정보 파싱해서
+# parse_custom_test_configs 넘기는?
 def load_custom_test_configs(row: AdminCustomTest) -> list[dict]:
     return parse_custom_test_configs(
         test_id=getattr(row, "test_id", ""),

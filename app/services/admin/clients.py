@@ -52,7 +52,7 @@ def find_assigned_client_for_profile(
     custom_test_id: int,
     profile: dict[str, Any],
 ) -> tuple[AdminClient | None, str]:
-    assigned_clients = get_assigned_clients_for_profile(
+    assigned_clients = get_assigned_clients_for_profile( # 입력한 인적사항과 배정된 내담자 조회
         db,
         admin_user_id=admin_user_id,
         custom_test_id=custom_test_id,

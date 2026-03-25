@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True
 class ScoringContext:
     custom_test_id: int
     custom_test_name: str

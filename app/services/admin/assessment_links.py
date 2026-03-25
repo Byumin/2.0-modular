@@ -146,11 +146,12 @@ def _required_profile_fields_for_variants(test_configs: list[dict]) -> list[str]
                 required.append(key)
     return required
 
-
+# custom_test_row의 test_configs에서 profile과 일치하는 검사 구간을 찾아서,
+# 해당 검사 구간에 맞는 문항 화면 payload를 반환
 def _build_custom_assessment_profile_meta(custom_test_row: AdminCustomTest, test_configs: list[dict]) -> dict:
     test_ids, test_id_text = summarize_custom_test_ids(test_configs, custom_test_row.test_id)
     raw_additional_payload = json.loads(getattr(custom_test_row, "additional_profile_fields_json", "[]") or "[]")
-    additional_profile_fields = normalize_additional_profile_fields(raw_additional_payload)
+    additional_profile_fields = normalize_additional_profile_fields(raw_additional_payload) # 커스텀 검사의 생성한 추가 인적사항 필드 정규화
     return {
         "custom_test_id": custom_test_row.id,
         "custom_test_name": custom_test_row.custom_test_name,
@@ -190,7 +191,7 @@ def _resolve_active_variants(test_configs: list[dict], profile: dict[str, Any]) 
         )
     return resolved
 
-
+# custom_test_row의 test_configs에서 profile과 일치하는 검사 구간을 찾아서, 해당 검사 구간에 맞는 문항 화면 payload를 반환
 def _load_question_bundle(test_id: str, sub_test_json: str) -> dict:
     row = fetch_parent_item_bundle(test_id, sub_test_json)
     if row is None:
@@ -526,7 +527,7 @@ def _append_items_as_render_parts(
         segment_render_type = current_type
     flush_segment(segment_start, len(items), segment_render_type)
 
-
+# 입력 인적사항에 맞는 검사 구간 찾아서, 해당 검사 구간에 맞는 문항 payload 반환
 def build_custom_assessment_question_payload(custom_test_row: AdminCustomTest, profile: dict[str, Any]) -> dict:
     test_configs = load_custom_test_configs(custom_test_row)
     if not test_configs:
@@ -630,13 +631,13 @@ def get_custom_test_by_access_link(db: Session, access_token: str) -> dict:
     payload["access_token"] = access_token # 응답에 access_token 포함
     return payload
 
-
+# access token으로 링크 조회, 해당 링크의 custom_test row 조회, 인적사항과 일치하는 검사 구간 확인, 검사 문항 화면 payload 반환
 def validate_custom_test_profile_by_access_link(db: Session, access_token: str, profile: dict[str, Any]) -> dict:
-    link = get_active_access_link_by_token(db, access_token)
+    link = get_active_access_link_by_token(db, access_token) # access token으로 링크 조회
     if link is None:
         raise HTTPException(status_code=404, detail="유효하지 않은 검사 URL입니다.")
 
-    custom_test = get_custom_test_by_id_and_admin(
+    custom_test = get_custom_test_by_id_and_admin( # 해당 링크의 custom_test row 조회
         db,
         custom_test_id=link.admin_custom_test_id,
         admin_user_id=link.admin_user_id,
@@ -644,7 +645,7 @@ def validate_custom_test_profile_by_access_link(db: Session, access_token: str, 
     if custom_test is None:
         raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
 
-    _, error_message = find_assigned_client_for_profile(
+    _, error_message = find_assigned_client_for_profile( # 입력한 인적사항과 배정된 내담자 확인 + 값 검증
         db,
         admin_user_id=link.admin_user_id,
         custom_test_id=custom_test.id,
