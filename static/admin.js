@@ -2302,9 +2302,6 @@ async function initClientDetailPage() {
   const parentReportDetailEl = document.getElementById('clientParentReportDetail');
   const parentReportTitleEl = document.getElementById('clientParentReportTitle');
   const parentReportMetaEl = document.getElementById('clientParentReportMeta');
-  const parentReportScaleCountEl = document.getElementById('clientParentReportScaleCount');
-  const parentReportAvgScoreEl = document.getElementById('clientParentReportAvgScore');
-  const parentReportTopScaleEl = document.getElementById('clientParentReportTopScale');
   const parentReportScaleRowsEl = document.getElementById('clientParentReportScaleRows');
   const openClientResultViewerBtn = document.getElementById('openClientResultViewerBtn');
   const msg = document.getElementById('clientDetailMessage');
@@ -2374,19 +2371,22 @@ async function initClientDetailPage() {
   };
 
   const buildParentResultItems = (item, logs) => {
-    const backendRows = Array.isArray(item.parent_test_results)
-      ? item.parent_test_results
-      : (Array.isArray(item.parent_results) ? item.parent_results : []);
+    const candidateRows = [
+      item.parent_test_results,
+      item.parent_results,
+      item.custom_test_results,
+    ];
+    const backendRows = candidateRows.find((rows) => Array.isArray(rows) && rows.length) || [];
     if (backendRows.length) {
       return backendRows.map((row, idx) => {
         const customTests = Array.isArray(row?.custom_test_names)
           ? row.custom_test_names.map((v) => toText(v)).filter(Boolean)
-          : (toText(row?.custom_test_name) ? [toText(row?.custom_test_name)] : []);
+          : (toText(row?.custom_test_name ?? row?.test_name) ? [toText(row?.custom_test_name ?? row?.test_name)] : []);
         return {
           id: toText(row?.id, `parent-${idx + 1}`),
           parent_test_name: toText(row?.parent_test_name ?? row?.parent_test_id ?? row?.test_id, '기반 검사'),
-          performed_count: toCount(row?.performed_count ?? row?.assessment_count ?? row?.count),
-          last_assessed_on: toText(row?.last_assessed_on ?? row?.latest_assessed_on, '-'),
+          performed_count: toCount(row?.performed_count ?? row?.assessment_count ?? row?.count ?? 1),
+          last_assessed_on: toText(row?.last_assessed_on ?? row?.latest_assessed_on ?? row?.assessed_on ?? row?.created_at, '-'),
           custom_tests: customTests,
           scales: normalizeScaleItems(row?.scales ?? row?.scale_results),
         };
@@ -2418,36 +2418,23 @@ async function initClientDetailPage() {
     parentResultsEmptyEl.classList.add('hidden');
 
     rows.forEach((row) => {
-      const scaleRows = (row.scales || []).slice(0, 6);
-      const scaleItemsHtml = scaleRows.map((scale) => `
-        <li class="parent-result-scale-item">
-          <span>${escapeHtml(scale.scale_code)} · ${escapeHtml(scale.scale_name)}</span>
-          <span>점수 ${escapeHtml(scale.score_text)} / 수준 ${escapeHtml(scale.level_text)}</span>
-        </li>
-      `).join('');
-      const scaleBodyHtml = scaleItemsHtml
-        ? `<ul class="parent-result-scale-list">${scaleItemsHtml}</ul>`
-        : '<p class="parent-result-note">채점 결과 데이터가 준비되면 표시됩니다.</p>';
       const customTestsText = row.custom_tests.length ? row.custom_tests.join(', ') : '-';
       const isActive = String(row.id) === String(activeParentReportId);
 
       const li = document.createElement('li');
       li.className = `row-item parent-result-item ${isActive ? 'is-active' : ''}`;
       li.innerHTML = `
-        <div class="parent-result-head">
-          <strong>${escapeHtml(row.parent_test_name)}</strong>
-          <div class="row-actions">
-            <span class="badge badge-live">실시 ${row.performed_count}건</span>
+        <div class="parent-result-row-grid">
+          <strong class="parent-result-name">${escapeHtml(row.parent_test_name)}</strong>
+          <span class="parent-result-cell">${escapeHtml(row.last_assessed_on || '-')}</span>
+          <span class="parent-result-cell">${escapeHtml(customTestsText)}</span>
+          <span class="parent-result-cell">${escapeHtml(String(row.scales.length || 0))}개</span>
+          <div class="row-actions parent-result-actions">
             <button type="button" class="outline-btn uniform-btn" data-role="view-parent-report" data-id="${escapeHtml(String(row.id))}">
-              ${isActive ? '리포트 닫기' : '리포트 보기'}
+              ${isActive ? '결과 닫기' : '결과 보기'}
             </button>
           </div>
         </div>
-        <div class="parent-result-meta">
-          <span>최근 실시일: ${escapeHtml(row.last_assessed_on || '-')}</span>
-          <span>커스텀 검사: ${escapeHtml(customTestsText)}</span>
-        </div>
-        ${scaleBodyHtml}
       `;
       parentResultsListEl.appendChild(li);
     });
@@ -2468,51 +2455,21 @@ async function initClientDetailPage() {
     if (parentReportMetaEl) {
       parentReportMetaEl.textContent = `최근 실시일: ${active.last_assessed_on || '-'} | 실시 ${active.performed_count}건`;
     }
-    if (parentReportScaleCountEl) {
-      parentReportScaleCountEl.textContent = `${active.scales.length}개`;
-    }
-    const numericScores = active.scales
-      .map((scale) => scale.score_number)
-      .filter((score) => Number.isFinite(score));
-    const avgScore = numericScores.length
-      ? (numericScores.reduce((acc, cur) => acc + cur, 0) / numericScores.length).toFixed(1)
-      : '-';
-    if (parentReportAvgScoreEl) {
-      parentReportAvgScoreEl.textContent = avgScore === '-' ? '-' : `${avgScore}점`;
-    }
-    const topScale = active.scales
-      .filter((scale) => Number.isFinite(scale.score_number))
-      .sort((a, b) => b.score_number - a.score_number)[0];
-    if (parentReportTopScaleEl) {
-      parentReportTopScaleEl.textContent = topScale
-        ? `${topScale.scale_code} ${topScale.scale_name}`
-        : '-';
-    }
 
     if (!parentReportScaleRowsEl) {
       return;
     }
     parentReportScaleRowsEl.innerHTML = '';
-    const maxScore = numericScores.length ? Math.max(...numericScores) : 0;
-    active.scales.forEach((scale) => {
-      const barPct = (maxScore > 0 && Number.isFinite(scale.score_number))
-        ? Math.max(4, Math.round((scale.score_number / maxScore) * 100))
-        : 0;
-      const barHtml = barPct > 0
-        ? `<div class="parent-scale-bar-track"><div class="parent-scale-bar-fill" style="width:${barPct}%"></div></div>`
-        : '<div class="parent-scale-bar-track is-empty"></div>';
-      const row = document.createElement('article');
-      row.className = 'parent-scale-bar-row';
-      row.innerHTML = `
-        <div class="parent-scale-bar-head">
-          <strong>${escapeHtml(scale.scale_code)} · ${escapeHtml(scale.scale_name)}</strong>
-          <span>점수 ${escapeHtml(scale.score_text)} / 수준 ${escapeHtml(scale.level_text)}</span>
-        </div>
-        ${barHtml}
-        <p class="parent-scale-bar-note">${escapeHtml(scale.note || '채점 결과 데이터가 준비되면 표시됩니다.')}</p>
-      `;
-      parentReportScaleRowsEl.appendChild(row);
-    });
+    const row = document.createElement('article');
+    row.className = 'parent-scale-bar-row';
+    row.innerHTML = `
+      <div class="parent-scale-bar-head">
+        <strong>${escapeHtml(active.parent_test_name)} 결과 화면</strong>
+        <span>프론트 레이아웃 준비 완료</span>
+      </div>
+      <p class="parent-scale-bar-note">여기에 ${escapeHtml(active.parent_test_name)} 검사 전용 리포트 내용을 붙이면 됩니다. 현재는 parent 검사 단위 선택/열기 흐름만 연결된 상태입니다.</p>
+    `;
+    parentReportScaleRowsEl.appendChild(row);
   };
 
   if (parentResultsListEl) {
@@ -2572,10 +2529,15 @@ async function initClientDetailPage() {
       logs.forEach((log) => {
         const li = document.createElement('li');
         li.className = 'row-item';
+        const customTestName = toText(log.custom_test_name, '커스텀 검사');
+        const parentTestName = toText(log.parent_test_name, '');
+        const summaryText = parentTestName
+          ? `${customTestName} (기반: ${parentTestName})`
+          : customTestName;
         li.innerHTML = `
           <div class="row-grid client-log-row-grid">
-            <div class="row-col main-col"><strong>${log.assessed_on || '-'}</strong></div>
-            <div class="row-col">${toKstString(log.created_at || '')}</div>
+            <div class="row-col main-col"><strong>${summaryText}</strong></div>
+            <div class="row-col">${log.assessed_on || '-'}</div>
           </div>
         `;
         logListEl.appendChild(li);
@@ -2680,13 +2642,8 @@ async function initClientResultPage() {
   const selectedTestMetaEl = document.getElementById('clientResultSelectedTestMeta');
   const selectedScaleSummaryEl = document.getElementById('clientResultSelectedScaleSummary');
   const scaleFilterLegendEl = document.getElementById('clientResultScaleFilterLegend');
-  const scaleCountEl = document.getElementById('clientResultScaleCount');
-  const avgScoreEl = document.getElementById('clientResultAvgScore');
-  const topScaleEl = document.getElementById('clientResultTopScale');
   const barChartEl = document.getElementById('clientResultBarChart');
   const profileChartEl = document.getElementById('clientResultProfileChart');
-  const compareChartEl = document.getElementById('clientResultCompareChart');
-  const tableBodyEl = document.getElementById('clientResultTableBody');
   const detailEmptyEl = document.getElementById('clientResultDetailEmpty');
   const pageMessageEl = document.getElementById('clientResultPageMessage');
 
@@ -2999,6 +2956,19 @@ async function initClientResultPage() {
   let testItems = [];
   const selectedScaleKeys = new Set();
   const expandedTreeGroups = new Set();
+  let profileChartAnimationFrame = 0;
+  let previousProfileChartPoints = new Map();
+  let hasProfileChartRendered = false;
+
+  const cancelProfileChartAnimation = () => {
+    if (profileChartAnimationFrame) {
+      cancelAnimationFrame(profileChartAnimationFrame);
+      profileChartAnimationFrame = 0;
+    }
+  };
+
+  const easeProfileMotion = (t) => 1 - ((1 - t) ** 3);
+  const toProfilePointKey = (scale) => `${toText(scale?.parent_test_name, '')}::${toText(scale?.scale_code, '')}`;
 
   const getPrimaryTest = () => (testItems.length ? testItems[0] : null);
 
@@ -3280,51 +3250,6 @@ async function initClientResultPage() {
     selectedScaleSummaryEl.appendChild(scaleRow);
   };
 
-  const renderScoreSummary = (scales) => {
-    const rows = Array.isArray(scales) ? scales : [];
-    if (!rows.length) {
-      if (scaleCountEl) {
-        scaleCountEl.textContent = '결과 생성 전';
-      }
-      if (avgScoreEl) {
-        avgScoreEl.textContent = '점수 미입력';
-      }
-      if (topScaleEl) {
-        topScaleEl.textContent = '결과 생성 전';
-      }
-      return;
-    }
-
-    if (scaleCountEl) {
-      scaleCountEl.textContent = `${rows.length}개`;
-    }
-    const numericScores = rows
-      .map((scale) => scale.score_number)
-      .filter((score) => Number.isFinite(score));
-    if (!numericScores.length) {
-      if (avgScoreEl) {
-        avgScoreEl.textContent = '점수 미입력';
-      }
-      if (topScaleEl) {
-        topScaleEl.textContent = '채점 진행 전';
-      }
-      return;
-    }
-
-    const avgScore = numericScores.length
-      ? (numericScores.reduce((acc, cur) => acc + cur, 0) / numericScores.length).toFixed(1)
-      : '-';
-    if (avgScoreEl) {
-      avgScoreEl.textContent = `${avgScore}점`;
-    }
-    const topScale = rows
-      .filter((scale) => Number.isFinite(scale.score_number))
-      .sort((a, b) => b.score_number - a.score_number)[0];
-    if (topScaleEl) {
-      topScaleEl.textContent = topScale ? `${topScale.scale_code} ${topScale.scale_name}` : '채점 전 상태';
-    }
-  };
-
   const renderBarChart = (scales) => {
     if (!barChartEl) {
       return;
@@ -3377,66 +3302,17 @@ async function initClientResultPage() {
     });
   };
 
-  const renderCompareChart = (scales) => {
-    if (!compareChartEl) {
-      return;
-    }
-    const rows = Array.isArray(scales) ? scales : [];
-    compareChartEl.innerHTML = '';
-    if (!rows.length) {
-      compareChartEl.innerHTML = `
-        <div class="client-chart-placeholder">
-          <p>선택된 척도가 없습니다. 좌측 트리에서 척도를 선택하세요.</p>
-          <div class="client-chart-placeholder-bars">
-            <span></span><span></span><span></span>
-          </div>
-        </div>
-      `;
-      return;
-    }
-
-    const numericRows = rows
-      .filter((scale) => Number.isFinite(scale.score_number))
-      .sort((a, b) => b.score_number - a.score_number);
-    if (!numericRows.length) {
-      compareChartEl.innerHTML = `
-        <div class="client-chart-placeholder">
-          <p>채점 진행 전입니다. 선택된 척도 비교 그래프가 준비중입니다.</p>
-          <div class="client-chart-placeholder-bars">
-            <span></span><span></span><span></span>
-          </div>
-        </div>
-      `;
-      return;
-    }
-
-    const maxScore = Math.max(...numericRows.map((scale) => scale.score_number), 1);
-    numericRows.forEach((scale, idx) => {
-      const barPct = Math.max(4, Math.round((scale.score_number / maxScore) * 100));
-      const rank = idx + 1;
-      const row = document.createElement('article');
-      row.className = 'client-result-bar-row';
-      row.innerHTML = `
-        <div class="client-result-bar-head">
-          <strong>${rank}. ${escapeHtml(scale.scale_code)} · ${escapeHtml(scale.scale_name)}</strong>
-          <span>${escapeHtml(scale.score_text || '-')}</span>
-        </div>
-        <div class="client-result-bar-track">
-          <div class="client-result-bar-fill" style="width:${barPct}%"></div>
-        </div>
-      `;
-      compareChartEl.appendChild(row);
-    });
-  };
-
   const renderProfileChart = (scales) => {
     if (!profileChartEl) {
       return;
     }
+    cancelProfileChartAnimation();
     profileChartEl.innerHTML = '';
 
-    const rows = Array.isArray(scales) ? scales : [];
+    const rows = Array.isArray(scales) ? scales.slice() : [];
     if (!rows.length) {
+      previousProfileChartPoints = new Map();
+      hasProfileChartRendered = false;
       const frame = createSvgEl('rect', {
         x: 18,
         y: 18,
@@ -3454,11 +3330,31 @@ async function initClientResultPage() {
       return;
     }
 
+    const parentPriority = { GOLDEN: 0, STS: 1 };
+    rows.sort((left, right) => {
+      const leftParent = toText(left?.parent_test_name, '').toUpperCase();
+      const rightParent = toText(right?.parent_test_name, '').toUpperCase();
+      const leftOrder = Object.prototype.hasOwnProperty.call(parentPriority, leftParent)
+        ? parentPriority[leftParent]
+        : 99;
+      const rightOrder = Object.prototype.hasOwnProperty.call(parentPriority, rightParent)
+        ? parentPriority[rightParent]
+        : 99;
+      if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
+      }
+      const leftCode = toText(left?.scale_code, '');
+      const rightCode = toText(right?.scale_code, '');
+      return leftCode.localeCompare(rightCode, 'ko');
+    });
+
     const numericScores = rows.map((scale) => (
       Number.isFinite(scale.score_number) ? scale.score_number : null
     ));
     const validNumbers = numericScores.filter((score) => Number.isFinite(score));
     if (!validNumbers.length) {
+      previousProfileChartPoints = new Map();
+      hasProfileChartRendered = false;
       const frame = createSvgEl('rect', {
         x: 18,
         y: 18,
@@ -3480,93 +3376,227 @@ async function initClientResultPage() {
     }
 
     const width = 560;
-    const height = 240;
-    const pLeft = 42;
-    const pRight = 20;
-    const pTop = 20;
-    const pBottom = 42;
+    const height = 280;
+    const pLeft = 38;
+    const pRight = 26;
+    const pTop = 16;
+    const pBottom = 60;
     const chartW = width - pLeft - pRight;
     const chartH = height - pTop - pBottom;
-    const maxScore = Math.max(...validNumbers, 1);
+    const maxScore = 100;
+    const xInset = Math.min(28, chartW * 0.06);
+    const plotLeft = pLeft + xInset;
+    const plotRight = width - pRight - xInset;
+    const plotW = Math.max(1, plotRight - plotLeft);
 
     for (let i = 0; i <= 4; i += 1) {
       const y = pTop + (chartH * i) / 4;
       profileChartEl.appendChild(createSvgEl('line', {
-        x1: pLeft,
-        x2: width - pRight,
+        x1: plotLeft,
+        x2: plotRight,
         y1: y,
         y2: y,
         stroke: '#e6e9ef',
         'stroke-width': 1,
       }));
+      const axisLabel = createSvgEl('text', {
+        x: pLeft - 10,
+        y: y + 4,
+        'text-anchor': 'end',
+        'font-size': 8,
+        'font-weight': 500,
+        fill: '#738193',
+      });
+      axisLabel.textContent = String(100 - i * 25);
+      profileChartEl.appendChild(axisLabel);
     }
+
+    profileChartEl.appendChild(createSvgEl('line', {
+      x1: plotLeft,
+      x2: plotRight,
+      y1: pTop + chartH,
+      y2: pTop + chartH,
+      stroke: '#d8e0ea',
+      'stroke-width': 1,
+    }));
 
     const points = rows.map((scale, idx) => {
       const x = rows.length === 1
-        ? pLeft + chartW / 2
-        : pLeft + (chartW * idx) / Math.max(1, rows.length - 1);
-      const value = Number.isFinite(scale.score_number) ? scale.score_number : 0;
+        ? plotLeft + plotW / 2
+        : plotLeft + (plotW * idx) / Math.max(1, rows.length - 1);
+      const rawValue = Number.isFinite(scale.score_number) ? scale.score_number : 0;
+      const value = Math.max(0, Math.min(100, rawValue));
       const y = pTop + chartH - (value / maxScore) * chartH;
-      return { x, y, scale, hasNumeric: Number.isFinite(scale.score_number) };
+      return {
+        key: toProfilePointKey(scale),
+        x,
+        y,
+        scale,
+        hasNumeric: Number.isFinite(scale.score_number),
+      };
     });
 
     const path = createSvgEl('polyline', {
       fill: 'none',
       stroke: '#85acd1',
-      'stroke-width': 2.5,
-      points: points.map((point) => `${point.x},${point.y}`).join(' '),
+      'stroke-width': 2,
+      points: '',
     });
     profileChartEl.appendChild(path);
 
-    points.forEach((point) => {
-      profileChartEl.appendChild(createSvgEl('circle', {
+    const pointEls = points.map((point) => {
+      const circle = createSvgEl('circle', {
         cx: point.x,
         cy: point.y,
-        r: 3.5,
+        r: 3,
         fill: point.hasNumeric ? '#5b89b4' : '#cfd8e4',
-      }));
+        opacity: 0,
+      });
+      profileChartEl.appendChild(circle);
       const label = createSvgEl('text', {
         x: point.x,
-        y: height - 14,
+        y: height - 34,
         'text-anchor': 'middle',
-        'font-size': 10,
-        fill: '#6f7785',
+        'font-size': 8,
+        'font-weight': 500,
+        fill: '#6a798b',
       });
       label.textContent = point.scale.scale_code;
       profileChartEl.appendChild(label);
+      return { circle, label };
     });
-  };
 
-  const renderResultTable = (scales, emptyMessage = '결과 생성 전입니다.') => {
-    if (!tableBodyEl) {
+    const groups = [];
+    rows.forEach((scale, idx) => {
+      const parent = toText(scale.parent_test_name, '기반 검사');
+      const last = groups[groups.length - 1];
+      if (!last || last.parent !== parent) {
+        groups.push({ parent, start: idx, end: idx });
+        return;
+      }
+      last.end = idx;
+    });
+
+    groups.forEach((group, idx) => {
+      const startPoint = points[group.start];
+      const endPoint = points[group.end];
+      if (!startPoint || !endPoint) {
+        return;
+      }
+
+      const groupLeft = group.start === group.end
+        ? startPoint.x - 18
+        : startPoint.x;
+      const groupRight = group.start === group.end
+        ? endPoint.x + 18
+        : endPoint.x;
+      const centerX = (groupLeft + groupRight) / 2;
+
+      profileChartEl.appendChild(createSvgEl('line', {
+        x1: groupLeft,
+        x2: groupRight,
+        y1: height - 24,
+        y2: height - 24,
+        stroke: '#c9d5e3',
+        'stroke-width': 1,
+      }));
+
+      if (idx < groups.length - 1) {
+        const separatorX = groupRight + ((points[group.end + 1]?.x ?? groupRight) - groupRight) / 2;
+        profileChartEl.appendChild(createSvgEl('line', {
+          x1: separatorX,
+          x2: separatorX,
+          y1: pTop + chartH + 6,
+          y2: height - 20,
+          stroke: '#dde5ef',
+          'stroke-width': 1,
+          'stroke-dasharray': '3 3',
+        }));
+      }
+
+      const groupLabel = createSvgEl('text', {
+        x: centerX,
+        y: height - 9,
+        'text-anchor': 'middle',
+        'font-size': 8,
+        'font-weight': 600,
+        fill: '#66788e',
+      });
+      groupLabel.textContent = group.parent.toUpperCase();
+      profileChartEl.appendChild(groupLabel);
+    });
+
+    const baselineY = pTop + chartH;
+    const reducedMotion = typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const duration = hasProfileChartRendered ? 320 : 520;
+    const fromPoints = points.map((point) => {
+      const previous = previousProfileChartPoints.get(point.key);
+      return {
+        x: point.x,
+        y: previous ? previous.y : baselineY,
+      };
+    });
+    const applyFrame = (t) => {
+      const currentPoints = points.map((point, idx) => {
+        const from = fromPoints[idx];
+        const currentY = from.y + ((point.y - from.y) * t);
+        return `${point.x},${currentY}`;
+      }).join(' ');
+      path.setAttribute('points', currentPoints);
+      pointEls.forEach(({ circle }, idx) => {
+        const from = fromPoints[idx];
+        const currentY = from.y + ((points[idx].y - from.y) * t);
+        circle.setAttribute('cy', String(currentY));
+        circle.setAttribute('opacity', String(Math.max(0.18, t)));
+      });
+    };
+    const finalizePoints = new Map(
+      points.map((point) => [point.key, { x: point.x, y: point.y }]),
+    );
+
+    if (reducedMotion) {
+      applyFrame(1);
+      path.removeAttribute('stroke-dasharray');
+      path.removeAttribute('stroke-dashoffset');
+      previousProfileChartPoints = finalizePoints;
+      hasProfileChartRendered = true;
       return;
     }
-    const rows = Array.isArray(scales) ? scales : [];
-    const hasMultipleParents = new Set(
-      rows.map((scale) => toText(scale.parent_test_name)).filter(Boolean)
-    ).size > 1;
-    tableBodyEl.innerHTML = '';
-    if (!rows.length) {
-      const emptyRow = document.createElement('tr');
-      emptyRow.innerHTML = `<td colspan="5">${escapeHtml(emptyMessage)}</td>`;
-      tableBodyEl.appendChild(emptyRow);
-      return;
+
+    applyFrame(0);
+    if (!hasProfileChartRendered && typeof path.getTotalLength === 'function') {
+      try {
+        const totalLength = path.getTotalLength();
+        path.setAttribute('stroke-dasharray', String(totalLength));
+        path.setAttribute('stroke-dashoffset', String(totalLength));
+      } catch (error) {
+        path.removeAttribute('stroke-dasharray');
+        path.removeAttribute('stroke-dashoffset');
+      }
     }
 
-    rows.forEach((scale) => {
-      const scaleName = hasMultipleParents
-        ? `${toText(scale.parent_test_name, '-') } > ${toText(scale.scale_name, '-')}`
-        : toText(scale.scale_name, '-');
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${escapeHtml(scale.scale_code)}</td>
-        <td>${escapeHtml(scaleName)}</td>
-        <td>${escapeHtml(scale.score_text || '-')}</td>
-        <td>${escapeHtml(scale.level_text || '-')}</td>
-        <td>${escapeHtml(scale.note || '-')}</td>
-      `;
-      tableBodyEl.appendChild(tr);
-    });
+    const startedAt = performance.now();
+    const animate = (now) => {
+      const rawProgress = Math.min(1, (now - startedAt) / duration);
+      const eased = easeProfileMotion(rawProgress);
+      applyFrame(eased);
+      if (!hasProfileChartRendered && path.hasAttribute('stroke-dashoffset')) {
+        const totalLength = Number(path.getAttribute('stroke-dasharray') || 0);
+        path.setAttribute('stroke-dashoffset', String(totalLength * (1 - eased)));
+      }
+      if (rawProgress < 1) {
+        profileChartAnimationFrame = requestAnimationFrame(animate);
+        return;
+      }
+      path.removeAttribute('stroke-dasharray');
+      path.removeAttribute('stroke-dashoffset');
+      previousProfileChartPoints = finalizePoints;
+      hasProfileChartRendered = true;
+      profileChartAnimationFrame = 0;
+    };
+    profileChartAnimationFrame = requestAnimationFrame(animate);
   };
 
   const renderDetail = () => {
@@ -3586,11 +3616,8 @@ async function initClientResultPage() {
       }
       renderScaleTree([]);
       renderSelectedScaleSummary([], []);
-      renderScoreSummary([]);
       renderBarChart([]);
-      renderCompareChart([]);
       renderProfileChart([]);
-      renderResultTable([], '결과를 불러올 검사 데이터가 없습니다.');
       renderClientSummary();
       return;
     }
@@ -3628,11 +3655,8 @@ async function initClientResultPage() {
     }
     renderScaleTree(allScaleRows);
     renderSelectedScaleSummary(visibleScales, allScaleRows);
-    renderScoreSummary(visibleScales);
     renderBarChart(visibleScales);
-    renderCompareChart(visibleScales);
     renderProfileChart(visibleScales);
-    renderResultTable(visibleScales, '결과 생성 전입니다.');
     renderClientSummary();
   };
 

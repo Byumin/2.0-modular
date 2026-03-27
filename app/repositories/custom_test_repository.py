@@ -269,3 +269,69 @@ def list_submission_scoring_results_by_client(
         .limit(limit)
         .all()
     )
+
+
+def get_last_submission_by_client(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+):
+    return (
+        db.query(
+            AdminCustomTestSubmission.created_at.label("submitted_at"),
+        )
+        .filter(
+            AdminCustomTestSubmission.admin_user_id == admin_user_id,
+            AdminCustomTestSubmission.client_id == client_id,
+        )
+        .order_by(AdminCustomTestSubmission.created_at.desc(), AdminCustomTestSubmission.id.desc())
+        .first()
+    )
+
+
+def count_submissions_by_client_since(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+    submitted_from,
+) -> int:
+    count = (
+        db.query(func.count(AdminCustomTestSubmission.id))
+        .filter(
+            AdminCustomTestSubmission.admin_user_id == admin_user_id,
+            AdminCustomTestSubmission.client_id == client_id,
+            AdminCustomTestSubmission.created_at >= submitted_from,
+        )
+        .scalar()
+    )
+    return int(count or 0)
+
+
+def list_submissions_by_client_with_test_name(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+    limit: int = 30,
+):
+    return (
+        db.query(
+            AdminCustomTestSubmission,
+            AdminCustomTest.custom_test_name,
+            AdminCustomTest.test_id.label("parent_test_id"),
+        )
+        .join(
+            AdminCustomTest,
+            AdminCustomTest.id == AdminCustomTestSubmission.admin_custom_test_id,
+            isouter=True,
+        )
+        .filter(
+            AdminCustomTestSubmission.admin_user_id == admin_user_id,
+            AdminCustomTestSubmission.client_id == client_id,
+        )
+        .order_by(AdminCustomTestSubmission.created_at.desc(), AdminCustomTestSubmission.id.desc())
+        .limit(limit)
+        .all()
+    )

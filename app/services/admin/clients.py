@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException
@@ -17,14 +17,17 @@ from app.repositories.client_repository import (
     get_client_assignment_with_test_name,
     get_assigned_clients_for_profile,
     get_assignment_by_admin_and_client,
-    get_last_assessed_on_by_client,
     get_last_assessed_rows,
-    list_assessment_logs_by_client,
     list_admin_clients_by_admin,
     list_client_assignments_with_test_name,
 )
 from app.repositories.custom_test_repository import get_custom_test_by_id_and_admin
-from app.repositories.custom_test_repository import list_submission_scoring_results_by_client
+from app.repositories.custom_test_repository import (
+    count_submissions_by_client_since,
+    get_last_submission_by_client,
+    list_submission_scoring_results_by_client,
+    list_submissions_by_client_with_test_name,
+)
 from app.schemas.values import normalize_gender_value
 from app.services.admin.auth import get_current_admin
 from app.services.admin.common import serialize_admin_client, summarize_custom_test_ids
@@ -37,6 +40,7 @@ def _normalize_parent_test_text(raw_value: str | None) -> str | None:
 
 def _serialize_client_scoring_rows(scoring_rows) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+    seen_parent_test_ids: set[str] = set()
     for row in scoring_rows:
         scoring_row = row.SubmissionScoringResult
         try:
@@ -50,8 +54,12 @@ def _serialize_client_scoring_rows(scoring_rows) -> list[dict[str, Any]]:
         custom_test_name = getattr(row, "custom_test_name", "") or "커스텀 검사"
 
         for parent_test_id, raw_result in result_payload.items():
+            parent_test_id_text = str(parent_test_id)
+            if parent_test_id_text in seen_parent_test_ids:
+                continue
             if not isinstance(raw_result, dict):
                 continue
+            seen_parent_test_ids.add(parent_test_id_text)
             raw_scales = raw_result.get("scales", {})
             scale_rows: list[dict[str, Any]] = []
             if isinstance(raw_scales, dict):
@@ -90,11 +98,11 @@ def _serialize_client_scoring_rows(scoring_rows) -> list[dict[str, Any]]:
 
             items.append(
                 {
-                    "id": f"{scoring_row.id}::{parent_test_id}",
+                    "id": f"{scoring_row.id}::{parent_test_id_text}",
                     "custom_test_name": custom_test_name,
                     "test_name": custom_test_name,
-                    "parent_test_name": str(parent_test_id),
-                    "parent_test_id": str(parent_test_id),
+                    "parent_test_name": parent_test_id_text,
+                    "parent_test_id": parent_test_id_text,
                     "assessed_on": assessed_on,
                     "created_at": scoring_row.created_at.isoformat(),
                     "status": raw_result.get("status", scoring_row.scoring_status),
@@ -216,23 +224,33 @@ def get_admin_client_detail(db: Session, admin_session: str | None, client_id: i
         admin_user_id=admin.id,
         client_id=row.id,
     )
-    last_assessed_row = get_last_assessed_on_by_client(
+    last_submission_row = get_last_submission_by_client(
         db,
         admin_user_id=admin.id,
         client_id=row.id,
     )
-    last_assessed_on = last_assessed_row.last_assessed_on if last_assessed_row else None
-    today_iso = date.today().isoformat()
-    status_text = "미실시"
-    if last_assessed_on is not None:
-        status_text = "완료" if last_assessed_on.isoformat() == today_iso else "진행중"
-
-    logs = list_assessment_logs_by_client(
+    last_assessed_on = last_submission_row.submitted_at if last_submission_row else None
+    submitted_from = datetime.now() - timedelta(days=30)
+    monthly_submission_count = count_submissions_by_client_since(
+        db,
+        admin_user_id=admin.id,
+        client_id=row.id,
+        submitted_from=submitted_from,
+    )
+    logs = list_submissions_by_client_with_test_name(
         db,
         admin_user_id=admin.id,
         client_id=row.id,
         limit=30,
     )
+    has_assignment = assignment_row is not None
+    has_submission = last_assessed_on is not None
+    if has_submission:
+        status_text = "실시완료"
+    elif has_assignment:
+        status_text = "미실시"
+    else:
+        status_text = "배정대기"
     scoring_rows = list_submission_scoring_results_by_client(
         db,
         admin_user_id=admin.id,
@@ -244,14 +262,16 @@ def get_admin_client_detail(db: Session, admin_session: str | None, client_id: i
     base["assigned_custom_test_id"] = assignment_row.AdminClientAssignment.admin_custom_test_id if assignment_row else None
     base["assigned_custom_test_name"] = assignment_row.custom_test_name if assignment_row else None
     base["assigned_parent_test_name"] = _normalize_parent_test_text(getattr(assignment_row, "parent_test_id", None)) if assignment_row else None
-    base["last_assessed_on"] = last_assessed_on.isoformat() if last_assessed_on else None
+    base["last_assessed_on"] = last_assessed_on.date().isoformat() if last_assessed_on else None
     base["status"] = status_text
-    base["assessment_log_count"] = len(logs)
+    base["assessment_log_count"] = monthly_submission_count
     base["assessment_logs"] = [
         {
-            "id": log.id,
-            "assessed_on": log.assessed_on.isoformat(),
-            "created_at": log.created_at.isoformat(),
+            "id": log.AdminCustomTestSubmission.id,
+            "assessed_on": log.AdminCustomTestSubmission.created_at.date().isoformat(),
+            "created_at": log.AdminCustomTestSubmission.created_at.isoformat(),
+            "custom_test_name": getattr(log, "custom_test_name", "") or "커스텀 검사",
+            "parent_test_name": _normalize_parent_test_text(getattr(log, "parent_test_id", None)),
         }
         for log in logs
     ]

@@ -1347,8 +1347,36 @@ button:disabled:hover {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.client-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.client-detail-pane {
+  margin-top: 0;
+  border-color: #dde5ef;
+  background: #fbfdff;
+  padding: 12px;
+  min-height: clamp(460px, 66vh, 620px);
+}
+
+.client-detail-form-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.client-detail-status-pane {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  max-height: clamp(460px, 66vh, 620px);
+}
+
 .client-detail-memo {
-  min-height: 96px;
+  min-height: 128px;
   padding: var(--control-padding-y) var(--control-padding-x);
   font-size: var(--control-font-size);
   line-height: 1.45;
@@ -1357,11 +1385,29 @@ button:disabled:hover {
 
 .detail-form-actions {
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: 0;
 }
 
 .client-detail-summary-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.client-detail-log-section {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.client-detail-log-scroll {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.client-detail-log-scroll .row-list {
+  margin-top: 0;
 }
 
 .client-log-row-grid {
@@ -1412,19 +1458,26 @@ button:disabled:hover {
   box-shadow: inset 0 0 0 1px rgba(141, 175, 208, 0.28);
 }
 
-.parent-result-head {
-  display: flex;
+.parent-result-row-grid {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.9fr) minmax(96px, 0.72fr) minmax(180px, 1.3fr) 72px auto;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
 }
 
-.parent-result-meta {
-  margin-top: 6px;
-  display: grid;
-  gap: 3px;
+.parent-result-name {
+  font-size: 13px;
+  color: #223547;
+}
+
+.parent-result-cell {
   font-size: 12px;
   color: #5d6674;
+  line-height: 1.35;
+}
+
+.parent-result-actions {
+  justify-content: flex-end;
 }
 
 .parent-result-scale-list {
@@ -1462,6 +1515,10 @@ button:disabled:hover {
   padding: 11px;
   display: grid;
   gap: 10px;
+}
+
+.client-parent-report-detail.hidden {
+  display: none;
 }
 
 .parent-report-detail-head strong {
@@ -1604,21 +1661,24 @@ body[data-page='admin-client-result'] .top-actions {
 .client-result-view-grid {
   margin-top: 10px;
   display: grid;
-  grid-template-columns: minmax(168px, 0.36fr) minmax(0, 1.64fr);
+  grid-template-columns: minmax(210px, 0.46fr) minmax(0, 1.54fr);
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .client-result-tree-panel,
 .client-result-detail-panel {
   margin-top: 0;
   min-width: 0;
+  min-height: clamp(520px, 68vh, 700px);
 }
 
 .client-result-tree-panel {
   border-color: #d8e3ef;
   background: #f7fafe;
-  padding: 10px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
 }
 
 .client-result-detail-panel {
@@ -1626,6 +1686,8 @@ body[data-page='admin-client-result'] .top-actions {
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   box-shadow: 0 18px 32px rgba(24, 38, 55, 0.12);
   padding: 12px;
+  display: flex;
+  flex-direction: column;
 }
 
 .client-result-detail-panel .panel-title-row {
@@ -1658,8 +1720,10 @@ body[data-page='admin-client-result'] .top-actions {
 
 .client-result-tree-scroll {
   margin-top: 4px;
+  min-height: 0;
+  flex: 1 1 auto;
   max-height: none;
-  overflow: visible;
+  overflow: auto;
 }
 
 .client-result-scale-tree {
@@ -1871,6 +1935,16 @@ body[data-page='admin-client-result'] .top-actions {
   padding: 8px;
 }
 
+.client-result-selection-block {
+  flex: 0 0 auto;
+}
+
+.client-result-visual-block {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
 .client-result-filter-head {
   display: grid;
   gap: 1px;
@@ -2023,21 +2097,20 @@ body[data-page='admin-client-result'] .top-actions {
 .client-result-chart-grid {
   margin-top: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  flex: 1 1 auto;
 }
 
 .client-result-chart-card {
   margin-top: 0;
-  min-height: 224px;
+  min-height: 100%;
+  max-width: 760px;
+  width: 100%;
+  justify-self: center;
   border-color: #dce4ef;
   background: #ffffff;
-  padding: 10px 10px 10px;
-}
-
-.client-result-chart-grid .client-result-chart-card:nth-child(3) {
-  grid-column: 1 / -1;
-  min-height: 196px;
+  padding: 6px 6px 4px;
 }
 
 .client-result-bar-chart {
@@ -2120,8 +2193,8 @@ body[data-page='admin-client-result'] .top-actions {
 
 .client-result-detail-panel #clientResultProfileChart {
   width: 100%;
-  height: 208px;
-  margin-top: 6px;
+  height: clamp(216px, 26vw, 252px);
+  margin-top: 2px;
   display: block;
 }
 
@@ -3732,6 +3805,20 @@ body[data-page='admin-client-result'] .top-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .client-detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .client-detail-status-pane {
+    min-height: 0;
+    max-height: none;
+  }
+
+  .client-detail-log-scroll {
+    overflow: visible;
+    padding-right: 0;
+  }
+
   .dashboard-columns {
     grid-template-columns: 1fr;
     gap: 10px;
@@ -3759,6 +3846,20 @@ body[data-page='admin-client-result'] .top-actions {
   .client-detail-grid,
   .client-log-row-grid {
     grid-template-columns: 1fr;
+  }
+
+  .client-detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .client-detail-status-pane {
+    min-height: 0;
+    max-height: none;
+  }
+
+  .client-detail-log-scroll {
+    overflow: visible;
+    padding-right: 0;
   }
 
   .client-result-page-summary-grid,
@@ -3791,6 +3892,15 @@ body[data-page='admin-client-result'] .top-actions {
     box-shadow: none;
   }
 
+  .client-result-tree-panel,
+  .client-result-detail-panel {
+    min-height: 0;
+  }
+
+  .client-result-detail-panel #clientResultProfileChart {
+    height: 252px;
+  }
+
   .client-scale-filter-group-head {
     flex-wrap: wrap;
   }
@@ -3817,6 +3927,15 @@ body[data-page='admin-client-result'] .top-actions {
   .parent-result-scale-item {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .parent-result-row-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .parent-result-actions {
+    justify-content: flex-start;
   }
 
   .row-grid-tests,

@@ -72,57 +72,14 @@
               <div id="clientResultSelectedScaleSummary" class="client-result-selected-summary"></div>
             </section>
 
-            <section class="client-result-detail-block client-result-summary-block">
-              <div class="summary-grid client-result-score-summary-grid">
-                <article class="summary-card detail-summary-card">
-                  <p class="summary-label">표시 척도 수</p>
-                  <p id="clientResultScaleCount" class="summary-value detail-summary-value">-</p>
-                </article>
-                <article class="summary-card detail-summary-card">
-                  <p class="summary-label">평균 점수</p>
-                  <p id="clientResultAvgScore" class="summary-value detail-summary-value">-</p>
-                </article>
-                <article class="summary-card detail-summary-card">
-                  <p class="summary-label">최고 점수 척도</p>
-                  <p id="clientResultTopScale" class="summary-value detail-summary-value">-</p>
-                </article>
-              </div>
-            </section>
-
             <section class="client-result-detail-block client-result-visual-block">
               <p class="summary-label section-label">시각화 결과</p>
               <section class="client-result-chart-grid">
                 <article class="chart-wrap client-result-chart-card">
-                  <p class="summary-label">척도별 점수 막대그래프</p>
-                  <div id="clientResultBarChart" class="client-result-bar-chart"></div>
-                </article>
-                <article class="chart-wrap client-result-chart-card">
                   <p class="summary-label">프로파일 차트</p>
-                  <svg id="clientResultProfileChart" viewBox="0 0 560 240" preserveAspectRatio="none"></svg>
-                </article>
-                <article class="chart-wrap client-result-chart-card">
-                  <p class="summary-label">선택 척도 비교 그래프</p>
-                  <div id="clientResultCompareChart" class="client-result-bar-chart"></div>
+                  <svg id="clientResultProfileChart" viewBox="0 0 560 280" preserveAspectRatio="none"></svg>
                 </article>
               </section>
-            </section>
-
-            <section class="client-result-detail-block client-result-table-block">
-              <label>결과 표</label>
-              <div class="scroll-area client-result-table-wrap">
-                <table class="client-result-table">
-                  <thead>
-                    <tr>
-                      <th>척도 코드</th>
-                      <th>척도명</th>
-                      <th>점수</th>
-                      <th>수준</th>
-                      <th>메모</th>
-                    </tr>
-                  </thead>
-                  <tbody id="clientResultTableBody"></tbody>
-                </table>
-              </div>
             </section>
 
             <div id="clientResultDetailEmpty" class="info-box hidden">검사를 선택하면 결과가 표시됩니다.</div>
