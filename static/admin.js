@@ -336,7 +336,7 @@ function renderClientsOverview(listEl, emptyEl, clients) {
           <span class="badge ${item.status === '미실시' ? 'badge-wait' : 'badge-live'}">${item.status}</span>
         </div>
         <div class="row-col row-action">
-          <a class="ghost-btn" href="/admin/clients">상세 보기</a>
+          <a class="ghost-btn" href="/admin/client-detail?id=${item.id}">상세 보기</a>
         </div>
       </div>
     `;
@@ -512,6 +512,18 @@ async function initClientsPage() {
     return;
   }
 
+  const clientFilterForm = document.getElementById('clientFilterForm');
+  const clientFilterQInput = document.getElementById('client_filter_q');
+  const clientFilterGenderInput = document.getElementById('client_filter_gender');
+  const clientFilterStatusInput = document.getElementById('client_filter_status');
+  const clientFilterTestInput = document.getElementById('client_filter_test');
+  const clientSearchResetBtn = document.getElementById('clientSearchResetBtn');
+  const openClientCreateBtn = document.getElementById('openClientCreateBtn');
+  const deleteSelectedClientsBtn = document.getElementById('deleteSelectedClientsBtn');
+
+  const clientFormModal = document.getElementById('clientFormModal');
+  const closeClientFormModalTopBtn = document.getElementById('closeClientFormModalTopBtn');
+  const clientFormTitle = document.getElementById('clientFormTitle');
   const clientForm = document.getElementById('clientForm');
   const clientIdInput = document.getElementById('client_id');
   const clientNameInput = document.getElementById('client_name');
@@ -522,183 +534,331 @@ async function initClientsPage() {
   const clientCancelBtn = document.getElementById('clientCancelBtn');
   const clientMessage = document.getElementById('clientMessage');
   const clientList = document.getElementById('clientList');
+  const clientListHead = document.getElementById('clientListHead');
+  const clientSelectAll = document.getElementById('clientSelectAll');
   const clientEmpty = document.getElementById('clientEmpty');
-  const clientResultModal = document.getElementById('clientResultModal');
-  const clientResultSummary = document.getElementById('clientResultSummary');
-  const clientResultName = document.getElementById('clientResultName');
-  const clientResultTest = document.getElementById('clientResultTest');
-  const clientResultDate = document.getElementById('clientResultDate');
-  const clientResultStatus = document.getElementById('clientResultStatus');
-  const clientResultCloseTopBtn = document.getElementById('clientResultCloseTopBtn');
-  const clientResultCloseBtn = document.getElementById('clientResultCloseBtn');
-  let editingAssignedTestId = null;
+  let allClients = [];
+  const selectedClientIds = new Set();
+  let visibleClientIds = [];
 
-  function closeClientResultModal() {
-    if (clientResultModal) {
-      clientResultModal.classList.add('hidden');
-    }
-  }
-
-  function openClientResultModal(item) {
-    if (!clientResultModal) {
+  function openClientFormModal() {
+    if (!clientFormModal) {
       return;
     }
-    const done = item.status === '완료';
-    clientResultSummary.textContent = done
-      ? '검사 실시가 완료되어 현재 저장된 결과 상태를 확인할 수 있습니다.'
-      : '검사 실시 완료 후 결과 확인이 가능합니다.';
-    clientResultName.textContent = item.name || '-';
-    clientResultTest.textContent = item.assigned_custom_test_name || '미배정';
-    clientResultDate.textContent = item.last_assessed_on || '-';
-    clientResultStatus.textContent = item.status || '-';
-    clientResultModal.classList.remove('hidden');
+    clientFormModal.classList.remove('hidden');
+    clientFormModal.setAttribute('aria-hidden', 'false');
   }
 
-  function resetForm() {
+  function closeClientFormModal() {
+    if (!clientFormModal) {
+      return;
+    }
+    clientFormModal.classList.add('hidden');
+    clientFormModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function resetClientForm() {
     clientIdInput.value = '';
     clientNameInput.value = '';
     clientGenderInput.value = '';
     clientBirthInput.value = '';
     clientMemoInput.value = '';
-    editingAssignedTestId = null;
     clientSaveBtn.textContent = '내담자 저장';
-    clientCancelBtn.classList.add('hidden');
+    clientMessage.textContent = '';
+    clientMessage.className = 'message';
+    if (clientFormTitle) {
+      clientFormTitle.textContent = '내담자 저장';
+    }
   }
 
-  async function refreshClients() {
-    const clients = (await api('/api/admin/clients')).items;
-    if (!clients.length) {
-      clientEmpty.classList.remove('hidden');
-      clientList.innerHTML = '';
+  function syncClientSelectionUI() {
+    const selectedVisibleCount = visibleClientIds.filter((id) => selectedClientIds.has(id)).length;
+    const visibleCount = visibleClientIds.length;
+
+    if (!deleteSelectedClientsBtn) {
+      if (clientSelectAll) {
+        clientSelectAll.checked = false;
+        clientSelectAll.indeterminate = false;
+        clientSelectAll.disabled = true;
+      }
       return;
     }
+    deleteSelectedClientsBtn.disabled = selectedVisibleCount === 0;
+    deleteSelectedClientsBtn.textContent = selectedVisibleCount > 0 ? `선택 삭제 (${selectedVisibleCount})` : '선택 삭제';
+
+    if (!clientSelectAll) {
+      return;
+    }
+    clientSelectAll.disabled = visibleCount === 0;
+    clientSelectAll.checked = visibleCount > 0 && selectedVisibleCount === visibleCount;
+    clientSelectAll.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleCount;
+  }
+
+  function getFilteredClients() {
+    const q = (clientFilterQInput?.value || '').trim().toLowerCase();
+    const gender = clientFilterGenderInput?.value || '';
+    const status = clientFilterStatusInput?.value || '';
+    const testQ = (clientFilterTestInput?.value || '').trim().toLowerCase();
+
+    return allClients.filter((item) => {
+      if (gender && item.gender !== gender) {
+        return false;
+      }
+      if (status && item.status !== status) {
+        return false;
+      }
+      if (q) {
+        const haystack = `${item.name || ''} ${item.memo || ''}`.toLowerCase();
+        if (!haystack.includes(q)) {
+          return false;
+        }
+      }
+      if (testQ) {
+        const assignedName = `${item.assigned_custom_test_name || ''} ${item.assigned_parent_test_name || ''}`.toLowerCase();
+        if (!assignedName.includes(testQ)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  function renderClients(clients) {
+    if (!allClients.length) {
+      clientEmpty.textContent = '등록된 내담자가 없습니다.';
+      clientEmpty.classList.remove('hidden');
+      visibleClientIds = [];
+      if (clientListHead) {
+        clientListHead.classList.add('hidden');
+      }
+      clientList.innerHTML = '';
+      syncClientSelectionUI();
+      return;
+    }
+
+    if (!clients.length) {
+      clientEmpty.textContent = '검색 조건에 맞는 내담자가 없습니다.';
+      clientEmpty.classList.remove('hidden');
+      visibleClientIds = [];
+      if (clientListHead) {
+        clientListHead.classList.add('hidden');
+      }
+      clientList.innerHTML = '';
+      syncClientSelectionUI();
+      return;
+    }
+
+    visibleClientIds = clients.map((item) => item.id);
     clientEmpty.classList.add('hidden');
+    if (clientListHead) {
+      clientListHead.classList.remove('hidden');
+    }
     clientList.innerHTML = '';
 
     clients.forEach((item) => {
       const li = document.createElement('li');
-      li.className = 'list-item';
+      li.className = 'row-item';
+      const detailHref = `/admin/client-detail?id=${item.id}`;
+      const isSelected = selectedClientIds.has(item.id);
+      const assignedName = item.assigned_custom_test_name || '';
+      const parentTestName = item.assigned_parent_test_name || '';
+      const assignedDisplay = assignedName
+        ? (parentTestName ? `${assignedName} (기반: ${parentTestName})` : assignedName)
+        : '미배정';
       li.innerHTML = `
-        <div class="list-row-head">
-          <strong>${escapeHtml(item.name)}</strong>
-          <span class="badge ${item.status === '미실시' ? 'badge-wait' : 'badge-live'}">${item.status}</span>
-        </div>
-        <p>배정 검사: ${escapeHtml(item.assigned_custom_test_name || '-')}</p>
-        <p>실시일: ${item.last_assessed_on || '-'}</p>
-        <p>메모: ${escapeHtml(item.memo || '-')}</p>
-        <div class="client-result-box">
-          <p class="client-result-box-title">검사 결과 확인</p>
-          <p class="client-result-box-sub">${item.status === '완료' ? '검사 완료 결과를 확인할 수 있습니다.' : '검사 완료 후 결과를 확인할 수 있습니다.'}</p>
-          <div class="row-actions item-actions client-result-actions">
-            <button
-              type="button"
-              class="outline-btn"
-              data-role="result"
-              ${item.status === '완료' ? '' : 'disabled'}
-            >결과 확인</button>
+        <div class="row-grid client-row-grid">
+          <div class="row-col select-col">
+            <input type="checkbox" class="client-select-checkbox" data-role="select-client" value="${item.id}" ${isSelected ? 'checked' : ''} aria-label="내담자 선택" />
+          </div>
+          <div class="row-col main-col client-name-cell">
+            <strong>${escapeHtml(item.name)}</strong>
+          </div>
+          <div class="row-col">${escapeHtml(assignedDisplay)}</div>
+          <div class="row-col">${item.last_assessed_on || '-'}</div>
+          <div class="row-col">
+            <span class="badge ${item.status === '미실시' ? 'badge-wait' : 'badge-live'}">${item.status}</span>
+          </div>
+          <div class="row-col row-action">
+            <a class="ghost-btn" href="${detailHref}">상세</a>
           </div>
         </div>
-        <div class="row-actions item-actions">
-          <button type="button" class="outline-btn" data-role="edit">수정</button>
-          <button type="button" class="outline-btn danger-outline" data-role="delete">삭제</button>
-          <button type="button" class="outline-btn" data-role="assess">오늘 실시 +1</button>
-        </div>
       `;
+      clientList.appendChild(li);
+    });
+    syncClientSelectionUI();
+  }
 
-      li.querySelector('[data-role="edit"]').addEventListener('click', () => {
-        clientIdInput.value = String(item.id);
-        clientNameInput.value = item.name;
-        clientGenderInput.value = item.gender;
-        clientBirthInput.value = item.birth_day || '';
-        clientMemoInput.value = item.memo || '';
-        editingAssignedTestId = item.assigned_custom_test_id ?? null;
-        clientSaveBtn.textContent = '내담자 수정';
-        clientCancelBtn.classList.remove('hidden');
-      });
+  function clearClientSelection() {
+    selectedClientIds.clear();
+    syncClientSelectionUI();
+  }
 
-      li.querySelector('[data-role="delete"]').addEventListener('click', async () => {
-        const ok = window.confirm('해당 내담자를 삭제하시겠습니까?');
-        if (!ok) {
-          return;
+  function applyClientFilters() {
+    renderClients(getFilteredClients());
+  }
+
+  async function refreshClients(options = {}) {
+    const clearSelection = options.clearSelection === true;
+    allClients = (await api('/api/admin/clients')).items;
+    if (clearSelection) {
+      clearClientSelection();
+    } else if (selectedClientIds.size > 0) {
+      const validIds = new Set(allClients.map((item) => item.id));
+      [...selectedClientIds].forEach((id) => {
+        if (!validIds.has(id)) {
+          selectedClientIds.delete(id);
         }
-        await api(`/api/admin/clients/${item.id}`, { method: 'DELETE' });
-        await refreshClients();
       });
+      syncClientSelectionUI();
+    }
+    applyClientFilters();
+  }
 
-      li.querySelector('[data-role="assess"]').addEventListener('click', async () => {
-        await api('/api/admin/assessment-logs', {
-          method: 'POST',
-          body: JSON.stringify({ admin_client_id: item.id })
-        });
-        await refreshClients();
+  clientFilterForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    clearClientSelection();
+    applyClientFilters();
+  });
+
+  clientSearchResetBtn.addEventListener('click', () => {
+    clientFilterQInput.value = '';
+    clientFilterGenderInput.value = '';
+    clientFilterStatusInput.value = '';
+    clientFilterTestInput.value = '';
+    clearClientSelection();
+    applyClientFilters();
+  });
+
+  openClientCreateBtn.addEventListener('click', () => {
+    resetClientForm();
+    openClientFormModal();
+  });
+
+  if (clientSelectAll) {
+    clientSelectAll.addEventListener('change', (event) => {
+      const checked = event.target.checked;
+      visibleClientIds.forEach((id) => {
+        if (checked) {
+          selectedClientIds.add(id);
+        } else {
+          selectedClientIds.delete(id);
+        }
       });
+      renderClients(getFilteredClients());
+    });
+  }
 
-      const resultBtn = li.querySelector('[data-role="result"]');
-      if (resultBtn) {
-        resultBtn.addEventListener('click', () => openClientResultModal(item));
+  clientList.addEventListener('change', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+    if (target.dataset.role !== 'select-client') {
+      return;
+    }
+    const clientId = Number(target.value);
+    if (!Number.isFinite(clientId)) {
+      return;
+    }
+    if (target.checked) {
+      selectedClientIds.add(clientId);
+    } else {
+      selectedClientIds.delete(clientId);
+    }
+    syncClientSelectionUI();
+  });
+
+  if (deleteSelectedClientsBtn) {
+    deleteSelectedClientsBtn.addEventListener('click', async () => {
+      const selectedIds = visibleClientIds.filter((id) => selectedClientIds.has(id));
+      if (!selectedIds.length) {
+        return;
       }
 
-      clientList.appendChild(li);
+      const ok = window.confirm(`선택한 내담자 ${selectedIds.length}명을 삭제하시겠습니까?`);
+      if (!ok) {
+        return;
+      }
+
+      deleteSelectedClientsBtn.disabled = true;
+      deleteSelectedClientsBtn.textContent = '삭제 중...';
+
+      const results = await Promise.allSettled(
+        selectedIds.map((clientId) => api(`/api/admin/clients/${clientId}`, { method: 'DELETE' }))
+      );
+      const failedCount = results.filter((row) => row.status === 'rejected').length;
+      if (failedCount > 0) {
+        window.alert(`${failedCount}명의 내담자 삭제에 실패했습니다. 목록을 새로고침했습니다.`);
+      }
+      await refreshClients({ clearSelection: true });
     });
   }
 
   clientForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     clientMessage.textContent = '';
+    clientMessage.className = 'message';
 
     const payload = {
       name: clientNameInput.value.trim(),
       gender: clientGenderInput.value,
       birth_day: clientBirthInput.value || null,
       memo: clientMemoInput.value.trim(),
-      admin_custom_test_id: clientIdInput.value ? editingAssignedTestId : null
+      admin_custom_test_id: null
     };
 
     if (!payload.name || !payload.gender) {
       clientMessage.textContent = '이름과 성별은 필수입니다.';
-      clientMessage.className = 'message error full-row';
+      clientMessage.className = 'message error';
       return;
     }
 
     clientSaveBtn.disabled = true;
     try {
-      if (clientIdInput.value) {
-        await api(`/api/admin/clients/${clientIdInput.value}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload)
-        });
-      } else {
-        await api('/api/admin/clients', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
-      }
-      resetForm();
-      await refreshClients();
+      await api('/api/admin/clients', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      closeClientFormModal();
+      resetClientForm();
+      await refreshClients({ clearSelection: true });
     } catch (error) {
       clientMessage.textContent = error.message;
-      clientMessage.className = 'message error full-row';
+      clientMessage.className = 'message error';
     } finally {
       clientSaveBtn.disabled = false;
     }
   });
 
-  clientCancelBtn.addEventListener('click', resetForm);
-  if (clientResultCloseTopBtn) {
-    clientResultCloseTopBtn.addEventListener('click', closeClientResultModal);
+  clientCancelBtn.addEventListener('click', () => {
+    closeClientFormModal();
+    resetClientForm();
+  });
+  if (closeClientFormModalTopBtn) {
+    closeClientFormModalTopBtn.addEventListener('click', () => {
+      closeClientFormModal();
+      resetClientForm();
+    });
   }
-  if (clientResultCloseBtn) {
-    clientResultCloseBtn.addEventListener('click', closeClientResultModal);
-  }
-  if (clientResultModal) {
-    clientResultModal.addEventListener('click', (event) => {
-      if (event.target === clientResultModal) {
-        closeClientResultModal();
+  if (clientFormModal) {
+    clientFormModal.addEventListener('click', (event) => {
+      if (event.target === clientFormModal) {
+        closeClientFormModal();
+        resetClientForm();
       }
     });
   }
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+    if (clientFormModal && !clientFormModal.classList.contains('hidden')) {
+      closeClientFormModal();
+      resetClientForm();
+    }
+  });
 
-  await refreshClients();
+  await refreshClients({ clearSelection: true });
 }
 
 function setSubTests(catalog, testId, subSelect) {
@@ -2111,6 +2271,1486 @@ async function initCreatePage() {
   await refreshManagedTests();
 }
 
+async function initClientDetailPage() {
+  const me = await ensureAdmin();
+  if (!me) {
+    return;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+  if (!id) {
+    window.location.href = '/admin/clients';
+    return;
+  }
+
+  const form = document.getElementById('clientDetailForm');
+  const nameInput = document.getElementById('detail_client_name');
+  const genderInput = document.getElementById('detail_client_gender');
+  const birthDayInput = document.getElementById('detail_client_birth_day');
+  const assignedTestInput = document.getElementById('detail_client_assigned_test');
+  const memoInput = document.getElementById('detail_client_memo');
+  const saveBtn = document.getElementById('clientDetailSaveBtn');
+  const detailMeta = document.getElementById('clientDetailMeta');
+  const statusEl = document.getElementById('clientDetailStatus');
+  const lastAssessedOnEl = document.getElementById('clientDetailLastAssessedOn');
+  const logCountEl = document.getElementById('clientDetailLogCount');
+  const logListEl = document.getElementById('clientDetailLogList');
+  const logEmptyEl = document.getElementById('clientDetailLogEmpty');
+  const parentResultsListEl = document.getElementById('clientParentResultsList');
+  const parentResultsEmptyEl = document.getElementById('clientParentResultsEmpty');
+  const parentReportDetailEl = document.getElementById('clientParentReportDetail');
+  const parentReportTitleEl = document.getElementById('clientParentReportTitle');
+  const parentReportMetaEl = document.getElementById('clientParentReportMeta');
+  const parentReportScaleCountEl = document.getElementById('clientParentReportScaleCount');
+  const parentReportAvgScoreEl = document.getElementById('clientParentReportAvgScore');
+  const parentReportTopScaleEl = document.getElementById('clientParentReportTopScale');
+  const parentReportScaleRowsEl = document.getElementById('clientParentReportScaleRows');
+  const openClientResultViewerBtn = document.getElementById('openClientResultViewerBtn');
+  const msg = document.getElementById('clientDetailMessage');
+
+  msg.textContent = '';
+  msg.className = 'message';
+  let assignedCustomTestId = null;
+  let parentReportItems = [];
+  let activeParentReportId = '';
+
+  const toText = (value, fallback = '') => {
+    const raw = String(value ?? '').trim();
+    return raw || fallback;
+  };
+
+  const toCount = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+  };
+
+  const parseScoreNumber = (raw) => {
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      return raw;
+    }
+    const text = String(raw ?? '').trim();
+    if (!text) {
+      return null;
+    }
+    const matched = text.match(/-?\d+(\.\d+)?/);
+    if (!matched) {
+      return null;
+    }
+    const num = Number(matched[0]);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  const buildPendingScale = () => ({
+    scale_key: '__pending__',
+    scale_code: '-',
+    scale_name: '결과 준비중',
+    score_text: '-',
+    level_text: '-',
+    note: '채점 모듈이 연결되면 척도별 결과가 표시됩니다.',
+    score_number: null,
+    is_placeholder: true,
+  });
+
+  const normalizeScaleItems = (rawScales) => {
+    const rows = Array.isArray(rawScales) ? rawScales : [];
+    const normalized = rows.map((row, idx) => {
+      const code = toText(row?.scale_code ?? row?.code, `S${idx + 1}`);
+      const name = toText(row?.scale_name ?? row?.name, '척도');
+      const scoreSource = row?.score_text ?? row?.score ?? row?.raw_score ?? row?.t_score ?? '-';
+      const levelSource = row?.level_text ?? row?.level ?? row?.risk_level ?? '-';
+      return {
+        scale_key: toText(row?.scale_key ?? row?.key, `${code}-${idx + 1}`),
+        scale_code: code,
+        scale_name: name,
+        score_text: String(scoreSource ?? '-'),
+        level_text: String(levelSource ?? '-'),
+        note: toText(row?.note ?? row?.description, ''),
+        score_number: parseScoreNumber(scoreSource),
+        is_placeholder: false,
+      };
+    });
+    return normalized.length ? normalized : [buildPendingScale()];
+  };
+
+  const buildParentResultItems = (item, logs) => {
+    const backendRows = Array.isArray(item.parent_test_results)
+      ? item.parent_test_results
+      : (Array.isArray(item.parent_results) ? item.parent_results : []);
+    if (backendRows.length) {
+      return backendRows.map((row, idx) => {
+        const customTests = Array.isArray(row?.custom_test_names)
+          ? row.custom_test_names.map((v) => toText(v)).filter(Boolean)
+          : (toText(row?.custom_test_name) ? [toText(row?.custom_test_name)] : []);
+        return {
+          id: toText(row?.id, `parent-${idx + 1}`),
+          parent_test_name: toText(row?.parent_test_name ?? row?.parent_test_id ?? row?.test_id, '기반 검사'),
+          performed_count: toCount(row?.performed_count ?? row?.assessment_count ?? row?.count),
+          last_assessed_on: toText(row?.last_assessed_on ?? row?.latest_assessed_on, '-'),
+          custom_tests: customTests,
+          scales: normalizeScaleItems(row?.scales ?? row?.scale_results),
+        };
+      });
+    }
+
+    if (!logs.length) {
+      return [];
+    }
+    return [{
+      id: 'parent-fallback',
+      parent_test_name: toText(item.assigned_parent_test_name, '기반 검사 정보 없음'),
+      performed_count: logs.length,
+      last_assessed_on: toText(item.last_assessed_on, logs[0]?.assessed_on || '-'),
+      custom_tests: toText(item.assigned_custom_test_name) ? [toText(item.assigned_custom_test_name)] : [],
+      scales: [buildPendingScale()],
+    }];
+  };
+
+  const renderParentResults = (rows) => {
+    if (!parentResultsListEl || !parentResultsEmptyEl) {
+      return;
+    }
+    parentResultsListEl.innerHTML = '';
+    if (!rows.length) {
+      parentResultsEmptyEl.classList.remove('hidden');
+      return;
+    }
+    parentResultsEmptyEl.classList.add('hidden');
+
+    rows.forEach((row) => {
+      const scaleRows = (row.scales || []).slice(0, 6);
+      const scaleItemsHtml = scaleRows.map((scale) => `
+        <li class="parent-result-scale-item">
+          <span>${escapeHtml(scale.scale_code)} · ${escapeHtml(scale.scale_name)}</span>
+          <span>점수 ${escapeHtml(scale.score_text)} / 수준 ${escapeHtml(scale.level_text)}</span>
+        </li>
+      `).join('');
+      const scaleBodyHtml = scaleItemsHtml
+        ? `<ul class="parent-result-scale-list">${scaleItemsHtml}</ul>`
+        : '<p class="parent-result-note">채점 결과 데이터가 준비되면 표시됩니다.</p>';
+      const customTestsText = row.custom_tests.length ? row.custom_tests.join(', ') : '-';
+      const isActive = String(row.id) === String(activeParentReportId);
+
+      const li = document.createElement('li');
+      li.className = `row-item parent-result-item ${isActive ? 'is-active' : ''}`;
+      li.innerHTML = `
+        <div class="parent-result-head">
+          <strong>${escapeHtml(row.parent_test_name)}</strong>
+          <div class="row-actions">
+            <span class="badge badge-live">실시 ${row.performed_count}건</span>
+            <button type="button" class="outline-btn uniform-btn" data-role="view-parent-report" data-id="${escapeHtml(String(row.id))}">
+              ${isActive ? '리포트 닫기' : '리포트 보기'}
+            </button>
+          </div>
+        </div>
+        <div class="parent-result-meta">
+          <span>최근 실시일: ${escapeHtml(row.last_assessed_on || '-')}</span>
+          <span>커스텀 검사: ${escapeHtml(customTestsText)}</span>
+        </div>
+        ${scaleBodyHtml}
+      `;
+      parentResultsListEl.appendChild(li);
+    });
+  };
+
+  const renderParentReportDetail = () => {
+    const active = parentReportItems.find((row) => String(row.id) === String(activeParentReportId)) || null;
+    if (!active || !parentReportDetailEl) {
+      if (parentReportDetailEl) {
+        parentReportDetailEl.classList.add('hidden');
+      }
+      return;
+    }
+    parentReportDetailEl.classList.remove('hidden');
+    if (parentReportTitleEl) {
+      parentReportTitleEl.textContent = active.parent_test_name || '-';
+    }
+    if (parentReportMetaEl) {
+      parentReportMetaEl.textContent = `최근 실시일: ${active.last_assessed_on || '-'} | 실시 ${active.performed_count}건`;
+    }
+    if (parentReportScaleCountEl) {
+      parentReportScaleCountEl.textContent = `${active.scales.length}개`;
+    }
+    const numericScores = active.scales
+      .map((scale) => scale.score_number)
+      .filter((score) => Number.isFinite(score));
+    const avgScore = numericScores.length
+      ? (numericScores.reduce((acc, cur) => acc + cur, 0) / numericScores.length).toFixed(1)
+      : '-';
+    if (parentReportAvgScoreEl) {
+      parentReportAvgScoreEl.textContent = avgScore === '-' ? '-' : `${avgScore}점`;
+    }
+    const topScale = active.scales
+      .filter((scale) => Number.isFinite(scale.score_number))
+      .sort((a, b) => b.score_number - a.score_number)[0];
+    if (parentReportTopScaleEl) {
+      parentReportTopScaleEl.textContent = topScale
+        ? `${topScale.scale_code} ${topScale.scale_name}`
+        : '-';
+    }
+
+    if (!parentReportScaleRowsEl) {
+      return;
+    }
+    parentReportScaleRowsEl.innerHTML = '';
+    const maxScore = numericScores.length ? Math.max(...numericScores) : 0;
+    active.scales.forEach((scale) => {
+      const barPct = (maxScore > 0 && Number.isFinite(scale.score_number))
+        ? Math.max(4, Math.round((scale.score_number / maxScore) * 100))
+        : 0;
+      const barHtml = barPct > 0
+        ? `<div class="parent-scale-bar-track"><div class="parent-scale-bar-fill" style="width:${barPct}%"></div></div>`
+        : '<div class="parent-scale-bar-track is-empty"></div>';
+      const row = document.createElement('article');
+      row.className = 'parent-scale-bar-row';
+      row.innerHTML = `
+        <div class="parent-scale-bar-head">
+          <strong>${escapeHtml(scale.scale_code)} · ${escapeHtml(scale.scale_name)}</strong>
+          <span>점수 ${escapeHtml(scale.score_text)} / 수준 ${escapeHtml(scale.level_text)}</span>
+        </div>
+        ${barHtml}
+        <p class="parent-scale-bar-note">${escapeHtml(scale.note || '채점 결과 데이터가 준비되면 표시됩니다.')}</p>
+      `;
+      parentReportScaleRowsEl.appendChild(row);
+    });
+  };
+
+  if (parentResultsListEl) {
+    parentResultsListEl.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const button = target.closest('[data-role="view-parent-report"]');
+      if (!(button instanceof HTMLElement)) {
+        return;
+      }
+      const nextId = button.dataset.id || '';
+      if (!nextId) {
+        return;
+      }
+      activeParentReportId = String(activeParentReportId) === String(nextId) ? '' : nextId;
+      renderParentResults(parentReportItems);
+      renderParentReportDetail();
+    });
+  }
+
+  if (openClientResultViewerBtn) {
+    openClientResultViewerBtn.addEventListener('click', () => {
+      const nextUrl = `/admin/client-result?id=${encodeURIComponent(id)}`;
+      const opened = window.open(nextUrl, '_blank', 'noopener,noreferrer');
+      if (!opened) {
+        window.location.href = nextUrl;
+      }
+    });
+  }
+
+  const renderDetail = (item) => {
+    nameInput.value = item.name || '';
+    genderInput.value = item.gender === 'male' || item.gender === 'female' ? item.gender : '';
+    birthDayInput.value = item.birth_day || '';
+    if (item.assigned_custom_test_name) {
+      assignedTestInput.value = item.assigned_parent_test_name
+        ? `${item.assigned_custom_test_name} (기반: ${item.assigned_parent_test_name})`
+        : item.assigned_custom_test_name;
+    } else {
+      assignedTestInput.value = '미배정';
+    }
+    memoInput.value = item.memo || '';
+
+    detailMeta.textContent = `등록일: ${toKstString(item.created_at || '')} | 최근 수정: ${toKstString(item.updated_at || '')}`;
+    statusEl.textContent = item.status || '-';
+    lastAssessedOnEl.textContent = item.last_assessed_on || '-';
+    logCountEl.textContent = `${Number(item.assessment_log_count) || 0}건`;
+
+    const logs = Array.isArray(item.assessment_logs) ? item.assessment_logs : [];
+    logListEl.innerHTML = '';
+    if (!logs.length) {
+      logEmptyEl.classList.remove('hidden');
+    } else {
+      logEmptyEl.classList.add('hidden');
+      logs.forEach((log) => {
+        const li = document.createElement('li');
+        li.className = 'row-item';
+        li.innerHTML = `
+          <div class="row-grid client-log-row-grid">
+            <div class="row-col main-col"><strong>${log.assessed_on || '-'}</strong></div>
+            <div class="row-col">${toKstString(log.created_at || '')}</div>
+          </div>
+        `;
+        logListEl.appendChild(li);
+      });
+    }
+
+    parentReportItems = buildParentResultItems(item, logs);
+    if (!parentReportItems.some((row) => String(row.id) === String(activeParentReportId))) {
+      activeParentReportId = '';
+    }
+    renderParentResults(parentReportItems);
+    renderParentReportDetail();
+  };
+
+  const loadClientDetail = async () => {
+    const detail = await api(`/api/admin/clients/${id}`);
+    const item = detail.item || {};
+    assignedCustomTestId = item.assigned_custom_test_id ?? null;
+    renderDetail(item);
+  };
+
+  try {
+    await loadClientDetail();
+  } catch (error) {
+    msg.textContent = error.message;
+    msg.className = 'message error';
+    return;
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    msg.textContent = '';
+    msg.className = 'message';
+
+    const payload = {
+      name: nameInput.value.trim(),
+      gender: genderInput.value,
+      birth_day: birthDayInput.value || null,
+      memo: memoInput.value.trim(),
+      admin_custom_test_id: assignedCustomTestId
+    };
+
+    if (!payload.name || !payload.gender) {
+      msg.textContent = '이름과 성별은 필수입니다.';
+      msg.className = 'message error';
+      return;
+    }
+
+    if (saveBtn) {
+      saveBtn.disabled = true;
+    }
+
+    try {
+      await api(`/api/admin/clients/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+      await loadClientDetail();
+      msg.textContent = '내담자 정보가 저장되었습니다.';
+      msg.className = 'message';
+    } catch (error) {
+      msg.textContent = error.message;
+      msg.className = 'message error';
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+      }
+    }
+  });
+}
+
+async function initClientResultPage() {
+  const me = await ensureAdmin();
+  if (!me) {
+    return;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+  if (!id) {
+    window.location.href = '/admin/clients';
+    return;
+  }
+
+  const backToClientDetailBtn = document.getElementById('backToClientDetailBtn');
+  if (backToClientDetailBtn) {
+    backToClientDetailBtn.href = `/admin/client-detail?id=${encodeURIComponent(id)}`;
+  }
+
+  const resultClientNameEl = document.getElementById('resultClientName');
+  const resultClientIdentityEl = document.getElementById('resultClientIdentity');
+  const resultClientLastAssessedOnEl = document.getElementById('resultClientLastAssessedOn');
+  const resultClientSelectedTestEl = document.getElementById('resultClientSelectedTest');
+  const resultClientTestMetaEl = document.getElementById('resultClientTestMeta');
+  const resultClientStatusEl = document.getElementById('resultClientStatus');
+  const scaleTreeEl = document.getElementById('clientResultScaleTree');
+  const scaleTreeEmptyEl = document.getElementById('clientResultScaleTreeEmpty');
+  const scaleTreeMetaEl = document.getElementById('clientResultScaleTreeMeta');
+  const selectAllScalesBtn = document.getElementById('clientResultSelectAllScalesBtn');
+  const clearScalesBtn = document.getElementById('clientResultClearScalesBtn');
+  const selectedTestTitleEl = document.getElementById('clientResultSelectedTestTitle');
+  const selectedTestMetaEl = document.getElementById('clientResultSelectedTestMeta');
+  const selectedScaleSummaryEl = document.getElementById('clientResultSelectedScaleSummary');
+  const scaleFilterLegendEl = document.getElementById('clientResultScaleFilterLegend');
+  const scaleCountEl = document.getElementById('clientResultScaleCount');
+  const avgScoreEl = document.getElementById('clientResultAvgScore');
+  const topScaleEl = document.getElementById('clientResultTopScale');
+  const barChartEl = document.getElementById('clientResultBarChart');
+  const profileChartEl = document.getElementById('clientResultProfileChart');
+  const compareChartEl = document.getElementById('clientResultCompareChart');
+  const tableBodyEl = document.getElementById('clientResultTableBody');
+  const detailEmptyEl = document.getElementById('clientResultDetailEmpty');
+  const pageMessageEl = document.getElementById('clientResultPageMessage');
+
+  const toText = (value, fallback = '') => {
+    const raw = String(value ?? '').trim();
+    return raw || fallback;
+  };
+
+  const parseScoreNumber = (raw) => {
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      return raw;
+    }
+    const text = String(raw ?? '').trim();
+    if (!text) {
+      return null;
+    }
+    const matched = text.match(/-?\d+(\.\d+)?/);
+    if (!matched) {
+      return null;
+    }
+    const num = Number(matched[0]);
+    return Number.isFinite(num) ? num : null;
+  };
+
+  const toSortTimestamp = (value) => {
+    const text = String(value ?? '').trim();
+    if (!text || text === '-') {
+      return 0;
+    }
+    const normalized = text.length === 10 ? `${text}T00:00:00` : text;
+    const ts = Date.parse(normalized);
+    return Number.isFinite(ts) ? ts : 0;
+  };
+
+  const setMessage = (text, isError = false) => {
+    if (!pageMessageEl) {
+      return;
+    }
+    pageMessageEl.textContent = text;
+    pageMessageEl.className = isError ? 'message error' : 'message';
+  };
+
+  const getGenderLabel = (value) => {
+    if (value === 'male') {
+      return '남';
+    }
+    if (value === 'female') {
+      return '여';
+    }
+    return '';
+  };
+
+  const buildSelectedScalesFromCustomTest = (catalog, customTestDetail) => {
+    const testConfigs = Array.isArray(customTestDetail?.test_configs) ? customTestDetail.test_configs : [];
+    if (!testConfigs.length) {
+      return [];
+    }
+
+    const byVariantScaleName = buildScaleNameIndex(catalog || { tests: [] });
+    const byTestScaleName = new Map();
+    (catalog?.tests || []).forEach((test) => {
+      const testId = String(test.test_id || '').trim();
+      if (!testId) {
+        return;
+      }
+      const scaleMap = byTestScaleName.get(testId) || new Map();
+      (test.sub_tests || []).forEach((sub) => {
+        (sub.scales || []).forEach((scale) => {
+          if (!scaleMap.has(scale.code)) {
+            scaleMap.set(scale.code, scale.name || scale.code);
+          }
+        });
+      });
+      byTestScaleName.set(testId, scaleMap);
+    });
+
+    const selected = [];
+    const seen = new Set();
+    testConfigs.forEach((config) => {
+      const testId = String(config?.test_id || '').trim();
+      (config?.sub_test_variants || []).forEach((variant) => {
+        const subTestJson = typeof variant?.sub_test_json === 'string'
+          ? variant.sub_test_json
+          : JSON.stringify(variant?.sub_test_json || {});
+        const scaleNameMap = byVariantScaleName.get(`${testId}::${subTestJson}`) || new Map();
+        const fallbackScaleMap = byTestScaleName.get(testId) || new Map();
+
+        (variant?.selected_scale_codes || []).forEach((codeRaw, idx) => {
+          const code = toText(codeRaw);
+          if (!code) {
+            return;
+          }
+          const key = `${testId}::${code}`;
+          if (seen.has(key)) {
+            return;
+          }
+          seen.add(key);
+          selected.push({
+            scale_key: `${key}-${idx + 1}`,
+            scale_code: code,
+            scale_name: toText(scaleNameMap.get(code), toText(fallbackScaleMap.get(code), code)),
+            parent_test_name: toText(testId, '-'),
+            score_text: '점수 데이터 없음',
+            level_text: '채점 전 상태',
+            note: '채점 모듈이 연결되면 척도별 결과가 표시됩니다.',
+            score_number: null,
+            is_placeholder: true,
+          });
+        });
+      });
+    });
+    return selected;
+  };
+
+  const buildPendingScale = () => ({
+    scale_key: '__pending__',
+    scale_code: '-',
+    scale_name: '결과 준비중',
+    score_text: '점수 데이터 없음',
+    level_text: '채점 전 상태',
+    note: '채점 모듈이 연결되면 척도별 결과가 표시됩니다.',
+    score_number: null,
+    is_placeholder: true,
+  });
+
+  const normalizeScaleRows = (rawScales, fallbackScales = []) => {
+    const rows = Array.isArray(rawScales) ? rawScales : [];
+    const normalized = rows.map((row, idx) => {
+      const code = toText(row?.scale_code ?? row?.code, `S${idx + 1}`);
+      const name = toText(row?.scale_name ?? row?.name, '척도');
+      const scoreSource = row?.score_text ?? row?.score ?? row?.raw_score ?? row?.t_score ?? '-';
+      const levelSource = row?.level_text ?? row?.level ?? row?.risk_level ?? '-';
+      const scoreText = String(scoreSource ?? '-').trim();
+      const levelText = String(levelSource ?? '-').trim();
+      return {
+        scale_key: toText(row?.scale_key ?? row?.key, `${code}-${idx + 1}`),
+        scale_code: code,
+        scale_name: name,
+        parent_test_name: toText(row?.parent_test_name ?? row?.parent_name ?? row?.parent_test_id ?? row?.test_id, ''),
+        score_text: scoreText && scoreText !== '-' ? scoreText : '점수 데이터 없음',
+        level_text: levelText && levelText !== '-' ? levelText : '채점 전 상태',
+        note: toText(row?.note ?? row?.description, ''),
+        score_number: parseScoreNumber(scoreSource),
+        is_placeholder: false,
+      };
+    });
+    if (normalized.length) {
+      return normalized;
+    }
+    if (Array.isArray(fallbackScales) && fallbackScales.length) {
+      return fallbackScales.map((scale, idx) => ({
+        scale_key: toText(scale.scale_key ?? scale.key, `${toText(scale.scale_code ?? scale.code, 'S')}-${idx + 1}`),
+        scale_code: toText(scale.scale_code ?? scale.code, `S${idx + 1}`),
+        scale_name: toText(scale.scale_name ?? scale.name, '척도'),
+        parent_test_name: toText(scale.parent_test_name ?? scale.test_id, ''),
+        score_text: '점수 데이터 없음',
+        level_text: '채점 전 상태',
+        note: toText(scale.note, '채점 모듈이 연결되면 척도별 결과가 표시됩니다.'),
+        score_number: null,
+        is_placeholder: true,
+      }));
+    }
+    return [buildPendingScale()];
+  };
+
+  const extractScaleBadges = (scaleRows) => {
+    const rows = Array.isArray(scaleRows) ? scaleRows : [];
+    const seen = new Set();
+    const badges = [];
+    rows.forEach((scale, idx) => {
+      const code = toText(scale?.scale_code ?? scale?.code, `S${idx + 1}`);
+      const name = toText(scale?.scale_name ?? scale?.name, code);
+      const key = toText(scale?.scale_key ?? scale?.key, `${code}-${idx + 1}`);
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      badges.push({
+        scale_key: key,
+        scale_code: code,
+        scale_name: name,
+      });
+    });
+    return badges;
+  };
+
+  const deriveScaleGroupKey = (scale) => {
+    const rawCode = toText(scale?.scale_code ?? scale?.code, '');
+    if (!rawCode || rawCode === '-') {
+      return '기타';
+    }
+    const token = rawCode.split(/[-_.\s]/)[0] || rawCode;
+    const alpha = token.match(/^[A-Za-z가-힣]+/);
+    return alpha ? alpha[0].toUpperCase() : token.toUpperCase();
+  };
+
+  const buildTestResultItems = (item, catalog, customTestDetail) => {
+    const fallbackScales = buildSelectedScalesFromCustomTest(catalog, customTestDetail);
+    const fallbackTestName = toText(
+      item.assigned_custom_test_name ?? customTestDetail?.custom_test_name,
+      '배정 검사'
+    );
+    const fallbackParentTestName = toText(
+      item.assigned_parent_test_name ?? customTestDetail?.test_id,
+      '-'
+    );
+    const candidateArrays = [
+      item.performed_tests,
+      item.test_results,
+      item.custom_test_results,
+      item.assessment_results,
+      item.assessment_histories,
+    ];
+    const backendRows = candidateArrays.find((rows) => Array.isArray(rows) && rows.length) || [];
+    if (backendRows.length) {
+      return backendRows.map((row, idx) => {
+        const rawScaleCandidates = [
+          row?.scales,
+          row?.scale_results,
+          row?.results,
+          row?.selected_scales,
+          row?.scale_items,
+        ];
+        const rawScaleRows = rawScaleCandidates.find((rows) => Array.isArray(rows)) || [];
+        const parentTestName = toText(
+          row?.parent_test_name ?? row?.parent_name ?? row?.parent_test_id,
+          fallbackParentTestName
+        );
+        const scales = normalizeScaleRows(rawScaleRows, fallbackScales).map((scale) => ({
+          ...scale,
+          parent_test_name: toText(scale.parent_test_name, parentTestName),
+        }));
+        const selectedScales = extractScaleBadges(scales.length ? scales : fallbackScales);
+        const assessedOn = toText(
+          row?.assessed_on ?? row?.assessment_date ?? row?.performed_at ?? row?.date ?? row?.created_at,
+          item.last_assessed_on || '-'
+        );
+        return {
+          id: toText(row?.id, `test-result-${idx + 1}`),
+          test_name: toText(row?.custom_test_name ?? row?.test_name ?? row?.name, fallbackTestName),
+          parent_test_name: parentTestName,
+          assessed_on: assessedOn,
+          status: toText(row?.status, assessedOn && assessedOn !== '-' ? '완료' : (item.status || '미실시')),
+          scales,
+          selected_scales: selectedScales,
+          sort_ts: toSortTimestamp(assessedOn),
+        };
+      });
+    }
+
+    const logs = Array.isArray(item.assessment_logs) ? item.assessment_logs : [];
+    if (logs.length) {
+      return logs.map((log, idx) => {
+        const assessedOn = toText(log?.assessed_on, '-');
+        const scales = normalizeScaleRows([], fallbackScales).map((scale) => ({
+          ...scale,
+          parent_test_name: toText(scale.parent_test_name, fallbackParentTestName),
+        }));
+        return {
+          id: toText(log?.id, `assessment-log-${idx + 1}`),
+          test_name: fallbackTestName,
+          parent_test_name: fallbackParentTestName,
+          assessed_on: assessedOn,
+          status: '완료',
+          scales,
+          selected_scales: extractScaleBadges(fallbackScales.length ? fallbackScales : scales),
+          sort_ts: toSortTimestamp(assessedOn),
+        };
+      });
+    }
+
+    if (!fallbackTestName || fallbackTestName === '배정 검사') {
+      return [];
+    }
+    const scales = normalizeScaleRows([], fallbackScales).map((scale) => ({
+      ...scale,
+      parent_test_name: toText(scale.parent_test_name, fallbackParentTestName),
+    }));
+    return [{
+      id: 'assigned-custom-test',
+      test_name: fallbackTestName,
+      parent_test_name: fallbackParentTestName,
+      assessed_on: toText(item.last_assessed_on, '-'),
+      status: toText(item.status, '미실시'),
+      scales,
+      selected_scales: extractScaleBadges(fallbackScales.length ? fallbackScales : scales),
+      sort_ts: toSortTimestamp(item.last_assessed_on),
+    }];
+  };
+
+  const sortTestItems = (rows) => [...rows].sort((a, b) => {
+    const timeDiff = (b.sort_ts || 0) - (a.sort_ts || 0);
+    if (timeDiff !== 0) {
+      return timeDiff;
+    }
+    return String(b.id).localeCompare(String(a.id), 'ko');
+  });
+
+  const createSvgEl = (tag, attrs = {}) => {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.entries(attrs).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        el.setAttribute(key, String(value));
+      }
+    });
+    return el;
+  };
+
+  let clientItem = null;
+  let testItems = [];
+  const selectedScaleKeys = new Set();
+  const expandedTreeGroups = new Set();
+
+  const getPrimaryTest = () => (testItems.length ? testItems[0] : null);
+
+  const getAllTreeScales = () => {
+    const rows = [];
+    testItems.forEach((item, testIdx) => {
+      const fallbackParentTestName = toText(item.parent_test_name, '기반 검사');
+      const testName = toText(item.test_name, `검사 ${testIdx + 1}`);
+      const assessedOn = toText(item.assessed_on, '-');
+      const status = toText(item.status, '-');
+      (Array.isArray(item.scales) ? item.scales : []).forEach((scale, idx) => {
+        const parentTestName = toText(scale.parent_test_name, fallbackParentTestName);
+        const scaleKey = toText(
+          scale.scale_key,
+          `${toText(scale.scale_code, `S${idx + 1}`)}-${idx + 1}`
+        );
+        rows.push({
+          ...scale,
+          tree_scale_key: `${String(item.id)}::${scaleKey}::${idx + 1}`,
+          parent_test_name: parentTestName,
+          test_name: testName,
+          assessed_on: assessedOn,
+          status,
+        });
+      });
+    });
+    return rows;
+  };
+
+  const getParentScaleGroups = (scales) => {
+    const rows = Array.isArray(scales) ? scales : [];
+    const parentMap = new Map();
+    rows.forEach((scale) => {
+      const parentKey = toText(scale.parent_test_name, '기반 검사');
+      if (!parentMap.has(parentKey)) {
+        parentMap.set(parentKey, []);
+      }
+      parentMap.get(parentKey).push(scale);
+    });
+
+    return [...parentMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, 'ko'))
+      .map(([parentKey, parentRows]) => ({
+        parentKey,
+        rows: [...parentRows].sort((a, b) => (
+          toText(a.scale_code).localeCompare(toText(b.scale_code), 'ko')
+        )),
+      }));
+  };
+
+  const selectAllScales = (scales) => {
+    selectedScaleKeys.clear();
+    (Array.isArray(scales) ? scales : []).forEach((scale) => {
+      selectedScaleKeys.add(String(scale.tree_scale_key));
+    });
+  };
+
+  const syncScaleSelection = (scales) => {
+    const rows = Array.isArray(scales) ? scales : [];
+    const validKeys = new Set(rows.map((scale) => String(scale.tree_scale_key)));
+    [...selectedScaleKeys].forEach((key) => {
+      if (!validKeys.has(String(key))) {
+        selectedScaleKeys.delete(String(key));
+      }
+    });
+  };
+
+  const renderClientSummary = () => {
+    if (!clientItem) {
+      return;
+    }
+    const genderText = getGenderLabel(clientItem.gender);
+    const identityParts = [genderText, clientItem.birth_day || ''].filter(Boolean);
+    if (resultClientNameEl) {
+      resultClientNameEl.textContent = toText(clientItem.name, '-');
+    }
+    if (resultClientIdentityEl) {
+      resultClientIdentityEl.textContent = identityParts.length
+        ? identityParts.join(' · ')
+        : '성별/생년월일 미입력';
+    }
+    const recentAssessedOn = toText(
+      clientItem.last_assessed_on,
+      testItems.find((item) => toText(item.assessed_on) && item.assessed_on !== '-')?.assessed_on || '-'
+    );
+    if (resultClientLastAssessedOnEl) {
+      resultClientLastAssessedOnEl.textContent = recentAssessedOn;
+    }
+    const testNameSet = new Set(
+      testItems.map((item) => toText(item.test_name)).filter(Boolean)
+    );
+    const statusSet = new Set(
+      testItems.map((item) => toText(item.status)).filter(Boolean)
+    );
+    const parentSet = new Set(
+      testItems.map((item) => toText(item.parent_test_name)).filter(Boolean)
+    );
+    if (resultClientSelectedTestEl) {
+      if (!testNameSet.size) {
+        resultClientSelectedTestEl.textContent = '검사 데이터 없음';
+      } else if (testNameSet.size === 1) {
+        resultClientSelectedTestEl.textContent = [...testNameSet][0];
+      } else {
+        resultClientSelectedTestEl.textContent = `${testNameSet.size}개 커스텀 검사`;
+      }
+    }
+    if (resultClientStatusEl) {
+      if (statusSet.size === 1) {
+        resultClientStatusEl.textContent = [...statusSet][0];
+      } else if (statusSet.size > 1) {
+        resultClientStatusEl.textContent = '복수 상태';
+      } else {
+        resultClientStatusEl.textContent = toText(clientItem.status, '-');
+      }
+    }
+    if (resultClientTestMetaEl) {
+      resultClientTestMetaEl.textContent = `실시 이력 ${testItems.length}건 · parent ${parentSet.size ? [...parentSet].join(', ') : '-'} · 좌측 척도 트리 선택에 따라 우측 결과가 즉시 갱신됩니다.`;
+    }
+  };
+
+  const resolveVisibleScales = (scales) => {
+    const rows = Array.isArray(scales) ? scales : [];
+    if (!rows.length) {
+      return [];
+    }
+    if (!selectedScaleKeys.size) {
+      return [];
+    }
+    return rows.filter((scale) => selectedScaleKeys.has(String(scale.tree_scale_key)));
+  };
+
+  const renderScaleTree = (scales) => {
+    if (!scaleTreeEl || !scaleTreeEmptyEl) {
+      return;
+    }
+    const rows = Array.isArray(scales) ? scales : [];
+    const parentGroups = getParentScaleGroups(rows);
+
+    if (scaleTreeMetaEl) {
+      scaleTreeMetaEl.textContent = `검사 ${parentGroups.length}개 · 선택 ${selectedScaleKeys.size}/${rows.length}`;
+    }
+    if (selectAllScalesBtn) {
+      selectAllScalesBtn.disabled = !rows.length || selectedScaleKeys.size === rows.length;
+    }
+    if (clearScalesBtn) {
+      clearScalesBtn.disabled = !rows.length || selectedScaleKeys.size === 0;
+    }
+
+    scaleTreeEl.innerHTML = '';
+    if (!rows.length) {
+      scaleTreeEmptyEl.classList.remove('hidden');
+      return;
+    }
+    scaleTreeEmptyEl.classList.add('hidden');
+
+    parentGroups.forEach((parent) => {
+      const parentRows = Array.isArray(parent.rows) ? parent.rows : [];
+      const parentSelectedCount = parentRows.filter((scale) => selectedScaleKeys.has(String(scale.tree_scale_key))).length;
+      const isExpanded = expandedTreeGroups.has(parent.parentKey);
+
+      const root = document.createElement('article');
+      root.className = 'client-scale-tree-root';
+
+      const rootHead = document.createElement('div');
+      rootHead.className = 'client-scale-tree-root-head';
+      const parentLabel = document.createElement('label');
+      parentLabel.className = 'client-scale-tree-group-check';
+      const parentCheckbox = document.createElement('input');
+      parentCheckbox.type = 'checkbox';
+      parentCheckbox.dataset.role = 'toggle-tree-parent-select';
+      parentCheckbox.dataset.parent = parent.parentKey;
+      parentCheckbox.checked = parentSelectedCount > 0 && parentSelectedCount === parentRows.length;
+      parentCheckbox.indeterminate = parentSelectedCount > 0 && parentSelectedCount < parentRows.length;
+      const rootTitle = document.createElement('strong');
+      rootTitle.textContent = parent.parentKey;
+      const rootMeta = document.createElement('span');
+      rootMeta.textContent = `${parentSelectedCount}/${parentRows.length}`;
+      parentLabel.appendChild(parentCheckbox);
+      parentLabel.appendChild(rootTitle);
+      parentLabel.appendChild(rootMeta);
+
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'client-scale-tree-toggle';
+      toggleBtn.dataset.role = 'toggle-tree-parent-open';
+      toggleBtn.dataset.parent = parent.parentKey;
+      toggleBtn.textContent = isExpanded ? '접기' : '펼치기';
+
+      rootHead.appendChild(parentLabel);
+      rootHead.appendChild(toggleBtn);
+      root.appendChild(rootHead);
+
+      const children = document.createElement('div');
+      children.className = `client-scale-tree-children ${isExpanded ? '' : 'hidden'}`;
+      parentRows.forEach((scale) => {
+        const rowSelected = selectedScaleKeys.has(String(scale.tree_scale_key));
+        const row = document.createElement('label');
+        row.className = `client-scale-tree-child ${rowSelected ? 'is-active' : ''}`;
+
+        const scaleCheckbox = document.createElement('input');
+        scaleCheckbox.type = 'checkbox';
+        scaleCheckbox.dataset.role = 'toggle-tree-scale-select';
+        scaleCheckbox.dataset.scaleKey = String(scale.tree_scale_key);
+        scaleCheckbox.checked = rowSelected;
+
+        const scaleCode = document.createElement('span');
+        scaleCode.className = 'client-scale-tree-code';
+        scaleCode.textContent = toText(scale.scale_code, '-');
+
+        const scaleName = document.createElement('span');
+        scaleName.className = 'client-scale-tree-name';
+        scaleName.textContent = toText(scale.scale_name, '-');
+
+        row.appendChild(scaleCheckbox);
+        row.appendChild(scaleCode);
+        row.appendChild(scaleName);
+        children.appendChild(row);
+      });
+      root.appendChild(children);
+
+      scaleTreeEl.appendChild(root);
+    });
+  };
+
+  const renderSelectedScaleSummary = (scales, totalScales) => {
+    if (!selectedScaleSummaryEl) {
+      return;
+    }
+    const rows = Array.isArray(scales) ? scales : [];
+    const allRows = Array.isArray(totalScales) ? totalScales : [];
+    selectedScaleSummaryEl.innerHTML = '';
+
+    if (!rows.length) {
+      selectedScaleSummaryEl.innerHTML = '<p class="field-info">선택된 척도가 없습니다. 좌측 트리에서 척도를 선택하세요.</p>';
+      return;
+    }
+
+    const grouped = new Map();
+    rows.forEach((scale) => {
+      const parentKey = toText(scale.parent_test_name, '기반 검사');
+      if (!grouped.has(parentKey)) {
+        grouped.set(parentKey, []);
+      }
+      grouped.get(parentKey).push(scale);
+    });
+
+    const selectedParentCount = new Set(rows.map((scale) => toText(scale.parent_test_name))).size;
+    const summaryMeta = document.createElement('p');
+    summaryMeta.className = 'client-selected-summary-meta';
+    summaryMeta.textContent = `선택 ${rows.length}/${allRows.length}개 척도 · parent ${selectedParentCount}개`;
+    selectedScaleSummaryEl.appendChild(summaryMeta);
+
+    const groupRow = document.createElement('div');
+    groupRow.className = 'client-selected-group-row';
+    [...grouped.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, 'ko'))
+      .forEach(([parentKey, parentRows]) => {
+        const chip = document.createElement('span');
+        chip.className = 'client-selected-group-chip';
+        chip.textContent = `${parentKey} (${parentRows.length}개)`;
+        groupRow.appendChild(chip);
+      });
+    selectedScaleSummaryEl.appendChild(groupRow);
+
+    const scaleRow = document.createElement('div');
+    scaleRow.className = 'client-selected-scale-row';
+    rows.slice(0, 8).forEach((scale) => {
+      const chip = document.createElement('span');
+      chip.className = 'client-selected-scale-chip';
+      chip.textContent = `${toText(scale.parent_test_name, '-')} > ${toText(scale.scale_code, '-')} · ${toText(scale.scale_name, '-')}`;
+      scaleRow.appendChild(chip);
+    });
+    if (rows.length > 8) {
+      const moreChip = document.createElement('span');
+      moreChip.className = 'client-selected-scale-chip is-more';
+      moreChip.textContent = `+${rows.length - 8}개`;
+      scaleRow.appendChild(moreChip);
+    }
+    selectedScaleSummaryEl.appendChild(scaleRow);
+  };
+
+  const renderScoreSummary = (scales) => {
+    const rows = Array.isArray(scales) ? scales : [];
+    if (!rows.length) {
+      if (scaleCountEl) {
+        scaleCountEl.textContent = '결과 생성 전';
+      }
+      if (avgScoreEl) {
+        avgScoreEl.textContent = '점수 미입력';
+      }
+      if (topScaleEl) {
+        topScaleEl.textContent = '결과 생성 전';
+      }
+      return;
+    }
+
+    if (scaleCountEl) {
+      scaleCountEl.textContent = `${rows.length}개`;
+    }
+    const numericScores = rows
+      .map((scale) => scale.score_number)
+      .filter((score) => Number.isFinite(score));
+    if (!numericScores.length) {
+      if (avgScoreEl) {
+        avgScoreEl.textContent = '점수 미입력';
+      }
+      if (topScaleEl) {
+        topScaleEl.textContent = '채점 진행 전';
+      }
+      return;
+    }
+
+    const avgScore = numericScores.length
+      ? (numericScores.reduce((acc, cur) => acc + cur, 0) / numericScores.length).toFixed(1)
+      : '-';
+    if (avgScoreEl) {
+      avgScoreEl.textContent = `${avgScore}점`;
+    }
+    const topScale = rows
+      .filter((scale) => Number.isFinite(scale.score_number))
+      .sort((a, b) => b.score_number - a.score_number)[0];
+    if (topScaleEl) {
+      topScaleEl.textContent = topScale ? `${topScale.scale_code} ${topScale.scale_name}` : '채점 전 상태';
+    }
+  };
+
+  const renderBarChart = (scales) => {
+    if (!barChartEl) {
+      return;
+    }
+    const rows = Array.isArray(scales) ? scales : [];
+    barChartEl.innerHTML = '';
+    if (!rows.length) {
+      barChartEl.innerHTML = `
+        <div class="client-chart-placeholder">
+          <p>결과 생성 전입니다. 검사 완료 후 그래프가 표시됩니다.</p>
+          <div class="client-chart-placeholder-bars">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const numericScores = rows
+      .map((scale) => scale.score_number)
+      .filter((score) => Number.isFinite(score));
+    if (!numericScores.length) {
+      barChartEl.innerHTML = `
+        <div class="client-chart-placeholder">
+          <p>채점 진행 전입니다. 채점 완료 후 척도별 점수 그래프가 표시됩니다.</p>
+          <div class="client-chart-placeholder-bars">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      `;
+      return;
+    }
+    const maxScore = numericScores.length ? Math.max(...numericScores) : 0;
+
+    rows.forEach((scale) => {
+      const hasNumeric = Number.isFinite(scale.score_number);
+      const barPct = (maxScore > 0 && hasNumeric) ? Math.max(4, Math.round((scale.score_number / maxScore) * 100)) : 0;
+      const row = document.createElement('article');
+      row.className = 'client-result-bar-row';
+      row.innerHTML = `
+        <div class="client-result-bar-head">
+          <strong>${escapeHtml(scale.scale_code)} · ${escapeHtml(scale.scale_name)}</strong>
+          <span>${hasNumeric ? `점수 ${escapeHtml(scale.score_text)}` : '점수 미집계'}</span>
+        </div>
+        <div class="client-result-bar-track${barPct > 0 ? '' : ' is-empty'}">
+          <div class="client-result-bar-fill" style="width:${barPct}%"></div>
+        </div>
+      `;
+      barChartEl.appendChild(row);
+    });
+  };
+
+  const renderCompareChart = (scales) => {
+    if (!compareChartEl) {
+      return;
+    }
+    const rows = Array.isArray(scales) ? scales : [];
+    compareChartEl.innerHTML = '';
+    if (!rows.length) {
+      compareChartEl.innerHTML = `
+        <div class="client-chart-placeholder">
+          <p>선택된 척도가 없습니다. 좌측 트리에서 척도를 선택하세요.</p>
+          <div class="client-chart-placeholder-bars">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const numericRows = rows
+      .filter((scale) => Number.isFinite(scale.score_number))
+      .sort((a, b) => b.score_number - a.score_number);
+    if (!numericRows.length) {
+      compareChartEl.innerHTML = `
+        <div class="client-chart-placeholder">
+          <p>채점 진행 전입니다. 선택된 척도 비교 그래프가 준비중입니다.</p>
+          <div class="client-chart-placeholder-bars">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const maxScore = Math.max(...numericRows.map((scale) => scale.score_number), 1);
+    numericRows.forEach((scale, idx) => {
+      const barPct = Math.max(4, Math.round((scale.score_number / maxScore) * 100));
+      const rank = idx + 1;
+      const row = document.createElement('article');
+      row.className = 'client-result-bar-row';
+      row.innerHTML = `
+        <div class="client-result-bar-head">
+          <strong>${rank}. ${escapeHtml(scale.scale_code)} · ${escapeHtml(scale.scale_name)}</strong>
+          <span>${escapeHtml(scale.score_text || '-')}</span>
+        </div>
+        <div class="client-result-bar-track">
+          <div class="client-result-bar-fill" style="width:${barPct}%"></div>
+        </div>
+      `;
+      compareChartEl.appendChild(row);
+    });
+  };
+
+  const renderProfileChart = (scales) => {
+    if (!profileChartEl) {
+      return;
+    }
+    profileChartEl.innerHTML = '';
+
+    const rows = Array.isArray(scales) ? scales : [];
+    if (!rows.length) {
+      const frame = createSvgEl('rect', {
+        x: 18,
+        y: 18,
+        width: 524,
+        height: 196,
+        rx: 10,
+        fill: '#fafcff',
+        stroke: '#dce5f0',
+        'stroke-dasharray': '4 4',
+      });
+      const emptyText = createSvgEl('text', { x: 280, y: 122, 'text-anchor': 'middle', 'font-size': 12, fill: '#6f7785' });
+      emptyText.textContent = '결과 생성 전입니다.';
+      profileChartEl.appendChild(frame);
+      profileChartEl.appendChild(emptyText);
+      return;
+    }
+
+    const numericScores = rows.map((scale) => (
+      Number.isFinite(scale.score_number) ? scale.score_number : null
+    ));
+    const validNumbers = numericScores.filter((score) => Number.isFinite(score));
+    if (!validNumbers.length) {
+      const frame = createSvgEl('rect', {
+        x: 18,
+        y: 18,
+        width: 524,
+        height: 196,
+        rx: 10,
+        fill: '#fafcff',
+        stroke: '#dce5f0',
+        'stroke-dasharray': '4 4',
+      });
+      const emptyText = createSvgEl('text', { x: 280, y: 114, 'text-anchor': 'middle', 'font-size': 12, fill: '#6f7785' });
+      const emptySub = createSvgEl('text', { x: 280, y: 134, 'text-anchor': 'middle', 'font-size': 11, fill: '#7e8796' });
+      emptyText.textContent = '채점 진행 전입니다.';
+      emptySub.textContent = '채점 완료 후 프로파일 차트가 표시됩니다.';
+      profileChartEl.appendChild(frame);
+      profileChartEl.appendChild(emptyText);
+      profileChartEl.appendChild(emptySub);
+      return;
+    }
+
+    const width = 560;
+    const height = 240;
+    const pLeft = 42;
+    const pRight = 20;
+    const pTop = 20;
+    const pBottom = 42;
+    const chartW = width - pLeft - pRight;
+    const chartH = height - pTop - pBottom;
+    const maxScore = Math.max(...validNumbers, 1);
+
+    for (let i = 0; i <= 4; i += 1) {
+      const y = pTop + (chartH * i) / 4;
+      profileChartEl.appendChild(createSvgEl('line', {
+        x1: pLeft,
+        x2: width - pRight,
+        y1: y,
+        y2: y,
+        stroke: '#e6e9ef',
+        'stroke-width': 1,
+      }));
+    }
+
+    const points = rows.map((scale, idx) => {
+      const x = rows.length === 1
+        ? pLeft + chartW / 2
+        : pLeft + (chartW * idx) / Math.max(1, rows.length - 1);
+      const value = Number.isFinite(scale.score_number) ? scale.score_number : 0;
+      const y = pTop + chartH - (value / maxScore) * chartH;
+      return { x, y, scale, hasNumeric: Number.isFinite(scale.score_number) };
+    });
+
+    const path = createSvgEl('polyline', {
+      fill: 'none',
+      stroke: '#85acd1',
+      'stroke-width': 2.5,
+      points: points.map((point) => `${point.x},${point.y}`).join(' '),
+    });
+    profileChartEl.appendChild(path);
+
+    points.forEach((point) => {
+      profileChartEl.appendChild(createSvgEl('circle', {
+        cx: point.x,
+        cy: point.y,
+        r: 3.5,
+        fill: point.hasNumeric ? '#5b89b4' : '#cfd8e4',
+      }));
+      const label = createSvgEl('text', {
+        x: point.x,
+        y: height - 14,
+        'text-anchor': 'middle',
+        'font-size': 10,
+        fill: '#6f7785',
+      });
+      label.textContent = point.scale.scale_code;
+      profileChartEl.appendChild(label);
+    });
+  };
+
+  const renderResultTable = (scales, emptyMessage = '결과 생성 전입니다.') => {
+    if (!tableBodyEl) {
+      return;
+    }
+    const rows = Array.isArray(scales) ? scales : [];
+    const hasMultipleParents = new Set(
+      rows.map((scale) => toText(scale.parent_test_name)).filter(Boolean)
+    ).size > 1;
+    tableBodyEl.innerHTML = '';
+    if (!rows.length) {
+      const emptyRow = document.createElement('tr');
+      emptyRow.innerHTML = `<td colspan="5">${escapeHtml(emptyMessage)}</td>`;
+      tableBodyEl.appendChild(emptyRow);
+      return;
+    }
+
+    rows.forEach((scale) => {
+      const scaleName = hasMultipleParents
+        ? `${toText(scale.parent_test_name, '-') } > ${toText(scale.scale_name, '-')}`
+        : toText(scale.scale_name, '-');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(scale.scale_code)}</td>
+        <td>${escapeHtml(scaleName)}</td>
+        <td>${escapeHtml(scale.score_text || '-')}</td>
+        <td>${escapeHtml(scale.level_text || '-')}</td>
+        <td>${escapeHtml(scale.note || '-')}</td>
+      `;
+      tableBodyEl.appendChild(tr);
+    });
+  };
+
+  const renderDetail = () => {
+    const allScaleRows = getAllTreeScales();
+    if (!testItems.length) {
+      if (selectedTestTitleEl) {
+        selectedTestTitleEl.textContent = '선택 가능한 검사 결과가 없습니다.';
+      }
+      if (selectedTestMetaEl) {
+        selectedTestMetaEl.textContent = '';
+      }
+      if (detailEmptyEl) {
+        detailEmptyEl.classList.remove('hidden');
+      }
+      if (scaleFilterLegendEl) {
+        scaleFilterLegendEl.textContent = '선택 척도 없음';
+      }
+      renderScaleTree([]);
+      renderSelectedScaleSummary([], []);
+      renderScoreSummary([]);
+      renderBarChart([]);
+      renderCompareChart([]);
+      renderProfileChart([]);
+      renderResultTable([], '결과를 불러올 검사 데이터가 없습니다.');
+      renderClientSummary();
+      return;
+    }
+
+    if (detailEmptyEl) {
+      detailEmptyEl.classList.add('hidden');
+    }
+    const primary = getPrimaryTest();
+    if (selectedTestTitleEl) {
+      selectedTestTitleEl.textContent = '선택 척도 결과';
+    }
+    if (selectedTestMetaEl) {
+      const parentNames = [...new Set(
+        allScaleRows.map((scale) => toText(scale.parent_test_name)).filter(Boolean)
+      )];
+      selectedTestMetaEl.textContent = `parent ${parentNames.join(', ') || '-'} · 최근 실시일 ${primary?.assessed_on || '-'} · 검사 이력 ${testItems.length}건`;
+    }
+
+    syncScaleSelection(allScaleRows);
+    const visibleScales = resolveVisibleScales(allScaleRows);
+    if (scaleFilterLegendEl) {
+      if (!visibleScales.length) {
+        scaleFilterLegendEl.textContent = '선택 척도 없음';
+      } else if (visibleScales.length === allScaleRows.length) {
+        scaleFilterLegendEl.textContent = `전체 척도 프로파일 (${visibleScales.length}개)`;
+      } else if (visibleScales.length === 1) {
+        const only = visibleScales[0];
+        scaleFilterLegendEl.textContent = `선택 척도: ${only.parent_test_name} > ${only.scale_code} · ${only.scale_name}`;
+      } else {
+        const parentCount = new Set(
+          visibleScales.map((scale) => toText(scale.parent_test_name)).filter(Boolean)
+        ).size;
+        scaleFilterLegendEl.textContent = `선택 척도 ${visibleScales.length}개 · parent ${parentCount}개`;
+      }
+    }
+    renderScaleTree(allScaleRows);
+    renderSelectedScaleSummary(visibleScales, allScaleRows);
+    renderScoreSummary(visibleScales);
+    renderBarChart(visibleScales);
+    renderCompareChart(visibleScales);
+    renderProfileChart(visibleScales);
+    renderResultTable(visibleScales, '결과 생성 전입니다.');
+    renderClientSummary();
+  };
+
+  if (scaleTreeEl) {
+    scaleTreeEl.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const toggleButton = target.closest('[data-role="toggle-tree-parent-open"]');
+      if (!(toggleButton instanceof HTMLElement)) {
+        return;
+      }
+      const parent = toggleButton.dataset.parent || '';
+      if (!parent) {
+        return;
+      }
+      if (expandedTreeGroups.has(parent)) {
+        expandedTreeGroups.delete(parent);
+      } else {
+        expandedTreeGroups.add(parent);
+      }
+      renderDetail();
+    });
+
+    scaleTreeEl.addEventListener('change', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) {
+        return;
+      }
+      const allScaleRows = getAllTreeScales();
+
+      if (target.dataset.role === 'toggle-tree-parent-select') {
+        const parent = target.dataset.parent || '';
+        if (!parent) {
+          return;
+        }
+        const parentRows = allScaleRows.filter((scale) => toText(scale.parent_test_name) === parent);
+        if (target.checked) {
+          parentRows.forEach((scale) => selectedScaleKeys.add(String(scale.tree_scale_key)));
+        } else {
+          parentRows.forEach((scale) => selectedScaleKeys.delete(String(scale.tree_scale_key)));
+        }
+        renderDetail();
+        return;
+      }
+
+      if (target.dataset.role !== 'toggle-tree-scale-select') {
+        return;
+      }
+      const scaleKey = target.dataset.scaleKey || '';
+      if (!scaleKey) {
+        return;
+      }
+      if (target.checked) {
+        selectedScaleKeys.add(scaleKey);
+      } else {
+        selectedScaleKeys.delete(scaleKey);
+      }
+      renderDetail();
+    });
+  }
+
+  if (selectAllScalesBtn) {
+    selectAllScalesBtn.addEventListener('click', () => {
+      const allScaleRows = getAllTreeScales();
+      selectAllScales(allScaleRows);
+      renderDetail();
+    });
+  }
+
+  if (clearScalesBtn) {
+    clearScalesBtn.addEventListener('click', () => {
+      selectedScaleKeys.clear();
+      renderDetail();
+    });
+  }
+
+  setMessage('', false);
+  try {
+    const detail = await api(`/api/admin/clients/${id}`);
+    clientItem = detail.item || {};
+
+    const assignedCustomTestId = Number(clientItem.assigned_custom_test_id);
+    let catalog = { tests: [] };
+    try {
+      const loadedCatalog = await api('/api/admin/tests/catalog');
+      if (loadedCatalog && Array.isArray(loadedCatalog.tests)) {
+        catalog = loadedCatalog;
+      }
+    } catch {
+      // Catalog is optional fallback data for scale-name mapping.
+    }
+
+    let customTestDetail = null;
+    if (Number.isFinite(assignedCustomTestId) && assignedCustomTestId > 0) {
+      try {
+        customTestDetail = await api(`/api/admin/custom-tests/${assignedCustomTestId}`);
+      } catch {
+        // Custom test detail is optional fallback data for scale badges.
+      }
+    }
+
+    testItems = sortTestItems(buildTestResultItems(clientItem, catalog, customTestDetail));
+    selectedScaleKeys.clear();
+    expandedTreeGroups.clear();
+    const allScaleRows = getAllTreeScales();
+    selectAllScales(allScaleRows);
+    getParentScaleGroups(allScaleRows).forEach((parent) => expandedTreeGroups.add(parent.parentKey));
+    renderClientSummary();
+    renderDetail();
+  } catch (error) {
+    setMessage(error.message, true);
+    renderClientSummary();
+    renderDetail();
+  }
+}
+
 async function initTestDetailPage() {
   const me = await ensureAdmin();
   if (!me) {
@@ -2242,6 +3882,14 @@ async function initTestDetailPage() {
   }
   if (page === 'admin-create') {
     await initCreatePage();
+    return;
+  }
+  if (page === 'admin-client-detail') {
+    await initClientDetailPage();
+    return;
+  }
+  if (page === 'admin-client-result') {
+    await initClientResultPage();
     return;
   }
   if (page === 'admin-test-detail') {
