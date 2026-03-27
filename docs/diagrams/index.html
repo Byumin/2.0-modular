@@ -101,6 +101,42 @@
         </p>
         <img src="./custom-test-create-service-flow.svg" alt="Custom test create service flow diagram" />
       </section>
+
+      <section class="panel">
+        <h2>5) Scoring Submission Runtime Sequence</h2>
+        <p>
+          원본: <a href="./scoring-submission-runtime-sequence.mmd">scoring-submission-runtime-sequence.mmd</a>
+          | SVG: <a href="./scoring-submission-runtime-sequence.svg">scoring-submission-runtime-sequence.svg</a>
+        </p>
+        <p>
+          `admin_custom_test_submission.answers_json` 예시 payload가 어떻게 읽히고, `ScoringContext`로 조립되는지 시퀀스로 정리했습니다.
+        </p>
+        <img src="./scoring-submission-runtime-sequence.svg" alt="Scoring submission runtime sequence diagram" />
+      </section>
+
+      <section class="panel">
+        <h2>6) Scoring Context Build Flow</h2>
+        <p>
+          원본: <a href="./scoring-context-build-flow.mmd">scoring-context-build-flow.mmd</a>
+          | SVG: <a href="./scoring-context-build-flow.svg">scoring-context-build-flow.svg</a>
+        </p>
+        <p>
+          저장된 answers list가 평탄화되고, `assessment_payload`가 재구성된 뒤, 최종적으로 `ScoringContext`가 만들어지는 변환 흐름입니다.
+        </p>
+        <img src="./scoring-context-build-flow.svg" alt="Scoring context build flow diagram" />
+      </section>
+
+      <section class="panel">
+        <h2>7) Choice Score Scoring Flow</h2>
+        <p>
+          원본: <a href="./scoring-choice-score-flow.mmd">scoring-choice-score-flow.mmd</a>
+          | SVG: <a href="./scoring-choice-score-flow.svg">scoring-choice-score-flow.svg</a>
+        </p>
+        <p>
+          `build_choice_score_result(...)` 내부에서 `test_id -> sub_test_json -> scale -> item score` 순서로 어떻게 점수가 계산되는지, 역채점이 `choice_score[item_id][answer_value]`에서 어떻게 반영되는지 예시와 함께 표시합니다.
+        </p>
+        <img src="./scoring-choice-score-flow.svg" alt="Choice score scoring flow diagram" />
+      </section>
     </main>
   </body>
 </html>

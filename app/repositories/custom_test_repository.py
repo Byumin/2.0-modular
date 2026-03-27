@@ -74,16 +74,32 @@ def create_custom_test(
     db.refresh(row)
     return row
 
-
+# 커스텀 검사 조회 (admin_user_id + custom_test_id)
 def get_custom_test_by_id_and_admin(
     db: Session,
     *,
     custom_test_id: int,
     admin_user_id: int,
-) -> AdminCustomTest | None:
+) -> AdminCustomTest | None: # SQLAlchemy ORM 모델 -> admin_custom_test 테이블 row 반환
     return (
         db.query(AdminCustomTest)
         .filter(AdminCustomTest.id == custom_test_id, AdminCustomTest.admin_user_id == admin_user_id)
+        .first()
+    )
+
+# 제출 데이터 조회 (admin_user_id + submission_id)
+def get_submission_by_id_and_admin(
+    db: Session,
+    *,
+    submission_id: int,
+    admin_user_id: int,
+) -> AdminCustomTestSubmission | None: # SQLAlchemy ORM 모델 -> admin_custom_test_submission 테이블 row 반환
+    return (
+        db.query(AdminCustomTestSubmission)
+        .filter(
+            AdminCustomTestSubmission.id == submission_id,
+            AdminCustomTestSubmission.admin_user_id == admin_user_id,
+        )
         .first()
     )
 
@@ -179,6 +195,7 @@ def create_submission(
     *,
     admin_user_id: int,
     custom_test_id: int,
+    client_id: int,
     access_token: str,
     responder_name: str,
     answers_json: str,
@@ -186,6 +203,7 @@ def create_submission(
     row = AdminCustomTestSubmission(
         admin_user_id=admin_user_id,
         admin_custom_test_id=custom_test_id,
+        client_id=client_id,
         access_token=access_token,
         responder_name=responder_name,
         answers_json=answers_json,

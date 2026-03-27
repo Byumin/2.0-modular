@@ -86,6 +86,7 @@ class AdminCustomTestSubmission(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     admin_user_id: Mapped[int] = mapped_column(ForeignKey("admin_user.id"), nullable=False, index=True)
     admin_custom_test_id: Mapped[int] = mapped_column(ForeignKey("child_test.id"), nullable=False, index=True)
+    client_id: Mapped[int | None] = mapped_column(ForeignKey("admin_client.id"), nullable=True, index=True)
     access_token: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     responder_name: Mapped[str] = mapped_column(String(80), nullable=False, default="")
     answers_json: Mapped[str] = mapped_column(Text, nullable=False)
