@@ -3,7 +3,10 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.db.schema_migrations import ensure_submission_client_id_column
+from app.db.schema_migrations import (
+    ensure_submission_client_id_column,
+    ensure_submission_scoring_result_table,
+)
 from app.db.session import Base, engine
 from app.router.assessment_link_router import router as assessment_link_router
 from app.router.auth_router import router as auth_router
@@ -32,4 +35,5 @@ app.include_router(scoring_router)
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
     ensure_submission_client_id_column()
+    ensure_submission_scoring_result_table()
     seed_default_admin()

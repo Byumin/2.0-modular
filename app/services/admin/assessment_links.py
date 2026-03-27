@@ -723,6 +723,8 @@ def submit_custom_test_by_access_link(
     profile: dict[str, Any],
     answers: dict[str, str],
 ) -> dict:
+    from app.services.scoring.submissions import score_submission_by_id
+
     link = get_active_access_link_by_token(db, access_token)
     if link is None:
         raise HTTPException(status_code=404, detail="유효하지 않은 검사 URL입니다.")
@@ -777,7 +779,7 @@ def submit_custom_test_by_access_link(
     profile_name = str(clean_profile.get("name", "")).strip()
     final_responder_name = profile_name or responder_name.strip()
 
-    create_submission(
+    submission = create_submission(
         db,
         admin_user_id=link.admin_user_id,
         custom_test_id=custom_test.id,
@@ -796,4 +798,16 @@ def submit_custom_test_by_access_link(
         ),
     )
 
-    return {"message": "검사가 제출되었습니다.", "submitted_item_count": len(cleaned_answers)}
+    scoring_result = score_submission_by_id(
+        db,
+        admin_user_id=link.admin_user_id,
+        submission_id=submission.id,
+    )
+
+    return {
+        "message": "검사가 제출되었습니다.",
+        "submitted_item_count": len(cleaned_answers),
+        "submission_id": submission.id,
+        "scoring_result_id": scoring_result.get("scoring_result_id"),
+        "scoring_status": scoring_result.get("status"),
+    }
