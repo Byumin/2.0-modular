@@ -61,10 +61,35 @@ def list_admin_clients_by_admin(db: Session, *, admin_user_id: int) -> list[Admi
 
 def list_client_assignments_with_test_name(db: Session, *, admin_user_id: int):
     return (
-        db.query(AdminClientAssignment, AdminCustomTest.custom_test_name)
+        db.query(
+            AdminClientAssignment,
+            AdminCustomTest.custom_test_name,
+            AdminCustomTest.test_id.label("parent_test_id"),
+        )
         .join(AdminCustomTest, AdminCustomTest.id == AdminClientAssignment.admin_custom_test_id)
         .filter(AdminClientAssignment.admin_user_id == admin_user_id)
         .all()
+    )
+
+
+def get_client_assignment_with_test_name(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+):
+    return (
+        db.query(
+            AdminClientAssignment,
+            AdminCustomTest.custom_test_name,
+            AdminCustomTest.test_id.label("parent_test_id"),
+        )
+        .join(AdminCustomTest, AdminCustomTest.id == AdminClientAssignment.admin_custom_test_id)
+        .filter(
+            AdminClientAssignment.admin_user_id == admin_user_id,
+            AdminClientAssignment.admin_client_id == client_id,
+        )
+        .first()
     )
 
 
@@ -76,6 +101,41 @@ def get_last_assessed_rows(db: Session, *, admin_user_id: int):
         )
         .filter(AdminAssessmentLog.admin_user_id == admin_user_id)
         .group_by(AdminAssessmentLog.admin_client_id)
+        .all()
+    )
+
+
+def get_last_assessed_on_by_client(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+):
+    return (
+        db.query(func.max(AdminAssessmentLog.assessed_on).label("last_assessed_on"))
+        .filter(
+            AdminAssessmentLog.admin_user_id == admin_user_id,
+            AdminAssessmentLog.admin_client_id == client_id,
+        )
+        .first()
+    )
+
+
+def list_assessment_logs_by_client(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+    limit: int = 30,
+):
+    return (
+        db.query(AdminAssessmentLog)
+        .filter(
+            AdminAssessmentLog.admin_user_id == admin_user_id,
+            AdminAssessmentLog.admin_client_id == client_id,
+        )
+        .order_by(AdminAssessmentLog.assessed_on.desc(), AdminAssessmentLog.id.desc())
+        .limit(limit)
         .all()
     )
 

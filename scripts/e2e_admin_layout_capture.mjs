@@ -32,8 +32,36 @@ try {
       await page.click('#closeCreateModalBtn');
       await page.waitForTimeout(100);
     }
+    if (t.name === 'admin-clients') {
+      await page.waitForSelector('#clientFilterForm', { timeout: 60000 });
+      await page.click('#openClientCreateBtn');
+      await page.waitForSelector('#clientFormModal:not(.hidden)', { timeout: 60000 });
+      await page.screenshot({ path: path.join(outDir, `${t.name}-modal.png`), fullPage: true });
+      await page.click('#clientCancelBtn');
+      await page.waitForTimeout(100);
+    }
     await page.screenshot({ path: path.join(outDir, `${t.name}.png`), fullPage: true });
   }
+
+  const firstClientId = await page.evaluate(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const href = document.querySelector('#clientList a[href^="/admin/client-detail?id="]')?.getAttribute('href') || '';
+    const url = new URL(href, window.location.origin);
+    const id = Number(url.searchParams.get('id'));
+    return Number.isFinite(id) ? id : null;
+  });
+
+  if (firstClientId) {
+    await page.goto(`${base}/admin/client-detail?id=${firstClientId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForSelector('#clientDetailForm', { timeout: 60000 });
+    await page.screenshot({ path: path.join(outDir, 'admin-client-detail.png'), fullPage: true });
+
+    await page.goto(`${base}/admin/client-result?id=${firstClientId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForSelector('#clientResultScaleTree', { timeout: 60000 });
+    await page.screenshot({ path: path.join(outDir, 'admin-client-result.png'), fullPage: true });
+  }
+
+  await page.goto(`${base}/admin/create`, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
   const testRows = await page.evaluate(async () => {
     await new Promise((resolve) => setTimeout(resolve, 100));

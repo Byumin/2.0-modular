@@ -34,6 +34,16 @@ def admin_clients_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "admin-clients.html")
 
 
+@router.get("/admin/client-detail")
+def admin_client_detail_page() -> FileResponse:
+    return FileResponse(STATIC_DIR / "admin-client-detail.html")
+
+
+@router.get("/admin/client-result")
+def admin_client_result_page() -> FileResponse:
+    return FileResponse(STATIC_DIR / "admin-client-result.html")
+
+
 @router.get("/admin/create")
 def admin_create_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "admin-create.html")
