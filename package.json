@@ -5,13 +5,16 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "diagram:render:sequence": "mmdc -i docs/diagrams/assessment-profile-runtime-sequence.mmd -o docs/diagrams/assessment-profile-runtime-sequence.svg -b transparent",
-    "diagram:render:flow": "mmdc -i docs/diagrams/assessment-profile-validate-flow.mmd -o docs/diagrams/assessment-profile-validate-flow.svg -b transparent",
-    "diagram:render:create-sequence": "mmdc -i docs/diagrams/custom-test-create-runtime-sequence.mmd -o docs/diagrams/custom-test-create-runtime-sequence.svg -b transparent",
-    "diagram:render:create-flow": "mmdc -i docs/diagrams/custom-test-create-service-flow.mmd -o docs/diagrams/custom-test-create-service-flow.svg -b transparent",
-    "diagram:render:scoring-sequence": "mmdc -i docs/diagrams/scoring-runtime-sequence.mmd -o docs/diagrams/scoring-runtime-sequence.svg -b transparent",
-    "diagram:render:scoring-flow": "mmdc -i docs/diagrams/scoring-service-flow.mmd -o docs/diagrams/scoring-service-flow.svg -b transparent",
-    "diagram:render": "npm run diagram:render:sequence && npm run diagram:render:flow && npm run diagram:render:create-sequence && npm run diagram:render:create-flow && npm run diagram:render:scoring-sequence && npm run diagram:render:scoring-flow"
+    "diagram:render:sequence": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/assessment-profile-runtime-sequence.mmd -o docs/diagrams/assessment-profile-runtime-sequence.svg -b transparent",
+    "diagram:render:flow": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/assessment-profile-validate-flow.mmd -o docs/diagrams/assessment-profile-validate-flow.svg -b transparent",
+    "diagram:render:create-sequence": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/custom-test-create-runtime-sequence.mmd -o docs/diagrams/custom-test-create-runtime-sequence.svg -b transparent",
+    "diagram:render:create-flow": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/custom-test-create-service-flow.mmd -o docs/diagrams/custom-test-create-service-flow.svg -b transparent",
+    "diagram:render:scoring-submission-sequence": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/scoring-submission-runtime-sequence.mmd -o docs/diagrams/scoring-submission-runtime-sequence.svg -b transparent",
+    "diagram:render:scoring-context-flow": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/scoring-context-build-flow.mmd -o docs/diagrams/scoring-context-build-flow.svg -b transparent",
+    "diagram:render:scoring-choice-score-flow": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/scoring-choice-score-flow.mmd -o docs/diagrams/scoring-choice-score-flow.svg -b transparent",
+    "diagram:render:scoring-sequence": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/scoring-runtime-sequence.mmd -o docs/diagrams/scoring-runtime-sequence.svg -b transparent",
+    "diagram:render:scoring-flow": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/scoring-service-flow.mmd -o docs/diagrams/scoring-service-flow.svg -b transparent",
+    "diagram:render": "npm run diagram:render:sequence && npm run diagram:render:flow && npm run diagram:render:create-sequence && npm run diagram:render:create-flow && npm run diagram:render:scoring-submission-sequence && npm run diagram:render:scoring-context-flow && npm run diagram:render:scoring-choice-score-flow && npm run diagram:render:scoring-sequence && npm run diagram:render:scoring-flow"
   },
   "repository": {
     "type": "git",

@@ -765,13 +765,13 @@ def submit_custom_test_by_access_link(
     if len(cleaned_answers) != len(valid_item_ids):
         raise HTTPException(status_code=400, detail="모든 문항에 응답해주세요.")
 
-    _, error_message = find_assigned_client_for_profile(
+    client, error_message = find_assigned_client_for_profile(
         db,
         admin_user_id=link.admin_user_id,
         custom_test_id=custom_test.id,
         profile=clean_profile,
     )
-    if error_message:
+    if error_message or client is None:
         raise HTTPException(status_code=403, detail=error_message)
 
     profile_name = str(clean_profile.get("name", "")).strip()
@@ -781,6 +781,7 @@ def submit_custom_test_by_access_link(
         db,
         admin_user_id=link.admin_user_id,
         custom_test_id=custom_test.id,
+        client_id=client.id,
         access_token=access_token,
         responder_name=final_responder_name,
         answers_json=json.dumps(

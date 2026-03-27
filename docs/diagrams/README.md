@@ -5,6 +5,9 @@
 - `assessment-profile-validate-flow.mmd`: validate-profile 내부 함수 호출/분기 플로우
 - `custom-test-create-runtime-sequence.mmd`: 커스텀 검사 생성(프론트 submit -> 백엔드 저장 -> 목록 갱신) 시퀀스 다이어그램
 - `custom-test-create-service-flow.mmd`: `create_admin_custom_test_batch` 내부 처리 플로우
+- `scoring-submission-runtime-sequence.mmd`: submission_id 기준 채점 라우터 호출부터 `ScoringContext` 조립까지의 시퀀스 다이어그램
+- `scoring-context-build-flow.mmd`: `build_scoring_context_from_submission` 내부 처리 플로우
+- `scoring-choice-score-flow.mmd`: `build_choice_score_result` 내부 처리 플로우
 - `scoring-runtime-sequence.mmd`: scoring 엔진 호출부터 scorer 선택/반환까지의 시퀀스 다이어그램
 - `scoring-service-flow.mmd`: `ScoringEngine.score_tests` 내부 처리 플로우
 
@@ -30,12 +33,15 @@
 
 ## Render commands
 ```bash
-npx mmdc -i docs/diagrams/assessment-profile-runtime-sequence.mmd -o docs/diagrams/assessment-profile-runtime-sequence.svg -b transparent
-npx mmdc -i docs/diagrams/assessment-profile-validate-flow.mmd -o docs/diagrams/assessment-profile-validate-flow.svg -b transparent
-npx mmdc -i docs/diagrams/custom-test-create-runtime-sequence.mmd -o docs/diagrams/custom-test-create-runtime-sequence.svg -b transparent
-npx mmdc -i docs/diagrams/custom-test-create-service-flow.mmd -o docs/diagrams/custom-test-create-service-flow.svg -b transparent
-npx mmdc -i docs/diagrams/scoring-runtime-sequence.mmd -o docs/diagrams/scoring-runtime-sequence.svg -b transparent
-npx mmdc -i docs/diagrams/scoring-service-flow.mmd -o docs/diagrams/scoring-service-flow.svg -b transparent
+npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/assessment-profile-runtime-sequence.mmd -o docs/diagrams/assessment-profile-runtime-sequence.svg -b transparent
+npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/assessment-profile-validate-flow.mmd -o docs/diagrams/assessment-profile-validate-flow.svg -b transparent
+npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/custom-test-create-runtime-sequence.mmd -o docs/diagrams/custom-test-create-runtime-sequence.svg -b transparent
+npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/custom-test-create-service-flow.mmd -o docs/diagrams/custom-test-create-service-flow.svg -b transparent
+npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/scoring-submission-runtime-sequence.mmd -o docs/diagrams/scoring-submission-runtime-sequence.svg -b transparent
+npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/scoring-context-build-flow.mmd -o docs/diagrams/scoring-context-build-flow.svg -b transparent
+npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/scoring-choice-score-flow.mmd -o docs/diagrams/scoring-choice-score-flow.svg -b transparent
+npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/scoring-runtime-sequence.mmd -o docs/diagrams/scoring-runtime-sequence.svg -b transparent
+npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/scoring-service-flow.mmd -o docs/diagrams/scoring-service-flow.svg -b transparent
 ```
 
 또는
