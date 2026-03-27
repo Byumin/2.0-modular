@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from typing import Any
 
@@ -23,6 +24,7 @@ from app.repositories.client_repository import (
     list_client_assignments_with_test_name,
 )
 from app.repositories.custom_test_repository import get_custom_test_by_id_and_admin
+from app.repositories.custom_test_repository import list_submission_scoring_results_by_client
 from app.schemas.values import normalize_gender_value
 from app.services.admin.auth import get_current_admin
 from app.services.admin.common import serialize_admin_client, summarize_custom_test_ids
@@ -31,6 +33,76 @@ from app.services.admin.common import serialize_admin_client, summarize_custom_t
 def _normalize_parent_test_text(raw_value: str | None) -> str | None:
     _, text = summarize_custom_test_ids([], fallback=raw_value)
     return text or None
+
+
+def _serialize_client_scoring_rows(scoring_rows) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for row in scoring_rows:
+        scoring_row = row.SubmissionScoringResult
+        try:
+            result_payload = json.loads(scoring_row.result_json or "{}")
+        except Exception:
+            result_payload = {}
+        if not isinstance(result_payload, dict):
+            continue
+
+        assessed_on = row.submission_created_at.isoformat() if row.submission_created_at else None
+        custom_test_name = getattr(row, "custom_test_name", "") or "커스텀 검사"
+
+        for parent_test_id, raw_result in result_payload.items():
+            if not isinstance(raw_result, dict):
+                continue
+            raw_scales = raw_result.get("scales", {})
+            scale_rows: list[dict[str, Any]] = []
+            if isinstance(raw_scales, dict):
+                for scale_key, raw_scale in raw_scales.items():
+                    if not isinstance(raw_scale, dict):
+                        continue
+                    score_100 = raw_scale.get("converted_score_100")
+                    total_score = raw_scale.get("total_score")
+                    max_score = raw_scale.get("max_score")
+                    note_parts: list[str] = []
+                    if max_score is not None:
+                        note_parts.append(f"max {max_score}")
+                    facets = raw_scale.get("facets")
+                    if isinstance(facets, dict) and facets:
+                        note_parts.append(f"facet {len(facets)}개")
+                    scale_rows.append(
+                        {
+                            "scale_key": str(scale_key),
+                            "scale_code": str(raw_scale.get("code", "")),
+                            "scale_name": str(raw_scale.get("name", "")),
+                            "score": score_100,
+                            "score_text": (
+                                f"{score_100} / 100"
+                                if score_100 is not None
+                                else (str(total_score) if total_score is not None else "점수 없음")
+                            ),
+                            "level_text": (
+                                f"원점수 {total_score}/{max_score}"
+                                if total_score is not None and max_score is not None
+                                else "원점수 정보 없음"
+                            ),
+                            "note": ", ".join(note_parts) if note_parts else "",
+                            "parent_test_name": str(parent_test_id),
+                        }
+                    )
+
+            items.append(
+                {
+                    "id": f"{scoring_row.id}::{parent_test_id}",
+                    "custom_test_name": custom_test_name,
+                    "test_name": custom_test_name,
+                    "parent_test_name": str(parent_test_id),
+                    "parent_test_id": str(parent_test_id),
+                    "assessed_on": assessed_on,
+                    "created_at": scoring_row.created_at.isoformat(),
+                    "status": raw_result.get("status", scoring_row.scoring_status),
+                    "scales": scale_rows,
+                    "meta": raw_result.get("meta", {}),
+                }
+            )
+    return items
 
 
 def upsert_client_assignment(
@@ -161,6 +233,12 @@ def get_admin_client_detail(db: Session, admin_session: str | None, client_id: i
         client_id=row.id,
         limit=30,
     )
+    scoring_rows = list_submission_scoring_results_by_client(
+        db,
+        admin_user_id=admin.id,
+        client_id=row.id,
+        limit=30,
+    )
 
     base = serialize_admin_client(row)
     base["assigned_custom_test_id"] = assignment_row.AdminClientAssignment.admin_custom_test_id if assignment_row else None
@@ -177,6 +255,7 @@ def get_admin_client_detail(db: Session, admin_session: str | None, client_id: i
         }
         for log in logs
     ]
+    base["custom_test_results"] = _serialize_client_scoring_rows(scoring_rows)
     return {"item": base}
 
 

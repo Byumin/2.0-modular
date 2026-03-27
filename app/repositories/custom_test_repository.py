@@ -7,6 +7,7 @@ from app.db.models import (
     AdminCustomTest,
     AdminCustomTestAccessLink,
     AdminCustomTestSubmission,
+    SubmissionScoringResult,
 )
 
 
@@ -212,3 +213,59 @@ def create_submission(
     db.commit()
     db.refresh(row)
     return row
+
+
+def create_submission_scoring_result(
+    db: Session,
+    *,
+    admin_user_id: int,
+    admin_custom_test_id: int,
+    client_id: int | None,
+    submission_id: int,
+    scoring_status: str,
+    result_json: str,
+) -> SubmissionScoringResult:
+    row = SubmissionScoringResult(
+        admin_user_id=admin_user_id,
+        admin_custom_test_id=admin_custom_test_id,
+        client_id=client_id,
+        submission_id=submission_id,
+        scoring_status=scoring_status,
+        result_json=result_json,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def list_submission_scoring_results_by_client(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+    limit: int = 30,
+):
+    return (
+        db.query(
+            SubmissionScoringResult,
+            AdminCustomTest.custom_test_name,
+            AdminCustomTest.test_id.label("parent_test_id"),
+            AdminCustomTestSubmission.created_at.label("submission_created_at"),
+        )
+        .join(
+            AdminCustomTestSubmission,
+            AdminCustomTestSubmission.id == SubmissionScoringResult.submission_id,
+        )
+        .outerjoin(
+            AdminCustomTest,
+            AdminCustomTest.id == SubmissionScoringResult.admin_custom_test_id,
+        )
+        .filter(
+            SubmissionScoringResult.admin_user_id == admin_user_id,
+            SubmissionScoringResult.client_id == client_id,
+        )
+        .order_by(SubmissionScoringResult.created_at.desc(), SubmissionScoringResult.id.desc())
+        .limit(limit)
+        .all()
+    )

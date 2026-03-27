@@ -3268,7 +3268,7 @@ async function initClientResultPage() {
     rows.slice(0, 8).forEach((scale) => {
       const chip = document.createElement('span');
       chip.className = 'client-selected-scale-chip';
-      chip.textContent = `${toText(scale.parent_test_name, '-')} > ${toText(scale.scale_code, '-')} · ${toText(scale.scale_name, '-')}`;
+      chip.textContent = `${toText(scale.scale_code, '-')} ${toText(scale.scale_name, '-')}`;
       scaleRow.appendChild(chip);
     });
     if (rows.length > 8) {

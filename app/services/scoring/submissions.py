@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.repositories.custom_test_repository import (
+    create_submission_scoring_result,
     get_custom_test_by_id_and_admin,
     get_submission_by_id_and_admin,
 )
@@ -219,25 +220,24 @@ def _build_scoring_index_by_test_variant(
     return scoring_index
 
 
-def build_scoring_context_from_submission(
-    # 제출 데이터와 커스텀 검사 데이터를 조회하여 ScoringContext 조립하는 함수
+def _load_submission_scoring_bundle(
     db: Session,
-    admin_session: str | None,
+    *,
+    admin_user_id: int,
     submission_id: int,
 ) -> tuple[ScoringContext, list[str], str, dict[str, Any]]:
-    admin = get_current_admin(db, admin_session) # 관리자 인증 및 조회 (admin_session -> admin_user_id -> AdminUser 모델 반환)
-    submission = get_submission_by_id_and_admin( # 제출 데이터 조회 (admin_user_id + submission_id)
+    submission = get_submission_by_id_and_admin(
         db,
         submission_id=submission_id,
-        admin_user_id=admin.id,
+        admin_user_id=admin_user_id,
     )
     if submission is None:
         raise HTTPException(status_code=404, detail="제출 데이터를 찾을 수 없습니다.")
 
-    custom_test = get_custom_test_by_id_and_admin( # 커스텀 검사 조회 (admin_user_id + custom_test_id)
+    custom_test = get_custom_test_by_id_and_admin(
         db,
         custom_test_id=submission.admin_custom_test_id,
-        admin_user_id=admin.id,
+        admin_user_id=admin_user_id,
     )
     if custom_test is None:
         raise HTTPException(status_code=404, detail="커스텀 검사를 찾을 수 없습니다.")
@@ -253,19 +253,11 @@ def build_scoring_context_from_submission(
     if not isinstance(profile, dict):
         profile = {}
 
-    flattened_answers = _flatten_submission_answers(answers_payload.get("answers", {})) # 제출된 응답 데이터를 평탄화하여 { "TESTID::SUBTESTJSON::PARENTITEMID": "ANSWER_VALUE", ... } 형태로 변환
-    test_configs = load_custom_test_configs(custom_test) # 커스텀 검사에 포함된 test_id 별 sub_test_json 목록과 sub_test_json 별 검사명 등을 로드하여 반환
+    flattened_answers = _flatten_submission_answers(answers_payload.get("answers", {}))
+    test_configs = load_custom_test_configs(custom_test)
     test_ids, test_id_text = summarize_custom_test_ids(test_configs, custom_test.test_id)
     assessment_payload = build_custom_assessment_question_payload(custom_test, profile)
     answers_by_test_variant = _build_answers_by_test_variant(flattened_answers)
-    # answers_by_test_variant 예시 형태
-    # {
-    #     "TESTID": {
-    #         "SUBTESTJSON": {
-    #             "PARENTITEMID": "ANSWER_VALUE",
-    #             "PARENTITEMID": "ANSWER_VALUE",
-    #             ...
-    #         },
     scoring_index_by_test_variant = _build_scoring_index_by_test_variant(assessment_payload)
 
     context = ScoringContext(
@@ -284,21 +276,49 @@ def build_scoring_context_from_submission(
     }
 
 
-def trigger_submission_scoring(db: Session, admin_session: str | None, submission_id: int) -> dict:
-    context, test_ids, test_id_text, loaded = build_scoring_context_from_submission(
+def build_scoring_context_from_submission(
+    # 제출 데이터와 커스텀 검사 데이터를 조회하여 ScoringContext 조립하는 함수
+    db: Session,
+    admin_session: str | None,
+    submission_id: int,
+) -> tuple[ScoringContext, list[str], str, dict[str, Any]]:
+    admin = get_current_admin(db, admin_session) # 관리자 인증 및 조회 (admin_session -> admin_user_id -> AdminUser 모델 반환)
+    return _load_submission_scoring_bundle(
         db,
-        admin_session,
-        submission_id,
+        admin_user_id=admin.id,
+        submission_id=submission_id,
+    )
+
+
+def score_submission_by_id(
+    db: Session,
+    *,
+    admin_user_id: int,
+    submission_id: int,
+) -> dict:
+    context, test_ids, test_id_text, loaded = _load_submission_scoring_bundle(
+        db,
+        admin_user_id=admin_user_id,
+        submission_id=submission_id,
     )
     submission = loaded["submission"]
     answers_payload = loaded["answers_payload"]
     engine = ScoringEngine()
-    scoring_results = engine.score_tests( # 제출된 응답과 커스텀 검사 데이터를 기반으로 해당 검사에 대한 채점 결과를 계산하여 반환
+    scoring_results = engine.score_tests(
         test_ids=test_ids,
         context=context,
     )
     serialized_results = _serialize_scoring_results(scoring_results)
     statuses = sorted({result["status"] for result in serialized_results.values()})
+    persisted_result = create_submission_scoring_result(
+        db,
+        admin_user_id=submission.admin_user_id,
+        admin_custom_test_id=submission.admin_custom_test_id,
+        client_id=submission.client_id,
+        submission_id=submission.id,
+        scoring_status=",".join(statuses) if statuses else "scored",
+        result_json=json.dumps(serialized_results, ensure_ascii=False),
+    )
 
     return {
         "message": "채점 엔진 호출이 완료되었습니다.",
@@ -314,6 +334,16 @@ def trigger_submission_scoring(db: Session, admin_session: str | None, submissio
         "assessment_item_count": len(context.assessment_payload.get("items", [])),
         "engine_result_count": len(serialized_results),
         "engine_statuses": statuses,
+        "scoring_result_id": persisted_result.id,
         "status": "scoring_completed",
         "results": serialized_results,
     }
+
+
+def trigger_submission_scoring(db: Session, admin_session: str | None, submission_id: int) -> dict:
+    admin = get_current_admin(db, admin_session)
+    return score_submission_by_id(
+        db,
+        admin_user_id=admin.id,
+        submission_id=submission_id,
+    )
