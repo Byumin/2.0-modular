@@ -7,6 +7,7 @@ from app.services.admin.clients import (
     create_admin_assessment_log,
     create_admin_client,
     delete_admin_client,
+    get_admin_client_detail,
     list_admin_clients,
     update_admin_client,
     update_admin_client_assignment,
@@ -30,6 +31,15 @@ def create_client(
     admin_session: str | None = Cookie(default=None),
 ) -> dict:
     return create_admin_client(db, admin_session, payload)
+
+
+@router.get("/api/admin/clients/{client_id}")
+def get_client(
+    client_id: int,
+    db: Session = Depends(get_db),
+    admin_session: str | None = Cookie(default=None),
+) -> dict:
+    return get_admin_client_detail(db, admin_session, client_id)
 
 
 @router.put("/api/admin/clients/{client_id}")
