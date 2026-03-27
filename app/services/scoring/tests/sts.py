@@ -6,7 +6,8 @@ from app.services.scoring.base import BaseScorer, ScoringContext, ScoringResult
 from app.services.scoring.utils import build_choice_score_result
 
 
-def _compute_choice_score_max(choice_score: dict[str, Any]) -> int | float:
+def _compute_choice_score_bounds(choice_score: dict[str, Any]) -> tuple[int | float, int | float]:
+    min_score: int | float = 0
     max_score: int | float = 0
     for score_map in choice_score.values():
         if not isinstance(score_map, dict):
@@ -21,14 +22,22 @@ def _compute_choice_score_max(choice_score: dict[str, Any]) -> int | float:
                 continue
         if not numeric_scores:
             continue
+        min_score += min(numeric_scores)
         max_score += max(numeric_scores)
-    return max_score
+    return min_score, max_score
 
 
-def _to_hundred_point_score(total_score: int | float, max_score: int | float) -> float | None:
-    if not isinstance(max_score, (int, float)) or max_score <= 0:
+def _to_hundred_point_score(
+    total_score: int | float,
+    min_score: int | float,
+    max_score: int | float,
+) -> float | None:
+    if not isinstance(min_score, (int, float)) or not isinstance(max_score, (int, float)):
         return None
-    return round((float(total_score) / float(max_score)) * 100, 2)
+    score_range = float(max_score) - float(min_score)
+    if score_range <= 0:
+        return None
+    return round(((float(total_score) - float(min_score)) / score_range) * 100, 2)
 
 
 def _apply_sts_max_score_hundred_point(
@@ -53,14 +62,16 @@ def _apply_sts_max_score_hundred_point(
             indexed_items = raw_scale.get("items")
             if not isinstance(scale_result, dict) or not isinstance(indexed_items, dict):
                 continue
-            max_score = _compute_choice_score_max(indexed_items)
+            min_score, max_score = _compute_choice_score_bounds(indexed_items)
+            scale_result["min_score"] = min_score
             scale_result["max_score"] = max_score
             scale_result["converted_score_100"] = _to_hundred_point_score(
                 scale_result.get("total_score", 0),
+                min_score,
                 max_score,
             )
 
-    result.meta["score_normalization"] = "max_score_to_100"
+    result.meta["score_normalization"] = "min_max_to_100"
     return result
 
 

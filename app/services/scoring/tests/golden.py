@@ -6,7 +6,8 @@ from app.services.scoring.base import BaseScorer, ScoringContext, ScoringResult
 from app.services.scoring.utils import build_choice_score_result
 
 
-def _compute_choice_score_max(choice_score: dict[str, Any]) -> int | float:
+def _compute_choice_score_bounds(choice_score: dict[str, Any]) -> tuple[int | float, int | float]:
+    min_score: int | float = 0
     max_score: int | float = 0
     for score_map in choice_score.values():
         if not isinstance(score_map, dict):
@@ -21,14 +22,22 @@ def _compute_choice_score_max(choice_score: dict[str, Any]) -> int | float:
                 continue
         if not numeric_scores:
             continue
+        min_score += min(numeric_scores)
         max_score += max(numeric_scores)
-    return max_score
+    return min_score, max_score
 
 
-def _to_hundred_point_score(total_score: int | float, max_score: int | float) -> float | None:
-    if not isinstance(max_score, (int, float)) or max_score <= 0:
+def _to_hundred_point_score(
+    total_score: int | float,
+    min_score: int | float,
+    max_score: int | float,
+) -> float | None:
+    if not isinstance(min_score, (int, float)) or not isinstance(max_score, (int, float)):
         return None
-    return round((float(total_score) / float(max_score)) * 100, 2)
+    score_range = float(max_score) - float(min_score)
+    if score_range <= 0:
+        return None
+    return round(((float(total_score) - float(min_score)) / score_range) * 100, 2)
 
 
 def _apply_golden_max_score_hundred_point(
@@ -56,10 +65,12 @@ def _apply_golden_max_score_hundred_point(
 
             indexed_items = raw_scale.get("items")
             if isinstance(indexed_items, dict):
-                max_score = _compute_choice_score_max(indexed_items)
+                min_score, max_score = _compute_choice_score_bounds(indexed_items)
+                scale_result["min_score"] = min_score
                 scale_result["max_score"] = max_score
                 scale_result["converted_score_100"] = _to_hundred_point_score(
                     scale_result.get("total_score", 0),
+                    min_score,
                     max_score,
                 )
                 continue
@@ -69,6 +80,7 @@ def _apply_golden_max_score_hundred_point(
             if not isinstance(indexed_facets, dict):
                 continue
 
+            total_min_score: int | float = 0
             total_max_score: int | float = 0
             for facet_code, raw_facet in indexed_facets.items():
                 facet_code_text = str(facet_code).strip()
@@ -77,23 +89,28 @@ def _apply_golden_max_score_hundred_point(
                 facet_items = raw_facet.get("items")
                 if not isinstance(facet_items, dict):
                     continue
-                facet_max_score = _compute_choice_score_max(facet_items)
+                facet_min_score, facet_max_score = _compute_choice_score_bounds(facet_items)
+                total_min_score += facet_min_score
                 total_max_score += facet_max_score
                 if isinstance(facet_results, dict) and isinstance(facet_results.get(facet_code_text), dict):
                     facet_result = facet_results[facet_code_text]
+                    facet_result["min_score"] = facet_min_score
                     facet_result["max_score"] = facet_max_score
                     facet_result["converted_score_100"] = _to_hundred_point_score(
                         facet_result.get("total_score", 0),
+                        facet_min_score,
                         facet_max_score,
                     )
 
+            scale_result["min_score"] = total_min_score
             scale_result["max_score"] = total_max_score
             scale_result["converted_score_100"] = _to_hundred_point_score(
                 scale_result.get("total_score", 0),
+                total_min_score,
                 total_max_score,
             )
 
-    result.meta["score_normalization"] = "max_score_to_100"
+    result.meta["score_normalization"] = "min_max_to_100"
     return result
 
 
