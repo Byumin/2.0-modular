@@ -20,75 +20,111 @@
           </div>
         </header>
 
-        <section class="panel-block panel-card client-input-panel">
+        <section class="panel-block panel-card client-search-panel">
           <div class="panel-title-row">
-            <h2>내담자 정보 입력</h2>
-            <div class="row-actions client-form-top-actions">
-              <button id="clientSaveBtn" type="submit" form="clientForm" class="uniform-btn">내담자 저장</button>
-              <button id="clientCancelBtn" type="button" class="outline-btn uniform-btn hidden">수정 취소</button>
+            <h2>내담자 검색</h2>
+            <div class="row-actions manage-top-actions">
+              <button id="clientSearchBtn" type="submit" form="clientFilterForm" class="uniform-btn">검색</button>
+              <button id="clientSearchResetBtn" type="button" class="outline-btn uniform-btn">검색 초기화</button>
+              <button id="openClientCreateBtn" type="button" class="outline-btn uniform-btn">내담자 저장</button>
             </div>
           </div>
-          <form id="clientForm" class="form client-form-grid" novalidate>
-            <input type="hidden" id="client_id" />
-
-            <div class="client-compact-field">
-              <label for="client_name">이름</label>
-              <input id="client_name" type="text" maxlength="50" required />
+          <form id="clientFilterForm" class="form grid-2 client-filter-form" novalidate>
+            <div>
+              <label for="client_filter_q">이름/메모</label>
+              <input id="client_filter_q" type="text" maxlength="120" placeholder="이름 또는 메모로 검색" />
             </div>
 
-            <div class="client-compact-field">
-              <label for="client_gender">성별</label>
-              <select id="client_gender" required>
-                <option value="" selected disabled>성별 선택</option>
+            <div>
+              <label for="client_filter_gender">성별</label>
+              <select id="client_filter_gender">
+                <option value="">전체</option>
                 <option value="male">남</option>
                 <option value="female">여</option>
               </select>
             </div>
 
-            <div class="client-compact-field">
-              <label for="client_birth_day">생년월일</label>
-              <input id="client_birth_day" type="date" />
+            <div>
+              <label for="client_filter_status">상태</label>
+              <select id="client_filter_status">
+                <option value="">전체</option>
+                <option value="미실시">미실시</option>
+                <option value="완료">완료</option>
+              </select>
             </div>
 
-            <div class="client-memo-field">
-              <label for="client_memo">메모</label>
-              <input id="client_memo" type="text" maxlength="500" placeholder="상담 메모" />
+            <div>
+              <label for="client_filter_test">배정 검사</label>
+              <input id="client_filter_test" type="text" maxlength="120" placeholder="배정 검사명으로 검색" />
             </div>
-
-            <p id="clientMessage" class="message full-row" aria-live="polite"></p>
           </form>
         </section>
 
         <section class="panel-block panel-card">
           <div class="panel-title-row">
             <h2>내담자 목록</h2>
+            <div class="row-actions top-actions">
+              <button id="deleteSelectedClientsBtn" type="button" class="outline-btn danger-outline uniform-btn" disabled>선택 삭제</button>
+            </div>
           </div>
           <div id="clientEmpty" class="info-box hidden">등록된 내담자가 없습니다.</div>
-          <div class="scroll-area list-scroll">
-            <ul id="clientList" class="simple-list client-list"></ul>
+          <div id="clientListHead" class="row-head row-grid client-row-grid client-list-head hidden">
+            <div><input id="clientSelectAll" type="checkbox" aria-label="전체 선택" /></div>
+            <div>이름</div>
+            <div>진행한 검사</div>
+            <div>최근 검사일</div>
+            <div>상태</div>
+            <div>상세</div>
+          </div>
+          <div class="scroll-area list-scroll client-list-scroll">
+            <ul id="clientList" class="row-list client-list"></ul>
           </div>
         </section>
       </section>
     </main>
 
-    <div id="clientResultModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="clientResultTitle">
-      <section class="modal-card client-result-modal">
+    <div id="clientFormModal" class="modal-backdrop hidden" aria-hidden="true">
+      <section class="modal-card client-form-modal" role="dialog" aria-modal="true" aria-labelledby="clientFormTitle">
         <div class="panel-title-row">
-          <h2 id="clientResultTitle">내담자 검사 결과</h2>
-          <button id="clientResultCloseTopBtn" type="button" class="outline-btn uniform-btn">닫기</button>
+          <h2 id="clientFormTitle">내담자 저장</h2>
+          <button id="closeClientFormModalTopBtn" type="button" class="outline-btn uniform-btn">닫기</button>
         </div>
-        <div class="info-box">
-          <p id="clientResultSummary" class="client-result-summary-text">-</p>
-        </div>
-        <div class="simple-list client-result-info-list">
-          <div class="list-item"><strong>내담자</strong><p id="clientResultName">-</p></div>
-          <div class="list-item"><strong>배정 검사</strong><p id="clientResultTest">-</p></div>
-          <div class="list-item"><strong>최근 실시일</strong><p id="clientResultDate">-</p></div>
-          <div class="list-item"><strong>진행 상태</strong><p id="clientResultStatus">-</p></div>
-        </div>
-        <div class="row-actions">
-          <button id="clientResultCloseBtn" type="button" class="outline-btn uniform-btn">닫기</button>
-        </div>
+        <form id="clientForm" class="form create-test-form client-modal-form" novalidate>
+          <input type="hidden" id="client_id" />
+          <section class="modal-section-card">
+            <div class="modal-section-head">
+              <h3>기본 정보 입력</h3>
+              <p>필수 항목 입력 후 저장하세요.</p>
+            </div>
+            <div class="modal-section-body form grid-2 client-modal-grid">
+              <div>
+                <label for="client_name">이름</label>
+                <input id="client_name" type="text" maxlength="50" required />
+              </div>
+              <div>
+                <label for="client_gender">성별</label>
+                <select id="client_gender" required>
+                  <option value="" selected disabled>성별 선택</option>
+                  <option value="male">남</option>
+                  <option value="female">여</option>
+                </select>
+              </div>
+              <div>
+                <label for="client_birth_day">생년월일</label>
+                <input id="client_birth_day" type="date" />
+              </div>
+              <div>
+                <label for="client_memo">메모</label>
+                <input id="client_memo" type="text" maxlength="500" placeholder="상담 메모" />
+              </div>
+            </div>
+          </section>
+          <p id="clientMessage" class="message" aria-live="polite"></p>
+          <div class="row-actions modal-action-footer">
+            <button id="clientSaveBtn" type="submit" class="uniform-btn primary-action">내담자 저장</button>
+            <button id="clientCancelBtn" type="button" class="outline-btn uniform-btn quiet-action">닫기</button>
+          </div>
+        </form>
       </section>
     </div>
 
