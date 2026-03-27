@@ -23,83 +23,87 @@
 
         <section class="panel-block no-top-line">
           <form id="clientDetailForm" class="form" novalidate>
-            <div class="grid-2 client-detail-grid">
-              <div>
-                <label for="detail_client_name">이름</label>
-                <input id="detail_client_name" type="text" maxlength="50" required />
-              </div>
-              <div>
-                <label for="detail_client_gender">성별</label>
-                <select id="detail_client_gender" required>
-                  <option value="" selected disabled>성별 선택</option>
-                  <option value="male">남</option>
-                  <option value="female">여</option>
-                </select>
-              </div>
-              <div>
-                <label for="detail_client_birth_day">생년월일</label>
-                <input id="detail_client_birth_day" type="date" />
-              </div>
-              <div>
-                <label for="detail_client_assigned_test">배정 검사</label>
-                <input id="detail_client_assigned_test" type="text" readonly />
-              </div>
-            </div>
+            <section class="client-detail-layout">
+              <article class="panel-card client-detail-pane client-detail-form-pane">
+                <div class="panel-title-row">
+                  <h2>기본 정보</h2>
+                </div>
 
-            <label for="detail_client_memo">메모</label>
-            <textarea id="detail_client_memo" class="client-detail-memo" maxlength="500"></textarea>
+                <div class="grid-2 client-detail-grid">
+                  <div>
+                    <label for="detail_client_name">이름</label>
+                    <input id="detail_client_name" type="text" maxlength="50" required />
+                  </div>
+                  <div>
+                    <label for="detail_client_gender">성별</label>
+                    <select id="detail_client_gender" required>
+                      <option value="" selected disabled>성별 선택</option>
+                      <option value="male">남</option>
+                      <option value="female">여</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="detail_client_birth_day">생년월일</label>
+                    <input id="detail_client_birth_day" type="date" />
+                  </div>
+                  <div>
+                    <label for="detail_client_assigned_test">배정 검사</label>
+                    <input id="detail_client_assigned_test" type="text" readonly />
+                  </div>
+                </div>
 
-            <div class="row-actions detail-form-actions">
-              <button id="clientDetailSaveBtn" type="submit" class="uniform-btn primary-action">저장</button>
-            </div>
+                <label for="detail_client_memo">메모</label>
+                <textarea id="detail_client_memo" class="client-detail-memo" maxlength="500"></textarea>
 
-            <div id="clientDetailMeta" class="detail-meta"></div>
+                <div class="row-actions detail-form-actions">
+                  <button id="clientDetailSaveBtn" type="submit" class="uniform-btn primary-action">저장</button>
+                </div>
 
-            <div class="summary-grid client-detail-summary-grid">
-              <article class="summary-card detail-summary-card">
-                <p class="summary-label">현재 상태</p>
-                <p id="clientDetailStatus" class="summary-value detail-summary-value">-</p>
+                <div id="clientDetailMeta" class="detail-meta"></div>
               </article>
-              <article class="summary-card detail-summary-card">
-                <p class="summary-label">최근 실시일</p>
-                <p id="clientDetailLastAssessedOn" class="summary-value detail-summary-value">-</p>
-              </article>
-              <article class="summary-card detail-summary-card">
-                <p class="summary-label">실시 기록 수(최대 30건)</p>
-                <p id="clientDetailLogCount" class="summary-value detail-summary-value">-</p>
-              </article>
-            </div>
 
-            <label>검사 실시 이력</label>
-            <div id="clientDetailLogEmpty" class="info-box hidden">검사 실시 이력이 없습니다.</div>
-            <ul id="clientDetailLogList" class="row-list compact-list"></ul>
+              <article class="panel-card client-detail-pane client-detail-status-pane">
+                <div class="panel-title-row">
+                  <h2>진행 상태</h2>
+                </div>
+
+                <div class="summary-grid client-detail-summary-grid">
+                  <article class="summary-card detail-summary-card">
+                    <p class="summary-label">현재 상태</p>
+                    <p id="clientDetailStatus" class="summary-value detail-summary-value">-</p>
+                  </article>
+                  <article class="summary-card detail-summary-card">
+                    <p class="summary-label">최근 실시일</p>
+                    <p id="clientDetailLastAssessedOn" class="summary-value detail-summary-value">-</p>
+                  </article>
+                  <article class="summary-card detail-summary-card">
+                    <p class="summary-label">최근 30일 실시 건수</p>
+                    <p id="clientDetailLogCount" class="summary-value detail-summary-value">-</p>
+                  </article>
+                </div>
+
+                <div class="client-detail-log-section">
+                  <label>커스텀 검사 실시 이력</label>
+                  <div id="clientDetailLogEmpty" class="info-box hidden">검사 실시 이력이 없습니다.</div>
+                  <div class="client-detail-log-scroll">
+                    <ul id="clientDetailLogList" class="row-list compact-list"></ul>
+                  </div>
+                </div>
+              </article>
+            </section>
 
             <section class="client-result-sections">
               <article class="panel-card client-result-section-card">
                 <div class="panel-title-row">
-                  <h2>실시한 parent 검사 리포트</h2>
+                  <h2>실시한 부모 검사 리포트</h2>
                 </div>
                 <div id="clientParentResultsEmpty" class="info-box hidden">실시한 parent 검사 결과가 없습니다.</div>
                 <ul id="clientParentResultsList" class="row-list compact-list client-parent-results-list"></ul>
 
                 <section id="clientParentReportDetail" class="client-parent-report-detail hidden">
                   <div class="parent-report-detail-head">
-                    <strong id="clientParentReportTitle">-</strong>
-                    <p id="clientParentReportMeta" class="field-info">-</p>
-                  </div>
-                  <div class="summary-grid client-parent-report-summary-grid">
-                    <article class="summary-card detail-summary-card">
-                      <p class="summary-label">리포트 척도 수</p>
-                      <p id="clientParentReportScaleCount" class="summary-value detail-summary-value">-</p>
-                    </article>
-                    <article class="summary-card detail-summary-card">
-                      <p class="summary-label">평균 점수</p>
-                      <p id="clientParentReportAvgScore" class="summary-value detail-summary-value">-</p>
-                    </article>
-                    <article class="summary-card detail-summary-card">
-                      <p class="summary-label">최고 점수 척도</p>
-                      <p id="clientParentReportTopScale" class="summary-value detail-summary-value">-</p>
-                    </article>
+                    <strong id="clientParentReportTitle"></strong>
+                    <p id="clientParentReportMeta" class="field-info"></p>
                   </div>
                   <div id="clientParentReportScaleRows" class="parent-result-scale-dashboard"></div>
                 </section>
