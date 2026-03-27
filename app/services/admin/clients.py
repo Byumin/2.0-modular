@@ -13,16 +13,24 @@ from app.repositories.client_repository import (
     delete_assignments_by_client,
     delete_logs_by_client,
     get_admin_client_by_id_and_admin,
+    get_client_assignment_with_test_name,
     get_assigned_clients_for_profile,
     get_assignment_by_admin_and_client,
+    get_last_assessed_on_by_client,
     get_last_assessed_rows,
+    list_assessment_logs_by_client,
     list_admin_clients_by_admin,
     list_client_assignments_with_test_name,
 )
 from app.repositories.custom_test_repository import get_custom_test_by_id_and_admin
 from app.schemas.values import normalize_gender_value
 from app.services.admin.auth import get_current_admin
-from app.services.admin.common import serialize_admin_client
+from app.services.admin.common import serialize_admin_client, summarize_custom_test_ids
+
+
+def _normalize_parent_test_text(raw_value: str | None) -> str | None:
+    _, text = summarize_custom_test_ids([], fallback=raw_value)
+    return text or None
 
 
 def upsert_client_assignment(
@@ -98,6 +106,7 @@ def list_admin_clients(db: Session, admin_session: str | None) -> dict:
         row.AdminClientAssignment.admin_client_id: {
             "custom_test_id": row.AdminClientAssignment.admin_custom_test_id,
             "custom_test_name": row.custom_test_name,
+            "parent_test_name": _normalize_parent_test_text(getattr(row, "parent_test_id", None)),
         }
         for row in assignment_rows
     }
@@ -116,11 +125,59 @@ def list_admin_clients(db: Session, admin_session: str | None) -> dict:
             status_text = "완료" if last_assessed_on.isoformat() == today_iso else "진행중"
         base["assigned_custom_test_id"] = assigned["custom_test_id"] if assigned else None
         base["assigned_custom_test_name"] = assigned["custom_test_name"] if assigned else None
+        base["assigned_parent_test_name"] = assigned["parent_test_name"] if assigned else None
         base["last_assessed_on"] = last_assessed_on.isoformat() if last_assessed_on else None
         base["status"] = status_text
         items.append(base)
 
     return {"items": items}
+
+
+def get_admin_client_detail(db: Session, admin_session: str | None, client_id: int) -> dict:
+    admin = get_current_admin(db, admin_session)
+    row = get_admin_client_by_id_and_admin(db, client_id=client_id, admin_user_id=admin.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="내담자를 찾을 수 없습니다.")
+
+    assignment_row = get_client_assignment_with_test_name(
+        db,
+        admin_user_id=admin.id,
+        client_id=row.id,
+    )
+    last_assessed_row = get_last_assessed_on_by_client(
+        db,
+        admin_user_id=admin.id,
+        client_id=row.id,
+    )
+    last_assessed_on = last_assessed_row.last_assessed_on if last_assessed_row else None
+    today_iso = date.today().isoformat()
+    status_text = "미실시"
+    if last_assessed_on is not None:
+        status_text = "완료" if last_assessed_on.isoformat() == today_iso else "진행중"
+
+    logs = list_assessment_logs_by_client(
+        db,
+        admin_user_id=admin.id,
+        client_id=row.id,
+        limit=30,
+    )
+
+    base = serialize_admin_client(row)
+    base["assigned_custom_test_id"] = assignment_row.AdminClientAssignment.admin_custom_test_id if assignment_row else None
+    base["assigned_custom_test_name"] = assignment_row.custom_test_name if assignment_row else None
+    base["assigned_parent_test_name"] = _normalize_parent_test_text(getattr(assignment_row, "parent_test_id", None)) if assignment_row else None
+    base["last_assessed_on"] = last_assessed_on.isoformat() if last_assessed_on else None
+    base["status"] = status_text
+    base["assessment_log_count"] = len(logs)
+    base["assessment_logs"] = [
+        {
+            "id": log.id,
+            "assessed_on": log.assessed_on.isoformat(),
+            "created_at": log.created_at.isoformat(),
+        }
+        for log in logs
+    ]
+    return {"item": base}
 
 
 def create_admin_client(db: Session, admin_session: str | None, payload) -> dict:
