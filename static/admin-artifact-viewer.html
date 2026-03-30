@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>검사 리포트 보기</title>
+    <style>
+      :root {
+        --viewer-bg: #e9edf2;
+        --panel-bg: #ffffff;
+        --panel-border: #d6dde7;
+        --text-main: #223047;
+        --text-sub: #5d6b82;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(180deg, #f4f7fb 0%, var(--viewer-bg) 100%);
+        color: var(--text-main);
+        font-family: "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+      }
+
+      .viewer-shell {
+        width: min(820px, calc(100vw - 24px));
+        margin: 12px auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .viewer-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 2px;
+      }
+
+      .viewer-title {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.4;
+      }
+
+      .viewer-sub {
+        margin: 0;
+        font-size: 12px;
+        color: var(--text-sub);
+      }
+
+      .viewer-frame-wrap {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 24px rgba(34, 48, 71, 0.08);
+      }
+
+      .viewer-frame {
+        display: block;
+        width: 794px;
+        max-width: 100%;
+        height: calc(100vh - 86px);
+        border: 0;
+        background: #ffffff;
+      }
+
+      .viewer-error {
+        margin: 24px auto;
+        width: min(640px, calc(100vw - 24px));
+        padding: 18px 20px;
+        border-radius: 10px;
+        border: 1px solid #f0d7d9;
+        background: #fff4f4;
+        color: #7e2333;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="viewerRoot"></main>
+    <script>
+      (() => {
+        const params = new URLSearchParams(window.location.search);
+        const report = (params.get("report") || "").trim().toUpperCase();
+
+        const reportMap = {
+          GOLDEN: {
+            title: "GOLDEN 성격유형검사 리포트",
+            path: "/artifacts/GOLDEN.html",
+          },
+          STS: {
+            title: "STS 6요인 기질검사 리포트",
+            path: "/artifacts/STS.html",
+          },
+        };
+
+        const selected = reportMap[report];
+        const root = document.getElementById("viewerRoot");
+        if (!root) {
+          return;
+        }
+
+        if (!selected) {
+          root.innerHTML = '<section class="viewer-error">지원하지 않는 리포트입니다. (GOLDEN 또는 STS)</section>';
+          return;
+        }
+
+        const sourceUrl = `${selected.path}?v=${Date.now()}`;
+        root.innerHTML = `
+          <section class="viewer-shell">
+            <header class="viewer-top">
+              <div>
+                <p class="viewer-title">${selected.title}</p>
+                <p class="viewer-sub">리포트 본문은 중앙 정렬된 뷰어에서 표시됩니다.</p>
+              </div>
+            </header>
+            <section class="viewer-frame-wrap">
+              <iframe class="viewer-frame" src="${sourceUrl}" title="${selected.title}"></iframe>
+            </section>
+          </section>
+        `;
+      })();
+    </script>
+  </body>
+</html>

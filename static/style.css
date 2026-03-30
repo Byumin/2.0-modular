@@ -1679,6 +1679,7 @@ body[data-page='admin-client-result'] .top-actions {
   padding: 8px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .client-result-detail-panel {
@@ -1688,6 +1689,7 @@ body[data-page='admin-client-result'] .top-actions {
   padding: 12px;
   display: flex;
   flex-direction: column;
+  overflow: visible;
 }
 
 .client-result-detail-panel .panel-title-row {
@@ -1722,7 +1724,7 @@ body[data-page='admin-client-result'] .top-actions {
   margin-top: 4px;
   min-height: 0;
   flex: 1 1 auto;
-  max-height: none;
+  max-height: calc(clamp(520px, 68vh, 700px) - 124px);
   overflow: auto;
 }
 
@@ -3895,6 +3897,16 @@ body[data-page='admin-client-result'] .top-actions {
   .client-result-tree-panel,
   .client-result-detail-panel {
     min-height: 0;
+  }
+
+  .client-result-tree-panel {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .client-result-tree-scroll {
+    max-height: none;
   }
 
   .client-result-detail-panel #clientResultProfileChart {

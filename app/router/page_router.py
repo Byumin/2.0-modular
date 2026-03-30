@@ -44,6 +44,11 @@ def admin_client_result_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "admin-client-result.html")
 
 
+@router.get("/admin/artifact-viewer")
+def admin_artifact_viewer_page() -> FileResponse:
+    return FileResponse(STATIC_DIR / "admin-artifact-viewer.html")
+
+
 @router.get("/admin/create")
 def admin_create_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "admin-create.html")

@@ -19,9 +19,23 @@ from app.services.admin.auth import seed_default_admin
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 STATIC_DIR = BASE_DIR / "static"
+ARTIFACTS_DIR = BASE_DIR / "artifacts"
+
+
+class ArtifactsStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200 and path.lower().endswith(".html"):
+            # Legacy report HTML files are CP949 encoded.
+            response.headers["content-type"] = "text/html; charset=cp949"
+            # Avoid stale UTF-8 cached responses in browsers.
+            response.headers["cache-control"] = "no-store, max-age=0"
+        return response
+
 
 app = FastAPI(title="Screening App", version="2.1.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/artifacts", ArtifactsStaticFiles(directory=ARTIFACTS_DIR), name="artifacts")
 app.include_router(page_router)
 app.include_router(auth_router)
 app.include_router(custom_test_router)

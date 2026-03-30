@@ -2299,10 +2299,6 @@ async function initClientDetailPage() {
   const logEmptyEl = document.getElementById('clientDetailLogEmpty');
   const parentResultsListEl = document.getElementById('clientParentResultsList');
   const parentResultsEmptyEl = document.getElementById('clientParentResultsEmpty');
-  const parentReportDetailEl = document.getElementById('clientParentReportDetail');
-  const parentReportTitleEl = document.getElementById('clientParentReportTitle');
-  const parentReportMetaEl = document.getElementById('clientParentReportMeta');
-  const parentReportScaleRowsEl = document.getElementById('clientParentReportScaleRows');
   const openClientResultViewerBtn = document.getElementById('openClientResultViewerBtn');
   const msg = document.getElementById('clientDetailMessage');
 
@@ -2310,7 +2306,6 @@ async function initClientDetailPage() {
   msg.className = 'message';
   let assignedCustomTestId = null;
   let parentReportItems = [];
-  let activeParentReportId = '';
 
   const toText = (value, fallback = '') => {
     const raw = String(value ?? '').trim();
@@ -2320,6 +2315,17 @@ async function initClientDetailPage() {
   const toCount = (value) => {
     const num = Number(value);
     return Number.isFinite(num) ? num : 0;
+  };
+
+  const resolveParentReportUrl = (parentTestName) => {
+    const normalized = toText(parentTestName).toUpperCase();
+    if (normalized === 'GOLDEN') {
+      return '/admin/artifact-viewer?report=GOLDEN';
+    }
+    if (normalized === 'STS') {
+      return '/admin/artifact-viewer?report=STS';
+    }
+    return '';
   };
 
   const parseScoreNumber = (raw) => {
@@ -2419,10 +2425,12 @@ async function initClientDetailPage() {
 
     rows.forEach((row) => {
       const customTestsText = row.custom_tests.length ? row.custom_tests.join(', ') : '-';
-      const isActive = String(row.id) === String(activeParentReportId);
+      const parentTestCode = toText(row.parent_test_name).toUpperCase();
+      const parentReportUrl = resolveParentReportUrl(parentTestCode);
+      const shortcutDisabledAttr = parentReportUrl ? '' : 'disabled';
 
       const li = document.createElement('li');
-      li.className = `row-item parent-result-item ${isActive ? 'is-active' : ''}`;
+      li.className = 'row-item parent-result-item';
       li.innerHTML = `
         <div class="parent-result-row-grid">
           <strong class="parent-result-name">${escapeHtml(row.parent_test_name)}</strong>
@@ -2430,46 +2438,12 @@ async function initClientDetailPage() {
           <span class="parent-result-cell">${escapeHtml(customTestsText)}</span>
           <span class="parent-result-cell">${escapeHtml(String(row.scales.length || 0))}개</span>
           <div class="row-actions parent-result-actions">
-            <button type="button" class="outline-btn uniform-btn" data-role="view-parent-report" data-id="${escapeHtml(String(row.id))}">
-              ${isActive ? '결과 닫기' : '결과 보기'}
-            </button>
+            <button type="button" class="outline-btn uniform-btn" data-role="open-parent-report-link" data-parent-test="${escapeHtml(parentTestCode)}" ${shortcutDisabledAttr}>결과 보기</button>
           </div>
         </div>
       `;
       parentResultsListEl.appendChild(li);
     });
-  };
-
-  const renderParentReportDetail = () => {
-    const active = parentReportItems.find((row) => String(row.id) === String(activeParentReportId)) || null;
-    if (!active || !parentReportDetailEl) {
-      if (parentReportDetailEl) {
-        parentReportDetailEl.classList.add('hidden');
-      }
-      return;
-    }
-    parentReportDetailEl.classList.remove('hidden');
-    if (parentReportTitleEl) {
-      parentReportTitleEl.textContent = active.parent_test_name || '-';
-    }
-    if (parentReportMetaEl) {
-      parentReportMetaEl.textContent = `최근 실시일: ${active.last_assessed_on || '-'} | 실시 ${active.performed_count}건`;
-    }
-
-    if (!parentReportScaleRowsEl) {
-      return;
-    }
-    parentReportScaleRowsEl.innerHTML = '';
-    const row = document.createElement('article');
-    row.className = 'parent-scale-bar-row';
-    row.innerHTML = `
-      <div class="parent-scale-bar-head">
-        <strong>${escapeHtml(active.parent_test_name)} 결과 화면</strong>
-        <span>프론트 레이아웃 준비 완료</span>
-      </div>
-      <p class="parent-scale-bar-note">여기에 ${escapeHtml(active.parent_test_name)} 검사 전용 리포트 내용을 붙이면 됩니다. 현재는 parent 검사 단위 선택/열기 흐름만 연결된 상태입니다.</p>
-    `;
-    parentReportScaleRowsEl.appendChild(row);
   };
 
   if (parentResultsListEl) {
@@ -2478,17 +2452,24 @@ async function initClientDetailPage() {
       if (!(target instanceof HTMLElement)) {
         return;
       }
-      const button = target.closest('[data-role="view-parent-report"]');
-      if (!(button instanceof HTMLElement)) {
+      const shortcutButton = target.closest('[data-role="open-parent-report-link"]');
+      if (shortcutButton instanceof HTMLElement) {
+        const parentTestName = shortcutButton.dataset.parentTest || '';
+        const reportUrl = resolveParentReportUrl(parentTestName);
+        if (!reportUrl) {
+          msg.textContent = '해당 parent 검사 바로가기 페이지가 아직 준비되지 않았습니다.';
+          msg.className = 'message error';
+          return;
+        }
+        const separator = reportUrl.includes('?') ? '&' : '?';
+        const cacheBustedUrl = `${reportUrl}${separator}v=${Date.now()}`;
+        const opened = window.open(cacheBustedUrl, '_blank', 'noopener,noreferrer');
+        if (!opened) {
+          msg.textContent = '팝업이 차단되어 결과 리포트를 열지 못했습니다. 브라우저 팝업 허용 후 다시 시도해주세요.';
+          msg.className = 'message error';
+        }
         return;
       }
-      const nextId = button.dataset.id || '';
-      if (!nextId) {
-        return;
-      }
-      activeParentReportId = String(activeParentReportId) === String(nextId) ? '' : nextId;
-      renderParentResults(parentReportItems);
-      renderParentReportDetail();
     });
   }
 
@@ -2545,11 +2526,7 @@ async function initClientDetailPage() {
     }
 
     parentReportItems = buildParentResultItems(item, logs);
-    if (!parentReportItems.some((row) => String(row.id) === String(activeParentReportId))) {
-      activeParentReportId = '';
-    }
     renderParentResults(parentReportItems);
-    renderParentReportDetail();
   };
 
   const loadClientDetail = async () => {
