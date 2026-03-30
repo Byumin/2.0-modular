@@ -2,13 +2,20 @@ from fastapi import APIRouter, Cookie, Depends
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.clients import AdminAssessmentLogIn, AdminClientIn, UpdateClientAssignmentIn
+from app.schemas.clients import (
+    AdminAssessmentLogIn,
+    AdminClientIn,
+    ReportLlmChatIn,
+    UpdateClientAssignmentIn,
+)
 from app.services.admin.clients import (
     create_admin_assessment_log,
     create_admin_client,
     delete_admin_client,
     get_admin_client_detail,
+    get_admin_client_report_llm_context,
     list_admin_clients,
+    proxy_report_llm_chat,
     update_admin_client,
     update_admin_client_assignment,
 )
@@ -40,6 +47,31 @@ def get_client(
     admin_session: str | None = Cookie(default=None),
 ) -> dict:
     return get_admin_client_detail(db, admin_session, client_id)
+
+
+@router.get("/api/admin/clients/{client_id}/report-llm-context")
+def get_client_report_llm_context(
+    client_id: int,
+    report: str,
+    db: Session = Depends(get_db),
+    admin_session: str | None = Cookie(default=None),
+) -> dict:
+    return get_admin_client_report_llm_context(db, admin_session, client_id, report)
+
+
+@router.post("/api/admin/clients/{client_id}/report-llm-chat")
+def post_client_report_llm_chat(
+    client_id: int,
+    payload: ReportLlmChatIn,
+    db: Session = Depends(get_db),
+    admin_session: str | None = Cookie(default=None),
+) -> dict:
+    return proxy_report_llm_chat(
+        db,
+        admin_session,
+        client_id=client_id,
+        payload=payload.model_dump(),
+    )
 
 
 @router.put("/api/admin/clients/{client_id}")

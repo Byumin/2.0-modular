@@ -333,7 +333,7 @@ function renderClientsOverview(listEl, emptyEl, clients) {
         <div class="row-col">${assignedText}</div>
         <div class="row-col">${assessedText}</div>
         <div class="row-col">
-          <span class="badge ${item.status === '미실시' ? 'badge-wait' : 'badge-live'}">${item.status}</span>
+          <span class="badge ${item.status === '미실시' || item.status === '배정대기' ? 'badge-wait' : 'badge-live'}">${item.status}</span>
         </div>
         <div class="row-col row-action">
           <a class="ghost-btn" href="/admin/client-detail?id=${item.id}">상세 보기</a>
@@ -535,11 +535,22 @@ async function initClientsPage() {
   const clientMessage = document.getElementById('clientMessage');
   const clientList = document.getElementById('clientList');
   const clientListHead = document.getElementById('clientListHead');
+  const clientListScroll = document.querySelector('.client-list-scroll');
   const clientSelectAll = document.getElementById('clientSelectAll');
   const clientEmpty = document.getElementById('clientEmpty');
   let allClients = [];
   const selectedClientIds = new Set();
   let visibleClientIds = [];
+
+  function syncClientListHeadLayout() {
+    if (!clientListHead) {
+      return;
+    }
+    const scrollbarWidth = clientListScroll
+      ? Math.max(0, clientListScroll.offsetWidth - clientListScroll.clientWidth)
+      : 0;
+    clientListHead.style.setProperty('--client-list-scrollbar-width', `${scrollbarWidth}px`);
+  }
 
   function openClientFormModal() {
     if (!clientFormModal) {
@@ -632,6 +643,7 @@ async function initClientsPage() {
         clientListHead.classList.add('hidden');
       }
       clientList.innerHTML = '';
+      syncClientListHeadLayout();
       syncClientSelectionUI();
       return;
     }
@@ -644,6 +656,7 @@ async function initClientsPage() {
         clientListHead.classList.add('hidden');
       }
       clientList.innerHTML = '';
+      syncClientListHeadLayout();
       syncClientSelectionUI();
       return;
     }
@@ -676,7 +689,7 @@ async function initClientsPage() {
           <div class="row-col">${escapeHtml(assignedDisplay)}</div>
           <div class="row-col">${item.last_assessed_on || '-'}</div>
           <div class="row-col">
-            <span class="badge ${item.status === '미실시' ? 'badge-wait' : 'badge-live'}">${item.status}</span>
+            <span class="badge ${item.status === '미실시' || item.status === '배정대기' ? 'badge-wait' : 'badge-live'}">${item.status}</span>
           </div>
           <div class="row-col row-action">
             <a class="ghost-btn" href="${detailHref}">상세</a>
@@ -685,6 +698,7 @@ async function initClientsPage() {
       `;
       clientList.appendChild(li);
     });
+    syncClientListHeadLayout();
     syncClientSelectionUI();
   }
 
@@ -767,6 +781,11 @@ async function initClientsPage() {
     }
     syncClientSelectionUI();
   });
+
+  if (clientListScroll) {
+    clientListScroll.addEventListener('scroll', syncClientListHeadLayout);
+  }
+  window.addEventListener('resize', syncClientListHeadLayout);
 
   if (deleteSelectedClientsBtn) {
     deleteSelectedClientsBtn.addEventListener('click', async () => {
@@ -2320,10 +2339,10 @@ async function initClientDetailPage() {
   const resolveParentReportUrl = (parentTestName) => {
     const normalized = toText(parentTestName).toUpperCase();
     if (normalized === 'GOLDEN') {
-      return '/admin/artifact-viewer?report=GOLDEN';
+      return `/admin/artifact-viewer?report=GOLDEN&id=${encodeURIComponent(String(id))}`;
     }
     if (normalized === 'STS') {
-      return '/admin/artifact-viewer?report=STS';
+      return `/admin/artifact-viewer?report=STS&id=${encodeURIComponent(String(id))}`;
     }
     return '';
   };
@@ -2463,11 +2482,11 @@ async function initClientDetailPage() {
         }
         const separator = reportUrl.includes('?') ? '&' : '?';
         const cacheBustedUrl = `${reportUrl}${separator}v=${Date.now()}`;
-        const opened = window.open(cacheBustedUrl, '_blank', 'noopener,noreferrer');
-        if (!opened) {
-          msg.textContent = '팝업이 차단되어 결과 리포트를 열지 못했습니다. 브라우저 팝업 허용 후 다시 시도해주세요.';
-          msg.className = 'message error';
-        }
+        const link = document.createElement('a');
+        link.href = cacheBustedUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.click();
         return;
       }
     });
@@ -2613,6 +2632,8 @@ async function initClientResultPage() {
   const scaleTreeEl = document.getElementById('clientResultScaleTree');
   const scaleTreeEmptyEl = document.getElementById('clientResultScaleTreeEmpty');
   const scaleTreeMetaEl = document.getElementById('clientResultScaleTreeMeta');
+  const treePanelEl = document.querySelector('.client-result-tree-panel');
+  const detailPanelEl = document.querySelector('.client-result-detail-panel');
   const selectAllScalesBtn = document.getElementById('clientResultSelectAllScalesBtn');
   const clearScalesBtn = document.getElementById('clientResultClearScalesBtn');
   const selectedTestTitleEl = document.getElementById('clientResultSelectedTestTitle');
@@ -2623,6 +2644,21 @@ async function initClientResultPage() {
   const profileChartEl = document.getElementById('clientResultProfileChart');
   const detailEmptyEl = document.getElementById('clientResultDetailEmpty');
   const pageMessageEl = document.getElementById('clientResultPageMessage');
+
+  const syncClientResultPanelHeights = () => {
+    if (!treePanelEl || !detailPanelEl) {
+      return;
+    }
+    if (window.innerWidth <= 900) {
+      treePanelEl.style.height = '';
+      return;
+    }
+    treePanelEl.style.height = '';
+    const target = detailPanelEl.offsetHeight;
+    if (target > 0) {
+      treePanelEl.style.height = `${target}px`;
+    }
+  };
 
   const toText = (value, fallback = '') => {
     const raw = String(value ?? '').trim();
@@ -2654,6 +2690,132 @@ async function initClientResultPage() {
     const ts = Date.parse(normalized);
     return Number.isFinite(ts) ? ts : 0;
   };
+
+  const parentThemePaletteMap = {
+    GOLDEN: {
+      accent: '#a76a24',
+      accentStrong: '#7d4d16',
+      soft: '#fff1dc',
+      softAlt: '#fff8ee',
+      border: '#e0bb87',
+      childBg: '#fffaf2',
+      childHover: '#fff2dc',
+      childActive: '#ffe5bc',
+      text: '#6f4312',
+      line: '#d4ae76',
+    },
+    STS: {
+      accent: '#2b7d68',
+      accentStrong: '#195e4d',
+      soft: '#def5ee',
+      softAlt: '#f1fbf8',
+      border: '#92cebf',
+      childBg: '#f3fbf8',
+      childHover: '#e4f6f0',
+      childActive: '#d4efe6',
+      text: '#1a5447',
+      line: '#79b9aa',
+    },
+    DEFAULT: {
+      accent: '#5b89b4',
+      accentStrong: '#365d84',
+      soft: '#e8f2fd',
+      softAlt: '#f6faff',
+      border: '#9ebfdf',
+      childBg: '#f7fbff',
+      childHover: '#eef5fd',
+      childActive: '#ddeafb',
+      text: '#264a71',
+      line: '#9dbddd',
+    },
+  };
+
+  const getParentThemeKey = (parentName) => {
+    const normalized = toText(parentName).toUpperCase();
+    if (normalized.includes('GOLDEN')) {
+      return 'GOLDEN';
+    }
+    if (normalized.includes('STS')) {
+      return 'STS';
+    }
+    return 'DEFAULT';
+  };
+
+  const applyParentThemeVars = (el, parentName) => {
+    if (!(el instanceof HTMLElement)) {
+      return;
+    }
+    const palette = parentThemePaletteMap[getParentThemeKey(parentName)] || parentThemePaletteMap.DEFAULT;
+    el.style.setProperty('--parent-accent', palette.accent);
+    el.style.setProperty('--parent-accent-strong', palette.accentStrong);
+    el.style.setProperty('--parent-soft', palette.soft);
+    el.style.setProperty('--parent-soft-alt', palette.softAlt);
+    el.style.setProperty('--parent-border', palette.border);
+    el.style.setProperty('--parent-child-bg', palette.childBg);
+    el.style.setProperty('--parent-child-hover', palette.childHover);
+    el.style.setProperty('--parent-child-active', palette.childActive);
+    el.style.setProperty('--parent-text', palette.text);
+    el.style.setProperty('--parent-line', palette.line);
+  };
+
+  const getParentThemePalette = (parentName) => (
+    parentThemePaletteMap[getParentThemeKey(parentName)] || parentThemePaletteMap.DEFAULT
+  );
+
+  const parentDisplayOrder = { GOLDEN: 0, STS: 1 };
+  let parentScaleOrderIndex = new Map();
+
+  const buildParentScaleOrderIndex = (catalog) => {
+    const tests = Array.isArray(catalog?.tests) ? catalog.tests : [];
+    const index = new Map();
+    tests.forEach((test) => {
+      const testId = toText(test?.test_id).toUpperCase();
+      if (!testId || index.has(testId)) {
+        return;
+      }
+      const scaleOrder = new Map();
+      (Array.isArray(test?.sub_tests) ? test.sub_tests : []).forEach((sub) => {
+        (Array.isArray(sub?.scales) ? sub.scales : []).forEach((scale) => {
+          const code = toText(scale?.code ?? scale?.scale_code).toUpperCase();
+          if (!code || scaleOrder.has(code)) {
+            return;
+          }
+          scaleOrder.set(code, scaleOrder.size);
+        });
+      });
+      index.set(testId, scaleOrder);
+    });
+    return index;
+  };
+
+  const compareScalesByParentStructOrder = (left, right) => {
+    const leftParent = toText(left?.parent_test_name, '').toUpperCase();
+    const rightParent = toText(right?.parent_test_name, '').toUpperCase();
+    const leftParentOrder = Object.prototype.hasOwnProperty.call(parentDisplayOrder, leftParent)
+      ? parentDisplayOrder[leftParent]
+      : 99;
+    const rightParentOrder = Object.prototype.hasOwnProperty.call(parentDisplayOrder, rightParent)
+      ? parentDisplayOrder[rightParent]
+      : 99;
+    if (leftParentOrder !== rightParentOrder) {
+      return leftParentOrder - rightParentOrder;
+    }
+    if (leftParent !== rightParent) {
+      return leftParent.localeCompare(rightParent, 'ko');
+    }
+    const leftCode = toText(left?.scale_code, '').toUpperCase();
+    const rightCode = toText(right?.scale_code, '').toUpperCase();
+    const scaleOrderMap = parentScaleOrderIndex.get(leftParent);
+    const leftOrder = scaleOrderMap?.has(leftCode) ? scaleOrderMap.get(leftCode) : Number.MAX_SAFE_INTEGER;
+    const rightOrder = scaleOrderMap?.has(rightCode) ? scaleOrderMap.get(rightCode) : Number.MAX_SAFE_INTEGER;
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+    return leftCode.localeCompare(rightCode, 'ko');
+  };
+
+  const sortScalesByParentStructOrder = (rows) => [...(Array.isArray(rows) ? rows : [])]
+    .sort(compareScalesByParentStructOrder);
 
   const setMessage = (text, isError = false) => {
     if (!pageMessageEl) {
@@ -2987,12 +3149,13 @@ async function initClientResultPage() {
     });
 
     return [...parentMap.entries()]
-      .sort(([a], [b]) => a.localeCompare(b, 'ko'))
+      .sort(([a], [b]) => compareScalesByParentStructOrder(
+        { parent_test_name: a, scale_code: '' },
+        { parent_test_name: b, scale_code: '' },
+      ))
       .map(([parentKey, parentRows]) => ({
         parentKey,
-        rows: [...parentRows].sort((a, b) => (
-          toText(a.scale_code).localeCompare(toText(b.scale_code), 'ko')
-        )),
+        rows: sortScalesByParentStructOrder(parentRows),
       }));
   };
 
@@ -3108,6 +3271,7 @@ async function initClientResultPage() {
 
       const root = document.createElement('article');
       root.className = 'client-scale-tree-root';
+      applyParentThemeVars(root, parent.parentKey);
 
       const rootHead = document.createElement('div');
       rootHead.className = 'client-scale-tree-root-head';
@@ -3144,6 +3308,7 @@ async function initClientResultPage() {
         const rowSelected = selectedScaleKeys.has(String(scale.tree_scale_key));
         const row = document.createElement('label');
         row.className = `client-scale-tree-child ${rowSelected ? 'is-active' : ''}`;
+        applyParentThemeVars(row, parent.parentKey);
 
         const scaleCheckbox = document.createElement('input');
         scaleCheckbox.type = 'checkbox';
@@ -3174,7 +3339,7 @@ async function initClientResultPage() {
     if (!selectedScaleSummaryEl) {
       return;
     }
-    const rows = Array.isArray(scales) ? scales : [];
+    const rows = sortScalesByParentStructOrder(scales);
     const allRows = Array.isArray(totalScales) ? totalScales : [];
     selectedScaleSummaryEl.innerHTML = '';
 
@@ -3201,11 +3366,15 @@ async function initClientResultPage() {
     const groupRow = document.createElement('div');
     groupRow.className = 'client-selected-group-row';
     [...grouped.entries()]
-      .sort(([a], [b]) => a.localeCompare(b, 'ko'))
+      .sort(([a], [b]) => compareScalesByParentStructOrder(
+        { parent_test_name: a, scale_code: '' },
+        { parent_test_name: b, scale_code: '' },
+      ))
       .forEach(([parentKey, parentRows]) => {
         const chip = document.createElement('span');
         chip.className = 'client-selected-group-chip';
         chip.textContent = `${parentKey} (${parentRows.length}개)`;
+        applyParentThemeVars(chip, parentKey);
         groupRow.appendChild(chip);
       });
     selectedScaleSummaryEl.appendChild(groupRow);
@@ -3216,6 +3385,7 @@ async function initClientResultPage() {
       const chip = document.createElement('span');
       chip.className = 'client-selected-scale-chip';
       chip.textContent = `${toText(scale.scale_code, '-')} ${toText(scale.scale_name, '-')}`;
+      applyParentThemeVars(chip, scale.parent_test_name);
       scaleRow.appendChild(chip);
     });
     if (rows.length > 8) {
@@ -3266,6 +3436,7 @@ async function initClientResultPage() {
       const barPct = (maxScore > 0 && hasNumeric) ? Math.max(4, Math.round((scale.score_number / maxScore) * 100)) : 0;
       const row = document.createElement('article');
       row.className = 'client-result-bar-row';
+      applyParentThemeVars(row, scale.parent_test_name);
       row.innerHTML = `
         <div class="client-result-bar-head">
           <strong>${escapeHtml(scale.scale_code)} · ${escapeHtml(scale.scale_name)}</strong>
@@ -3284,296 +3455,226 @@ async function initClientResultPage() {
       return;
     }
     cancelProfileChartAnimation();
+    const d3Lib = globalThis.d3;
     profileChartEl.innerHTML = '';
-
-    const rows = Array.isArray(scales) ? scales.slice() : [];
-    if (!rows.length) {
-      previousProfileChartPoints = new Map();
-      hasProfileChartRendered = false;
-      const frame = createSvgEl('rect', {
-        x: 18,
-        y: 18,
-        width: 524,
-        height: 196,
-        rx: 10,
-        fill: '#fafcff',
-        stroke: '#dce5f0',
-        'stroke-dasharray': '4 4',
-      });
-      const emptyText = createSvgEl('text', { x: 280, y: 122, 'text-anchor': 'middle', 'font-size': 12, fill: '#6f7785' });
-      emptyText.textContent = '결과 생성 전입니다.';
-      profileChartEl.appendChild(frame);
-      profileChartEl.appendChild(emptyText);
+    if (!d3Lib) {
+      profileChartEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" font-size="12" fill="#6f7785">D3 로드 실패</text>';
       return;
     }
 
-    const parentPriority = { GOLDEN: 0, STS: 1 };
-    rows.sort((left, right) => {
-      const leftParent = toText(left?.parent_test_name, '').toUpperCase();
-      const rightParent = toText(right?.parent_test_name, '').toUpperCase();
-      const leftOrder = Object.prototype.hasOwnProperty.call(parentPriority, leftParent)
-        ? parentPriority[leftParent]
-        : 99;
-      const rightOrder = Object.prototype.hasOwnProperty.call(parentPriority, rightParent)
-        ? parentPriority[rightParent]
-        : 99;
-      if (leftOrder !== rightOrder) {
-        return leftOrder - rightOrder;
+    const width = 584;
+    const height = 286;
+    const frameX = 18;
+    const frameY = 14;
+    const frameWidth = width - 36;
+    const frameHeight = height - 34;
+    const rows = sortScalesByParentStructOrder(scales);
+    const numericRows = rows.filter((scale) => Number.isFinite(scale.score_number));
+    const svg = d3Lib.select(profileChartEl)
+      .attr('viewBox', `0 0 ${width} ${height}`)
+      .attr('preserveAspectRatio', 'none');
+
+    const drawEmptyState = (title, subtitle = '') => {
+      previousProfileChartPoints = new Map();
+      hasProfileChartRendered = false;
+      svg.append('rect')
+        .attr('x', frameX)
+        .attr('y', frameY)
+        .attr('width', frameWidth)
+        .attr('height', frameHeight)
+        .attr('rx', 10)
+        .attr('fill', '#fafcff')
+        .attr('stroke', '#dce5f0')
+        .attr('stroke-dasharray', '4 4');
+      svg.append('text')
+        .attr('x', width / 2)
+        .attr('y', (height / 2) - (subtitle ? 10 : 6))
+        .attr('text-anchor', 'middle')
+        .attr('font-size', 12)
+        .attr('fill', '#6f7785')
+        .text(title);
+      if (subtitle) {
+        svg.append('text')
+          .attr('x', width / 2)
+          .attr('y', (height / 2) + 12)
+          .attr('text-anchor', 'middle')
+          .attr('font-size', 11)
+          .attr('fill', '#7e8796')
+          .text(subtitle);
       }
-      const leftCode = toText(left?.scale_code, '');
-      const rightCode = toText(right?.scale_code, '');
-      return leftCode.localeCompare(rightCode, 'ko');
-    });
+    };
 
-    const numericScores = rows.map((scale) => (
-      Number.isFinite(scale.score_number) ? scale.score_number : null
-    ));
-    const validNumbers = numericScores.filter((score) => Number.isFinite(score));
-    if (!validNumbers.length) {
-      previousProfileChartPoints = new Map();
-      hasProfileChartRendered = false;
-      const frame = createSvgEl('rect', {
-        x: 18,
-        y: 18,
-        width: 524,
-        height: 196,
-        rx: 10,
-        fill: '#fafcff',
-        stroke: '#dce5f0',
-        'stroke-dasharray': '4 4',
-      });
-      const emptyText = createSvgEl('text', { x: 280, y: 114, 'text-anchor': 'middle', 'font-size': 12, fill: '#6f7785' });
-      const emptySub = createSvgEl('text', { x: 280, y: 134, 'text-anchor': 'middle', 'font-size': 11, fill: '#7e8796' });
-      emptyText.textContent = '채점 진행 전입니다.';
-      emptySub.textContent = '채점 완료 후 프로파일 차트가 표시됩니다.';
-      profileChartEl.appendChild(frame);
-      profileChartEl.appendChild(emptyText);
-      profileChartEl.appendChild(emptySub);
+    if (!rows.length) {
+      drawEmptyState('결과 생성 전입니다.');
       return;
     }
 
-    const width = 560;
-    const height = 280;
-    const pLeft = 38;
-    const pRight = 26;
-    const pTop = 16;
-    const pBottom = 60;
+    if (!numericRows.length) {
+      drawEmptyState('채점 진행 전입니다.', '채점 완료 후 프로파일 차트가 표시됩니다.');
+      return;
+    }
+
+    const pLeft = 44;
+    const pRight = 22;
+    const pTop = 20;
+    const pBottom = 44;
     const chartW = width - pLeft - pRight;
     const chartH = height - pTop - pBottom;
-    const maxScore = 100;
-    const xInset = Math.min(28, chartW * 0.06);
+    const xInset = Math.min(22, chartW * 0.045);
     const plotLeft = pLeft + xInset;
     const plotRight = width - pRight - xInset;
-    const plotW = Math.max(1, plotRight - plotLeft);
+    const gridTop = pTop + (chartH * 0.18);
+    const gridBottom = pTop + (chartH * 0.82);
+    const xScale = d3Lib.scalePoint()
+      .domain(rows.map((scale) => toProfilePointKey(scale)))
+      .range([plotLeft, plotRight]);
+    const yAxisScale = d3Lib.scaleLinear()
+      .domain([0, 100])
+      .range([gridBottom, gridTop]);
+    const yPlotScale = d3Lib.scaleLinear()
+      .domain([0, 100])
+      .range([gridBottom, gridTop]);
 
-    for (let i = 0; i <= 4; i += 1) {
-      const y = pTop + (chartH * i) / 4;
-      profileChartEl.appendChild(createSvgEl('line', {
-        x1: plotLeft,
-        x2: plotRight,
-        y1: y,
-        y2: y,
-        stroke: '#e6e9ef',
-        'stroke-width': 1,
-      }));
-      const axisLabel = createSvgEl('text', {
-        x: pLeft - 10,
-        y: y + 4,
-        'text-anchor': 'end',
-        'font-size': 8,
-        'font-weight': 500,
-        fill: '#738193',
-      });
-      axisLabel.textContent = String(100 - i * 25);
-      profileChartEl.appendChild(axisLabel);
-    }
+    svg.append('g')
+      .selectAll('line')
+      .data([100, 75, 50, 25, 0])
+      .enter()
+      .append('line')
+      .attr('x1', plotLeft)
+      .attr('x2', plotRight)
+      .attr('y1', (d) => yAxisScale(d))
+      .attr('y2', (d) => yAxisScale(d))
+      .attr('stroke', '#e6e9ef')
+      .attr('stroke-width', 1);
 
-    profileChartEl.appendChild(createSvgEl('line', {
-      x1: plotLeft,
-      x2: plotRight,
-      y1: pTop + chartH,
-      y2: pTop + chartH,
-      stroke: '#d8e0ea',
-      'stroke-width': 1,
-    }));
+    svg.append('g')
+      .selectAll('text')
+      .data([100, 75, 50, 25, 0])
+      .enter()
+      .append('text')
+      .attr('x', pLeft - 12)
+      .attr('y', (d) => yAxisScale(d) + 4)
+      .attr('text-anchor', 'end')
+      .attr('font-size', 7)
+      .attr('font-weight', 500)
+      .attr('fill', '#738193')
+      .text((d) => String(d));
 
-    const points = rows.map((scale, idx) => {
-      const x = rows.length === 1
-        ? plotLeft + plotW / 2
-        : plotLeft + (plotW * idx) / Math.max(1, rows.length - 1);
-      const rawValue = Number.isFinite(scale.score_number) ? scale.score_number : 0;
-      const value = Math.max(0, Math.min(100, rawValue));
-      const y = pTop + chartH - (value / maxScore) * chartH;
+    svg.append('line')
+      .attr('x1', plotLeft)
+      .attr('x2', plotRight)
+      .attr('y1', pTop + chartH)
+      .attr('y2', pTop + chartH)
+      .attr('stroke', '#d8e0ea')
+      .attr('stroke-width', 1);
+
+    const points = rows.map((scale) => {
+      const key = toProfilePointKey(scale);
+      const value = Math.max(0, Math.min(100, Number.isFinite(scale.score_number) ? scale.score_number : 0));
       return {
-        key: toProfilePointKey(scale),
-        x,
-        y,
-        scale,
+        key,
+        x: xScale(key) ?? plotLeft,
+        y: yPlotScale(value),
+        value,
         hasNumeric: Number.isFinite(scale.score_number),
+        scale,
       };
-    });
-
-    const path = createSvgEl('polyline', {
-      fill: 'none',
-      stroke: '#85acd1',
-      'stroke-width': 2,
-      points: '',
-    });
-    profileChartEl.appendChild(path);
-
-    const pointEls = points.map((point) => {
-      const circle = createSvgEl('circle', {
-        cx: point.x,
-        cy: point.y,
-        r: 3,
-        fill: point.hasNumeric ? '#5b89b4' : '#cfd8e4',
-        opacity: 0,
-      });
-      profileChartEl.appendChild(circle);
-      const label = createSvgEl('text', {
-        x: point.x,
-        y: height - 34,
-        'text-anchor': 'middle',
-        'font-size': 8,
-        'font-weight': 500,
-        fill: '#6a798b',
-      });
-      label.textContent = point.scale.scale_code;
-      profileChartEl.appendChild(label);
-      return { circle, label };
     });
 
     const groups = [];
     rows.forEach((scale, idx) => {
       const parent = toText(scale.parent_test_name, '기반 검사');
-      const last = groups[groups.length - 1];
-      if (!last || last.parent !== parent) {
+      const current = groups[groups.length - 1];
+      if (!current || current.parent !== parent) {
         groups.push({ parent, start: idx, end: idx });
         return;
       }
-      last.end = idx;
+      current.end = idx;
     });
 
+    const lineBuilder = d3Lib.line()
+      .x((d) => d.x)
+      .y((d) => d.y)
+      .curve(d3Lib.curveLinear);
+
     groups.forEach((group, idx) => {
-      const startPoint = points[group.start];
-      const endPoint = points[group.end];
+      const palette = getParentThemePalette(group.parent);
+      const groupPoints = points.slice(group.start, group.end + 1);
+      const startPoint = groupPoints[0];
+      const endPoint = groupPoints[groupPoints.length - 1];
       if (!startPoint || !endPoint) {
         return;
       }
 
-      const groupLeft = group.start === group.end
-        ? startPoint.x - 18
-        : startPoint.x;
-      const groupRight = group.start === group.end
-        ? endPoint.x + 18
-        : endPoint.x;
+      svg.append('path')
+        .datum(groupPoints)
+        .attr('fill', 'none')
+        .attr('stroke', palette.accent)
+        .attr('stroke-width', 1.8)
+        .attr('stroke-linecap', 'round')
+        .attr('stroke-linejoin', 'round')
+        .attr('d', lineBuilder);
+
+      svg.append('g')
+        .selectAll(`circle.group-${idx}`)
+        .data(groupPoints)
+        .enter()
+        .append('circle')
+        .attr('cx', (d) => d.x)
+        .attr('cy', (d) => d.y)
+        .attr('r', 2.6)
+        .attr('fill', (d) => (d.hasNumeric ? palette.accent : '#cfd8e4'));
+
+      svg.append('g')
+        .selectAll(`text.group-scale-${idx}`)
+        .data(groupPoints)
+        .enter()
+        .append('text')
+        .attr('x', (d) => d.x)
+        .attr('y', height - 30)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', 7)
+        .attr('font-weight', 500)
+        .attr('fill', palette.text)
+        .text((d) => d.scale.scale_code);
+
+      const groupLeft = group.start === group.end ? startPoint.x - 18 : startPoint.x;
+      const groupRight = group.start === group.end ? endPoint.x + 18 : endPoint.x;
       const centerX = (groupLeft + groupRight) / 2;
 
-      profileChartEl.appendChild(createSvgEl('line', {
-        x1: groupLeft,
-        x2: groupRight,
-        y1: height - 24,
-        y2: height - 24,
-        stroke: '#c9d5e3',
-        'stroke-width': 1,
-      }));
+      svg.append('line')
+        .attr('x1', groupLeft)
+        .attr('x2', groupRight)
+        .attr('y1', height - 13)
+        .attr('y2', height - 13)
+        .attr('stroke', palette.line)
+        .attr('stroke-width', 1.2);
 
       if (idx < groups.length - 1) {
-        const separatorX = groupRight + ((points[group.end + 1]?.x ?? groupRight) - groupRight) / 2;
-        profileChartEl.appendChild(createSvgEl('line', {
-          x1: separatorX,
-          x2: separatorX,
-          y1: pTop + chartH + 6,
-          y2: height - 20,
-          stroke: '#dde5ef',
-          'stroke-width': 1,
-          'stroke-dasharray': '3 3',
-        }));
+        const nextPoint = points[group.end + 1];
+        const separatorX = groupRight + (((nextPoint?.x ?? groupRight) - groupRight) / 2);
+        svg.append('line')
+          .attr('x1', separatorX)
+          .attr('x2', separatorX)
+          .attr('y1', pTop + chartH + 6)
+          .attr('y2', height - 16)
+          .attr('stroke', '#dde5ef')
+          .attr('stroke-width', 1)
+          .attr('stroke-dasharray', '3 3');
       }
 
-      const groupLabel = createSvgEl('text', {
-        x: centerX,
-        y: height - 9,
-        'text-anchor': 'middle',
-        'font-size': 8,
-        'font-weight': 600,
-        fill: '#66788e',
-      });
-      groupLabel.textContent = group.parent.toUpperCase();
-      profileChartEl.appendChild(groupLabel);
+      svg.append('text')
+        .attr('x', centerX)
+        .attr('y', height - 2)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', 7)
+        .attr('font-weight', 600)
+        .attr('fill', palette.accentStrong)
+        .text(group.parent.toUpperCase());
     });
 
-    const baselineY = pTop + chartH;
-    const reducedMotion = typeof window !== 'undefined'
-      && typeof window.matchMedia === 'function'
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const duration = hasProfileChartRendered ? 320 : 520;
-    const fromPoints = points.map((point) => {
-      const previous = previousProfileChartPoints.get(point.key);
-      return {
-        x: point.x,
-        y: previous ? previous.y : baselineY,
-      };
-    });
-    const applyFrame = (t) => {
-      const currentPoints = points.map((point, idx) => {
-        const from = fromPoints[idx];
-        const currentY = from.y + ((point.y - from.y) * t);
-        return `${point.x},${currentY}`;
-      }).join(' ');
-      path.setAttribute('points', currentPoints);
-      pointEls.forEach(({ circle }, idx) => {
-        const from = fromPoints[idx];
-        const currentY = from.y + ((points[idx].y - from.y) * t);
-        circle.setAttribute('cy', String(currentY));
-        circle.setAttribute('opacity', String(Math.max(0.18, t)));
-      });
-    };
-    const finalizePoints = new Map(
-      points.map((point) => [point.key, { x: point.x, y: point.y }]),
-    );
-
-    if (reducedMotion) {
-      applyFrame(1);
-      path.removeAttribute('stroke-dasharray');
-      path.removeAttribute('stroke-dashoffset');
-      previousProfileChartPoints = finalizePoints;
-      hasProfileChartRendered = true;
-      return;
-    }
-
-    applyFrame(0);
-    if (!hasProfileChartRendered && typeof path.getTotalLength === 'function') {
-      try {
-        const totalLength = path.getTotalLength();
-        path.setAttribute('stroke-dasharray', String(totalLength));
-        path.setAttribute('stroke-dashoffset', String(totalLength));
-      } catch (error) {
-        path.removeAttribute('stroke-dasharray');
-        path.removeAttribute('stroke-dashoffset');
-      }
-    }
-
-    const startedAt = performance.now();
-    const animate = (now) => {
-      const rawProgress = Math.min(1, (now - startedAt) / duration);
-      const eased = easeProfileMotion(rawProgress);
-      applyFrame(eased);
-      if (!hasProfileChartRendered && path.hasAttribute('stroke-dashoffset')) {
-        const totalLength = Number(path.getAttribute('stroke-dasharray') || 0);
-        path.setAttribute('stroke-dashoffset', String(totalLength * (1 - eased)));
-      }
-      if (rawProgress < 1) {
-        profileChartAnimationFrame = requestAnimationFrame(animate);
-        return;
-      }
-      path.removeAttribute('stroke-dasharray');
-      path.removeAttribute('stroke-dashoffset');
-      previousProfileChartPoints = finalizePoints;
-      hasProfileChartRendered = true;
-      profileChartAnimationFrame = 0;
-    };
-    profileChartAnimationFrame = requestAnimationFrame(animate);
+    previousProfileChartPoints = new Map(points.map((point) => [point.key, { x: point.x, y: point.y }]));
+    hasProfileChartRendered = true;
   };
 
   const renderDetail = () => {
@@ -3635,6 +3736,7 @@ async function initClientResultPage() {
     renderBarChart(visibleScales);
     renderProfileChart(visibleScales);
     renderClientSummary();
+    syncClientResultPanelHeights();
   };
 
   if (scaleTreeEl) {
@@ -3737,12 +3839,12 @@ async function initClientResultPage() {
       }
     }
 
+    parentScaleOrderIndex = buildParentScaleOrderIndex(catalog);
     testItems = sortTestItems(buildTestResultItems(clientItem, catalog, customTestDetail));
     selectedScaleKeys.clear();
     expandedTreeGroups.clear();
     const allScaleRows = getAllTreeScales();
     selectAllScales(allScaleRows);
-    getParentScaleGroups(allScaleRows).forEach((parent) => expandedTreeGroups.add(parent.parentKey));
     renderClientSummary();
     renderDetail();
   } catch (error) {
@@ -3750,6 +3852,15 @@ async function initClientResultPage() {
     renderClientSummary();
     renderDetail();
   }
+
+  if (typeof ResizeObserver === 'function' && detailPanelEl) {
+    const panelObserver = new ResizeObserver(() => {
+      syncClientResultPanelHeights();
+    });
+    panelObserver.observe(detailPanelEl);
+  }
+  window.addEventListener('resize', syncClientResultPanelHeights);
+  syncClientResultPanelHeights();
 }
 
 async function initTestDetailPage() {

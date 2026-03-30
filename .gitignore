@@ -1,2 +1,11 @@
 .venv/
 playwright-report/
+.playwright-browsers/
+test-results/
+artifacts/screenshots/
+node_modules/.bin/playwright
+node_modules/.bin/playwright-core
+node_modules/playwright/
+node_modules/playwright-core/
+__pycache__/
+*.py[cod]
