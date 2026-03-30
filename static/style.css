@@ -1248,7 +1248,8 @@ button:disabled:hover {
 }
 
 .client-list-head {
-  margin-top: 8px;
+  --client-list-scrollbar-width: 0px;
+  margin: 8px calc(9px + var(--client-list-scrollbar-width)) 0 9px;
 }
 
 .client-list .row-item {
@@ -1638,7 +1639,7 @@ body[data-page='admin-client-result'] .top-actions {
 
 .client-result-page-summary-grid .summary-value {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.35;
   letter-spacing: -0.01em;
@@ -1663,7 +1664,7 @@ body[data-page='admin-client-result'] .top-actions {
   display: grid;
   grid-template-columns: minmax(210px, 0.46fr) minmax(0, 1.54fr);
   gap: 12px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .client-result-tree-panel,
@@ -1679,6 +1680,7 @@ body[data-page='admin-client-result'] .top-actions {
   padding: 8px;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -1686,7 +1688,7 @@ body[data-page='admin-client-result'] .top-actions {
   border-color: #bfd3e7;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   box-shadow: 0 18px 32px rgba(24, 38, 55, 0.12);
-  padding: 12px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
   overflow: visible;
@@ -1724,7 +1726,7 @@ body[data-page='admin-client-result'] .top-actions {
   margin-top: 4px;
   min-height: 0;
   flex: 1 1 auto;
-  max-height: calc(clamp(520px, 68vh, 700px) - 124px);
+  max-height: none;
   overflow: auto;
 }
 
@@ -1735,9 +1737,9 @@ body[data-page='admin-client-result'] .top-actions {
 }
 
 .client-scale-tree-root {
-  border: 1px solid #dce6f2;
+  border: 1px solid var(--parent-border, #dce6f2);
   border-radius: 10px;
-  background: #ffffff;
+  background: linear-gradient(180deg, var(--parent-soft-alt, #ffffff) 0%, #ffffff 100%);
   padding: 5px;
   display: grid;
   gap: 4px;
@@ -1749,17 +1751,17 @@ body[data-page='admin-client-result'] .top-actions {
   justify-content: space-between;
   gap: 8px;
   padding-bottom: 4px;
-  border-bottom: 1px solid #e6edf6;
+  border-bottom: 1px solid color-mix(in srgb, var(--parent-border, #e6edf6) 78%, #ffffff 22%);
 }
 
 .client-scale-tree-root-head strong {
   font-size: 12px;
-  color: #26384c;
+  color: var(--parent-accent-strong, #26384c);
 }
 
 .client-scale-tree-root-head span {
   font-size: 10px;
-  color: #637083;
+  color: var(--parent-text, #637083);
 }
 
 .client-scale-tree-group {
@@ -1813,21 +1815,21 @@ body[data-page='admin-client-result'] .top-actions {
   padding: 0;
   border: none;
   background: transparent;
-  color: #3a648e;
+  color: var(--parent-accent, #3a648e);
   font-size: 10px;
   font-weight: 700;
 }
 
 .client-scale-tree-toggle:hover {
   background: transparent;
-  color: #1f4f7d;
+  color: var(--parent-accent-strong, #1f4f7d);
   transform: none;
 }
 
 .client-scale-tree-children {
   margin-top: 4px;
   padding-left: 8px;
-  border-left: 1px dashed #d8e2ed;
+  border-left: 1px dashed var(--parent-line, #d8e2ed);
   display: grid;
   gap: 2px;
 }
@@ -1844,17 +1846,18 @@ body[data-page='admin-client-result'] .top-actions {
   padding: 2px 4px;
   border-radius: 7px;
   cursor: pointer;
-  color: #425266;
+  color: var(--parent-text, #425266);
+  background: var(--parent-child-bg, transparent);
 }
 
 .client-scale-tree-child:hover {
-  background: #f2f7fd;
+  background: var(--parent-child-hover, #f2f7fd);
 }
 
 .client-scale-tree-child.is-active {
-  background: #e8f2fd;
-  color: #1f476f;
-  box-shadow: inset 0 0 0 1px rgba(130, 171, 210, 0.28);
+  background: var(--parent-child-active, #e8f2fd);
+  color: var(--parent-accent-strong, #1f476f);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--parent-border, rgba(130, 171, 210, 0.28)) 88%, transparent 12%);
 }
 
 .client-scale-tree-child input {
@@ -1866,7 +1869,7 @@ body[data-page='admin-client-result'] .top-actions {
 .client-scale-tree-code {
   font-size: 10px;
   font-weight: 700;
-  color: #3e6389;
+  color: var(--parent-accent, #3e6389);
 }
 
 .client-scale-tree-name {
@@ -1901,26 +1904,27 @@ body[data-page='admin-client-result'] .top-actions {
 .client-selected-group-chip {
   display: inline-flex;
   align-items: center;
-  border: 1px solid #9ebfdf;
+  border: 1px solid var(--parent-border, #9ebfdf);
   border-radius: 999px;
-  background: #e8f2fd;
-  color: #1f476f;
+  background: var(--parent-soft, #e8f2fd);
+  color: var(--parent-accent-strong, #1f476f);
   font-size: 10px;
   font-weight: 700;
   padding: 4px 9px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--parent-border, #9ebfdf) 72%, transparent 28%);
 }
 
 .client-selected-scale-chip {
   display: inline-flex;
   align-items: center;
-  border: 1px solid #9ebfdf;
+  border: 1px solid color-mix(in srgb, var(--parent-border, #9ebfdf) 86%, #ffffff 14%);
   border-radius: 999px;
-  background: #e8f2fd;
-  color: #1f476f;
+  background: var(--parent-soft-alt, #e8f2fd);
+  color: var(--parent-text, #1f476f);
   font-size: 10px;
   font-weight: 700;
   padding: 4px 9px;
-  box-shadow: inset 0 0 0 1px rgba(130, 171, 210, 0.18);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--parent-border, rgba(130, 171, 210, 0.18)) 54%, transparent 46%);
 }
 
 .client-selected-scale-chip.is-more {
@@ -1942,9 +1946,11 @@ body[data-page='admin-client-result'] .top-actions {
 }
 
 .client-result-visual-block {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
+  gap: 4px;
+  padding: 7px 8px 8px;
 }
 
 .client-result-filter-head {
@@ -2091,28 +2097,57 @@ body[data-page='admin-client-result'] .top-actions {
 }
 
 .client-result-visual-block .section-label {
-  margin-bottom: 6px;
+  margin-bottom: 2px;
   color: #3f5164;
   font-weight: 700;
 }
 
 .client-result-chart-grid {
-  margin-top: 0;
+  margin-top: 2px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  flex: 1 1 auto;
+  gap: 6px;
+  flex: 0 0 auto;
 }
 
 .client-result-chart-card {
   margin-top: 0;
-  min-height: 100%;
-  max-width: 760px;
+  min-height: 0;
+  max-width: none;
   width: 100%;
-  justify-self: center;
+  justify-self: stretch;
   border-color: #dce4ef;
-  background: #ffffff;
-  padding: 6px 6px 4px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  padding: 8px 10px 6px;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.client-result-chart-card-head {
+  display: grid;
+  gap: 3px;
+}
+
+.client-result-chart-card-head .summary-label {
+  margin: 0;
+}
+
+.client-result-chart-card-head .field-info {
+  margin: 0;
+  font-size: 11px;
+}
+
+.client-result-chart-stage {
+  min-height: clamp(166px, 18vw, 214px);
+  border: 1px solid #e1e8f2;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(250, 252, 255, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%),
+    linear-gradient(135deg, rgba(221, 234, 247, 0.36) 0%, rgba(255, 255, 255, 0) 45%);
+  padding: 4px 6px 0;
+  display: flex;
+  align-items: stretch;
 }
 
 .client-result-bar-chart {
@@ -2139,7 +2174,7 @@ body[data-page='admin-client-result'] .top-actions {
   position: relative;
   height: 8px;
   border-radius: 999px;
-  background: #e8edf5;
+  background: color-mix(in srgb, var(--parent-soft, #e8edf5) 82%, #e9edf4 18%);
   overflow: hidden;
 }
 
@@ -2150,7 +2185,7 @@ body[data-page='admin-client-result'] .top-actions {
 .client-result-bar-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #abc6e0 0%, #82abd2 100%);
+  background: linear-gradient(90deg, var(--parent-border, #abc6e0) 0%, var(--parent-accent, #82abd2) 100%);
 }
 
 .client-chart-placeholder {
@@ -2195,9 +2230,11 @@ body[data-page='admin-client-result'] .top-actions {
 
 .client-result-detail-panel #clientResultProfileChart {
   width: 100%;
-  height: clamp(216px, 26vw, 252px);
-  margin-top: 2px;
+  min-height: clamp(156px, 16vw, 198px);
+  height: 100%;
+  margin-top: 0;
   display: block;
+  flex: 1 1 auto;
 }
 
 .client-result-table-wrap {
@@ -3910,7 +3947,8 @@ body[data-page='admin-client-result'] .top-actions {
   }
 
   .client-result-detail-panel #clientResultProfileChart {
-    height: 252px;
+    min-height: 260px;
+    height: 260px;
   }
 
   .client-scale-filter-group-head {

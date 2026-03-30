@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>내담자 상세 결과 조회</title>
     <link rel="stylesheet" href="/static/style.css" />
   </head>
@@ -76,8 +79,13 @@
               <p class="summary-label section-label">시각화 결과</p>
               <section class="client-result-chart-grid">
                 <article class="chart-wrap client-result-chart-card">
-                  <p class="summary-label">프로파일 차트</p>
-                  <svg id="clientResultProfileChart" viewBox="0 0 560 280" preserveAspectRatio="none"></svg>
+                  <div class="client-result-chart-card-head">
+                    <p class="summary-label">프로파일 차트</p>
+                    <p class="field-info">선택된 척도 결과를 parent 검사 기준으로 한눈에 비교합니다.</p>
+                  </div>
+                  <div class="client-result-chart-stage">
+                    <svg id="clientResultProfileChart" viewBox="0 0 640 340" preserveAspectRatio="none"></svg>
+                  </div>
                 </article>
               </section>
             </section>
@@ -90,6 +98,7 @@
       </section>
     </main>
 
-    <script src="/static/admin.js"></script>
+    <script src="/static/vendor/d3.min.js"></script>
+    <script src="/static/admin.js?v=20260330-3"></script>
   </body>
 </html>

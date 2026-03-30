@@ -1,6 +1,9 @@
 import json
+import os
 from datetime import date, datetime, timedelta
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -113,6 +116,125 @@ def _serialize_client_scoring_rows(scoring_rows) -> list[dict[str, Any]]:
     return items
 
 
+def _build_report_scale_hierarchy(raw_result: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_scales = raw_result.get("scales", {})
+    if not isinstance(raw_scales, dict):
+        return []
+
+    items: list[dict[str, Any]] = []
+    for raw_scale in raw_scales.values():
+        if not isinstance(raw_scale, dict):
+            continue
+        scale_item: dict[str, Any] = {
+            "code": str(raw_scale.get("code", "")).strip(),
+            "name": str(raw_scale.get("name", "")).strip(),
+            "score": raw_scale.get("converted_score_100"),
+            "children": [],
+        }
+        raw_facets = raw_scale.get("facets")
+        if isinstance(raw_facets, dict):
+            for raw_facet in raw_facets.values():
+                if not isinstance(raw_facet, dict):
+                    continue
+                scale_item["children"].append(
+                    {
+                        "code": str(raw_facet.get("code", "")).strip(),
+                        "name": str(raw_facet.get("name", "")).strip(),
+                        "score": raw_facet.get("converted_score_100"),
+                    }
+                )
+        items.append(scale_item)
+    return items
+
+
+def get_admin_client_report_llm_context(
+    db: Session,
+    admin_session: str | None,
+    client_id: int,
+    report: str,
+) -> dict:
+    admin = get_current_admin(db, admin_session)
+    client_row = get_admin_client_by_id_and_admin(db, client_id=client_id, admin_user_id=admin.id)
+    if client_row is None:
+        raise HTTPException(status_code=404, detail="내담자를 찾을 수 없습니다.")
+
+    report_name = str(report or "").strip().upper()
+    if report_name != "GOLDEN":
+        raise HTTPException(status_code=400, detail="현재는 GOLDEN 리포트만 지원합니다.")
+
+    scoring_rows = list_submission_scoring_results_by_client(
+        db,
+        admin_user_id=admin.id,
+        client_id=client_row.id,
+        limit=30,
+    )
+    for row in scoring_rows:
+        scoring_row = row.SubmissionScoringResult
+        try:
+            result_payload = json.loads(scoring_row.result_json or "{}")
+        except Exception:
+            continue
+        if not isinstance(result_payload, dict):
+            continue
+        raw_result = result_payload.get(report_name)
+        if not isinstance(raw_result, dict):
+            continue
+        return {
+            "client": {
+                "id": client_row.id,
+                "name": client_row.name,
+                "gender": client_row.gender,
+                "birth_day": client_row.birth_day.isoformat() if client_row.birth_day else None,
+            },
+            "report": report_name,
+            "custom_test_name": getattr(row, "custom_test_name", "") or "커스텀 검사",
+            "submission_id": scoring_row.submission_id,
+            "scoring_result_id": scoring_row.id,
+            "scored_at": scoring_row.created_at.isoformat(),
+            "hierarchy": _build_report_scale_hierarchy(raw_result),
+        }
+
+    raise HTTPException(status_code=404, detail="해당 리포트의 채점 결과를 찾을 수 없습니다.")
+
+
+def proxy_report_llm_chat(
+    db: Session,
+    admin_session: str | None,
+    *,
+    client_id: int,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    admin = get_current_admin(db, admin_session)
+    client_row = get_admin_client_by_id_and_admin(db, client_id=client_id, admin_user_id=admin.id)
+    if client_row is None:
+        raise HTTPException(status_code=404, detail="내담자를 찾을 수 없습니다.")
+
+    chat_url = os.getenv("LLM_CHAT_URL", "http://52.78.54.34:8010/chat").strip() or "http://52.78.54.34:8010/chat"
+    request_body = json.dumps(payload).encode("utf-8")
+    request = Request(
+        chat_url,
+        data=request_body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    timeout = max(1, min(int(payload.get("timeout", 120) or 120), 300))
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            response_text = response.read().decode("utf-8")
+            return json.loads(response_text or "{}")
+    except HTTPError as exc:
+        try:
+            error_payload = json.loads(exc.read().decode("utf-8") or "{}")
+        except Exception:
+            error_payload = {}
+        detail = error_payload.get("detail") or error_payload.get("error") or f"LLM 서버 호출 실패 ({exc.code})"
+        raise HTTPException(status_code=502, detail=str(detail)) from exc
+    except URLError as exc:
+        raise HTTPException(status_code=502, detail="LLM 서버에 연결하지 못했습니다.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="LLM 응답 처리에 실패했습니다.") from exc
+
+
 def upsert_client_assignment(
     db: Session,
     admin_id: int,
@@ -193,16 +315,18 @@ def list_admin_clients(db: Session, admin_session: str | None) -> dict:
 
     log_rows = get_last_assessed_rows(db, admin_user_id=admin.id)
     log_map = {row.client_id: row.last_assessed_on for row in log_rows}
-    today_iso = date.today().isoformat()
 
     items = []
     for row in rows:
         base = serialize_admin_client(row)
         assigned = assignment_map.get(row.id)
         last_assessed_on = log_map.get(row.id)
-        status_text = "미실시"
         if last_assessed_on is not None:
-            status_text = "완료" if last_assessed_on.isoformat() == today_iso else "진행중"
+            status_text = "실시완료"
+        elif assigned is not None:
+            status_text = "미실시"
+        else:
+            status_text = "배정대기"
         base["assigned_custom_test_id"] = assigned["custom_test_id"] if assigned else None
         base["assigned_custom_test_name"] = assigned["custom_test_name"] if assigned else None
         base["assigned_parent_test_name"] = assigned["parent_test_name"] if assigned else None

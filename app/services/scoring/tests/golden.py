@@ -31,13 +31,13 @@ def _to_hundred_point_score(
     total_score: int | float,
     min_score: int | float,
     max_score: int | float,
-) -> float | None:
+) -> int | None:
     if not isinstance(min_score, (int, float)) or not isinstance(max_score, (int, float)):
         return None
     score_range = float(max_score) - float(min_score)
     if score_range <= 0:
         return None
-    return round(((float(total_score) - float(min_score)) / score_range) * 100, 2)
+    return int(round(((float(total_score) - float(min_score)) / score_range) * 100))
 
 
 def _apply_golden_max_score_hundred_point(
