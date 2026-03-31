@@ -209,7 +209,7 @@ def proxy_report_llm_chat(
     if client_row is None:
         raise HTTPException(status_code=404, detail="내담자를 찾을 수 없습니다.")
 
-    chat_url = os.getenv("LLM_CHAT_URL", "http://52.78.54.34:8010/chat").strip() or "http://52.78.54.34:8010/chat"
+    chat_url = os.getenv("LLM_CHAT_URL", "http://127.0.0.1:9000/chat").strip() or "http://127.0.0.1:9000/chat"
     request_body = json.dumps(payload).encode("utf-8")
     request = Request(
         chat_url,
