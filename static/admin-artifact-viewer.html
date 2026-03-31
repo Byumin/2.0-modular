@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>검사 리포트 보기</title>
     <style>
       :root {
@@ -12,6 +15,12 @@
         --text-main: #223047;
         --text-sub: #5d6b82;
         --accent: #a76a24;
+        --summary-soft: #fffaf3;
+        --summary-border: #ead8bf;
+        --summary-hover: rgba(167, 106, 36, 0.06);
+        --summary-strong: #6f4312;
+        --summary-toggle: #9a6424;
+        --summary-score: var(--accent);
       }
 
       * {
@@ -27,7 +36,7 @@
       }
 
       .viewer-shell {
-        width: min(1680px, calc(100vw - 24px));
+        width: min(1820px, calc(100vw - 24px));
         margin: 12px auto;
         display: grid;
         gap: 8px;
@@ -55,7 +64,7 @@
 
       .viewer-layout {
         display: grid;
-        grid-template-columns: minmax(760px, 1fr) minmax(520px, 720px);
+        grid-template-columns: minmax(620px, 0.85fr) minmax(560px, 0.95fr);
         gap: 12px;
         align-items: start;
       }
@@ -183,6 +192,8 @@
         padding: 10px 11px;
         display: grid;
         gap: 6px;
+        align-content: start;
+        align-self: start;
       }
 
       .meta-line {
@@ -207,9 +218,9 @@
       }
 
       .hierarchy-item {
-        border: 1px solid #ead8bf;
+        border: 1px solid var(--summary-border);
         border-radius: 10px;
-        background: #fffaf3;
+        background: var(--summary-soft);
         display: grid;
         overflow: hidden;
       }
@@ -228,12 +239,12 @@
       }
 
       .hierarchy-head:hover {
-        background: rgba(167, 106, 36, 0.06);
+        background: var(--summary-hover);
       }
 
       .hierarchy-head strong {
         font-size: 13px;
-        color: #6f4312;
+        color: var(--summary-strong);
       }
 
       .hierarchy-head-label {
@@ -247,7 +258,7 @@
         align-items: center;
         justify-content: center;
         width: 18px;
-        color: #9a6424;
+        color: var(--summary-toggle);
         font-size: 11px;
         transform: rotate(-90deg);
         transition: transform 0.18s ease;
@@ -260,7 +271,7 @@
       .hierarchy-score {
         font-size: 12px;
         font-weight: 700;
-        color: var(--accent);
+        color: var(--summary-score);
       }
 
       .facet-list {
@@ -291,6 +302,7 @@
         display: grid;
         gap: 12px;
         min-height: 0;
+        align-content: start;
       }
 
       .viewer-output-body {
@@ -431,10 +443,32 @@
           GOLDEN: {
             title: "GOLDEN 성격유형검사 리포트",
             path: "/artifacts/GOLDEN.html",
+            llmSummaryText: "GOLDEN 리포트 점수 구조를 확인할 수 있습니다.",
+            llmButtonText: "GOLDEN 해석 생성",
+            theme: {
+              accent: "#a76a24",
+              summarySoft: "#fffaf3",
+              summaryBorder: "#ead8bf",
+              summaryHover: "rgba(167, 106, 36, 0.06)",
+              summaryStrong: "#6f4312",
+              summaryToggle: "#9a6424",
+              summaryScore: "#a76a24",
+            },
           },
           STS: {
             title: "STS 6요인 기질검사 리포트",
             path: "/artifacts/STS.html",
+            llmSummaryText: "STS 리포트 점수 구조를 확인할 수 있습니다.",
+            llmButtonText: "STS 해석 생성",
+            theme: {
+              accent: "#2b7d68",
+              summarySoft: "#def5ee",
+              summaryBorder: "#92cebf",
+              summaryHover: "rgba(43, 125, 104, 0.08)",
+              summaryStrong: "#195e4d",
+              summaryToggle: "#195e4d",
+              summaryScore: "#2b7d68",
+            },
           },
         };
 
@@ -458,7 +492,7 @@
             </header>
             <section class="viewer-layout">
               <section class="viewer-frame-wrap">
-                <iframe class="viewer-frame" src="${sourceUrl}" title="${selected.title}"></iframe>
+                <iframe id="viewerFrame" class="viewer-frame" src="${sourceUrl}" title="${selected.title}"></iframe>
               </section>
               <section class="viewer-side-layout">
                 <aside class="viewer-output-panel">
@@ -471,15 +505,15 @@
                   </section>
                 </aside>
                 <div id="viewerSideResizer" class="viewer-side-resizer" aria-hidden="true"></div>
-                <aside class="viewer-llm-panel">
-                  <header class="viewer-llm-head">
-                    <h2>점수 요약</h2>
-                    <p>현재는 GOLDEN 리포트만 지원합니다.</p>
-                  </header>
-                  <section class="viewer-llm-meta">
-                    <button id="runGoldenLlmBtn" type="button" class="uniform-btn" disabled>GOLDEN 해석 생성</button>
-                    <p id="viewerLlmStatus" class="llm-status">대기 중</p>
-                  </section>
+	                <aside class="viewer-llm-panel">
+	                  <header class="viewer-llm-head">
+	                    <h2>점수 요약</h2>
+	                    <p>${selected.llmSummaryText}</p>
+	                  </header>
+	                  <section class="viewer-llm-meta">
+	                    <button id="runGoldenLlmBtn" type="button" class="uniform-btn" disabled>${selected.llmButtonText}</button>
+	                    <p id="viewerLlmStatus" class="llm-status">대기 중</p>
+	                  </section>
                   <section class="viewer-llm-body">
                     <div id="viewerHierarchyCard" class="meta-card">점수 구조를 불러오는 중입니다.</div>
                   </section>
@@ -495,8 +529,25 @@
         const llmOutput = document.getElementById("viewerLlmOutput");
         const sideLayout = root.querySelector(".viewer-side-layout");
         const sideResizer = document.getElementById("viewerSideResizer");
+        const viewerFrame = document.getElementById("viewerFrame");
+        const isGoldenReport = report === "GOLDEN";
 
         let llmContext = null;
+
+        Object.entries(selected.theme || {}).forEach(([key, value]) => {
+          const cssName = ({
+            accent: "--accent",
+            summarySoft: "--summary-soft",
+            summaryBorder: "--summary-border",
+            summaryHover: "--summary-hover",
+            summaryStrong: "--summary-strong",
+            summaryToggle: "--summary-toggle",
+            summaryScore: "--summary-score",
+          })[key];
+          if (cssName) {
+            root.style.setProperty(cssName, value);
+          }
+        });
 
         const escapeHtml = (value) =>
           String(value ?? "")
@@ -508,12 +559,40 @@
 
         const formatScore = (value) => {
           const num = Number(value);
-          return Number.isFinite(num) ? `${num.toFixed(2)} / 100` : "-";
+          if (!Number.isFinite(num)) return "-";
+          if (report === "GOLDEN") {
+            return `${Math.round(num)} / 100`;
+          }
+          return `${num.toFixed(2)} / 100`;
         };
 
         const formatPromptScore = (value) => {
           const num = Number(value);
           return Number.isFinite(num) ? String(Math.round(num)) : "-";
+        };
+
+        const formatKoreanDate = (value) => {
+          const text = String(value ?? "").trim();
+          if (!text) return "-";
+          const date = new Date(text);
+          if (Number.isNaN(date.getTime())) return text;
+          const parts = new Intl.DateTimeFormat("sv-SE", {
+            timeZone: "Asia/Seoul",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).formatToParts(date);
+          const pick = (type) => parts.find((part) => part.type === type)?.value || "";
+          const year = pick("year");
+          const month = pick("month");
+          const day = pick("day");
+          const hour = pick("hour");
+          const minute = pick("minute");
+          if (!year || !month || !day) return text;
+          return `${year}-${month}-${day} ${hour || "00"}:${minute || "00"}`;
         };
 
         const renderMarkdown = (value) => {
@@ -578,11 +657,11 @@
           hierarchyCard.innerHTML = `
             <div class="meta-line"><strong>내담자</strong><span>${escapeHtml(client.name || "-")}</span></div>
             <div class="meta-line"><strong>검사</strong><span>${escapeHtml(payload?.custom_test_name || "-")}</span></div>
-            <div class="meta-line"><strong>채점 시각</strong><span>${escapeHtml(payload?.scored_at || "-")}</span></div>
+            <div class="meta-line"><strong>채점 시각</strong><span>${escapeHtml(formatKoreanDate(payload?.scored_at))}</span></div>
             <div class="hierarchy-list">
               ${hierarchy.map((scale, index) => `
-                <article class="hierarchy-item${index === 0 ? ' is-expanded' : ''}">
-                  <button type="button" class="hierarchy-head" data-role="toggle-hierarchy-item" aria-expanded="${index === 0 ? 'true' : 'false'}">
+                <article class="hierarchy-item">
+                  <button type="button" class="hierarchy-head" data-role="toggle-hierarchy-item" aria-expanded="false">
                     <span class="hierarchy-head-label">
                       <span class="hierarchy-toggle">▼</span>
                       <strong>${escapeHtml(scale.code)} · ${escapeHtml(scale.name)}</strong>
@@ -630,6 +709,7 @@
             `${client.name || "내담자"}의 GOLDEN 성격유형검사 결과를 보호자/상담 입장에서 해석해줘.`,
             `상위 척도와 하위 척도 관계를 유지해서 설명하고, 점수 차이가 큰 부분을 먼저 요약해줘.`,
             `상위 척도를 설명할 때 해당 하위척도를 함께 언급하면서 관련성을 설명해줘.`,
+            `필요하면 고차원적으로 보이는 특징이 있으면 설명해줘.`,
             `점수 데이터:`,
             condensedLines.join("\n"),
           ].join("\n\n");
@@ -637,6 +717,38 @@
 
         const setStatus = (text) => {
           if (llmStatus) llmStatus.textContent = text;
+        };
+
+        const centerReportWithinFrame = () => {
+          if (!(viewerFrame instanceof HTMLIFrameElement)) return;
+          try {
+            const frameDoc = viewerFrame.contentDocument;
+            const frameBody = frameDoc?.body;
+            if (!frameDoc || !frameBody) return;
+
+            frameBody.style.margin = "0";
+            frameBody.style.overflow = "auto";
+            frameBody.style.background = "#ffffff";
+
+            let styleEl = frameDoc.getElementById("viewerReportCenterStyle");
+            if (!(styleEl instanceof HTMLStyleElement)) {
+              styleEl = frameDoc.createElement("style");
+              styleEl.id = "viewerReportCenterStyle";
+              frameDoc.head.appendChild(styleEl);
+            }
+            styleEl.textContent = `
+              body > div.offset[style*="position:relative"][style*="width:793px"],
+              body > div.offset[style*="position:relative"][style*="width:794px"] {
+                display: block !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+                left: auto !important;
+                right: auto !important;
+              }
+            `;
+          } catch {
+            // Ignore iframe access issues.
+          }
         };
 
         const initSideResize = () => {
@@ -682,10 +794,6 @@
             if (hierarchyCard) hierarchyCard.textContent = "client_id가 없어 LLM 패널을 초기화할 수 없습니다.";
             return;
           }
-          if (report !== "GOLDEN") {
-            if (hierarchyCard) hierarchyCard.textContent = "현재는 GOLDEN 리포트만 LLM 해석을 지원합니다.";
-            return;
-          }
           try {
             const resp = await fetch(`/api/admin/clients/${encodeURIComponent(String(clientId))}/report-llm-context?report=${encodeURIComponent(report)}`, {
               credentials: "same-origin",
@@ -696,7 +804,13 @@
             }
             llmContext = data;
             renderHierarchy(data);
-            if (runBtn) runBtn.disabled = false;
+            if (runBtn) {
+              runBtn.disabled = !isGoldenReport;
+              runBtn.title = isGoldenReport ? "" : "현재는 GOLDEN 리포트만 AI 해석 생성이 가능합니다.";
+            }
+            if (!isGoldenReport && llmOutput) {
+              llmOutput.innerHTML = "<p>STS는 현재 점수 요약만 지원합니다. AI 해석 생성은 아직 GOLDEN만 가능합니다.</p>";
+            }
             setStatus("점수 구조 로드 완료");
           } catch (error) {
             if (hierarchyCard) hierarchyCard.textContent = error.message || "점수 구조를 불러오지 못했습니다.";
@@ -722,7 +836,7 @@
                 api_key: "dummy",
                 temperature: 0.2,
                 top_p: 0.9,
-                max_tokens: 700,
+                max_tokens: 1000,
                 timeout: 120,
                 mock_mode: false,
               }),
@@ -743,6 +857,10 @@
 
         if (runBtn) {
           runBtn.addEventListener("click", runGoldenLlm);
+        }
+
+        if (viewerFrame) {
+          viewerFrame.addEventListener("load", centerReportWithinFrame);
         }
 
         initSideResize();

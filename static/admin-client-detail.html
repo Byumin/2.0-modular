@@ -82,11 +82,11 @@
                   </article>
                 </div>
 
-                <div class="client-detail-log-section">
-                  <label>커스텀 검사 실시 이력</label>
-                  <div id="clientDetailLogEmpty" class="info-box hidden">검사 실시 이력이 없습니다.</div>
-                  <div class="client-detail-log-scroll">
-                    <ul id="clientDetailLogList" class="row-list compact-list"></ul>
+	                <div class="client-detail-log-section">
+	                  <label>검사 실시 이력</label>
+	                  <div id="clientDetailLogEmpty" class="info-box hidden">검사 실시 이력이 없습니다.</div>
+	                  <div class="client-detail-log-scroll">
+	                    <ul id="clientDetailLogList" class="row-list compact-list"></ul>
                   </div>
                 </div>
               </article>
@@ -101,15 +101,15 @@
                 <ul id="clientParentResultsList" class="row-list compact-list client-parent-results-list"></ul>
               </article>
 
-              <article class="panel-card client-result-section-card">
-                <div class="panel-title-row">
-                  <h2>내담자 상세 결과 조회</h2>
-                </div>
-                <p class="field-info">검사/척도 선택 및 시각화는 전용 화면에서 확인합니다.</p>
-                <div class="row-actions">
-                  <button id="openClientResultViewerBtn" type="button" class="uniform-btn primary-action">상세 결과 화면 열기</button>
-                </div>
-              </article>
+	              <article class="panel-card client-result-section-card">
+	                <div class="panel-title-row client-result-viewer-head">
+	                  <h2>내담자 상세 결과 조회</h2>
+	                  <p class="field-info client-result-viewer-info">검사/척도 선택 및 시각화는 전용 화면에서 확인합니다.</p>
+	                  <div class="row-actions client-result-viewer-actions">
+	                    <button id="openClientResultViewerBtn" type="button" class="uniform-btn primary-action">상세 결과 화면 열기</button>
+	                  </div>
+	                </div>
+	              </article>
             </section>
 
             <p id="clientDetailMessage" class="message" aria-live="polite"></p>
