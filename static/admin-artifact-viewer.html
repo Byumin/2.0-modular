@@ -627,9 +627,9 @@
             return lines;
           });
           return [
-            `${client.name || "내담자"}의 GOLDEN 성격유형검사 결과를 보호자/상담 현장에서 읽기 쉬운 한국어로 해석해줘.`,
+            `${client.name || "내담자"}의 GOLDEN 성격유형검사 결과를 보호자/상담 입장에서 해석해줘.`,
             `상위 척도와 하위 척도 관계를 유지해서 설명하고, 점수 차이가 큰 부분을 먼저 요약해줘.`,
-            `의학적 진단처럼 단정하지 말고 성향/경향 중심으로 설명해줘.`,
+            `상위 척도를 설명할 때 해당 하위척도를 함께 언급하면서 관련성을 설명해줘.`,
             `점수 데이터:`,
             condensedLines.join("\n"),
           ].join("\n\n");
@@ -718,7 +718,7 @@
                 prompt: buildGoldenPrompt(llmContext),
                 selected_test: "GOLDEN",
                 model_name: "jinkyeongk/Midm-2.0-Base-Instruct-AWQ",
-                base_url: "http://localhost:8000/v1",
+                base_url: "http://127.0.0.1:8000/v1",
                 api_key: "dummy",
                 temperature: 0.2,
                 top_p: 0.9,
