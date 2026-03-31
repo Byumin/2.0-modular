@@ -2320,11 +2320,29 @@ async function initClientDetailPage() {
   const parentResultsEmptyEl = document.getElementById('clientParentResultsEmpty');
   const openClientResultViewerBtn = document.getElementById('openClientResultViewerBtn');
   const msg = document.getElementById('clientDetailMessage');
+  const detailFormPaneEl = document.querySelector('.client-detail-form-pane');
+  const detailStatusPaneEl = document.querySelector('.client-detail-status-pane');
 
   msg.textContent = '';
   msg.className = 'message';
   let assignedCustomTestId = null;
   let parentReportItems = [];
+
+  const syncClientDetailPaneHeights = () => {
+    if (!(detailFormPaneEl instanceof HTMLElement) || !(detailStatusPaneEl instanceof HTMLElement)) {
+      return;
+    }
+    detailFormPaneEl.style.height = '';
+    detailStatusPaneEl.style.height = '';
+    if (window.innerWidth <= 900) {
+      return;
+    }
+    const nextHeight = Math.max(detailFormPaneEl.offsetHeight, detailStatusPaneEl.offsetHeight);
+    if (nextHeight > 0) {
+      detailFormPaneEl.style.height = `${nextHeight}px`;
+      detailStatusPaneEl.style.height = `${nextHeight}px`;
+    }
+  };
 
   const toText = (value, fallback = '') => {
     const raw = String(value ?? '').trim();
@@ -2494,11 +2512,12 @@ async function initClientDetailPage() {
 
   if (openClientResultViewerBtn) {
     openClientResultViewerBtn.addEventListener('click', () => {
-      const nextUrl = `/admin/client-result?id=${encodeURIComponent(id)}`;
-      const opened = window.open(nextUrl, '_blank', 'noopener,noreferrer');
-      if (!opened) {
-        window.location.href = nextUrl;
-      }
+      const nextUrl = `/admin/client-result?id=${encodeURIComponent(id)}&v=${Date.now()}`;
+      const link = document.createElement('a');
+      link.href = nextUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.click();
     });
   }
 
@@ -2534,19 +2553,20 @@ async function initClientDetailPage() {
         const summaryText = parentTestName
           ? `${customTestName} (기반: ${parentTestName})`
           : customTestName;
-        li.innerHTML = `
-          <div class="row-grid client-log-row-grid">
-            <div class="row-col main-col"><strong>${summaryText}</strong></div>
-            <div class="row-col">${log.assessed_on || '-'}</div>
-          </div>
-        `;
+	        li.innerHTML = `
+	          <div class="row-grid client-log-row-grid">
+	            <div class="row-col main-col"><strong>${summaryText}</strong></div>
+	            <div class="row-col date-col">${log.assessed_on || '-'}</div>
+	          </div>
+	        `;
         logListEl.appendChild(li);
       });
     }
 
-    parentReportItems = buildParentResultItems(item, logs);
-    renderParentResults(parentReportItems);
-  };
+	    parentReportItems = buildParentResultItems(item, logs);
+	    renderParentResults(parentReportItems);
+      syncClientDetailPaneHeights();
+	  };
 
   const loadClientDetail = async () => {
     const detail = await api(`/api/admin/clients/${id}`);
@@ -2555,15 +2575,15 @@ async function initClientDetailPage() {
     renderDetail(item);
   };
 
-  try {
-    await loadClientDetail();
-  } catch (error) {
+	  try {
+	    await loadClientDetail();
+	  } catch (error) {
     msg.textContent = error.message;
     msg.className = 'message error';
     return;
   }
 
-  form.addEventListener('submit', async (event) => {
+	  form.addEventListener('submit', async (event) => {
     event.preventDefault();
     msg.textContent = '';
     msg.className = 'message';
@@ -2597,12 +2617,27 @@ async function initClientDetailPage() {
     } catch (error) {
       msg.textContent = error.message;
       msg.className = 'message error';
-    } finally {
-      if (saveBtn) {
-        saveBtn.disabled = false;
-      }
+	    } finally {
+	      if (saveBtn) {
+	        saveBtn.disabled = false;
+	      }
+        syncClientDetailPaneHeights();
+	    }
+	  });
+
+  if (typeof ResizeObserver === 'function') {
+    const resizeObserver = new ResizeObserver(() => {
+      syncClientDetailPaneHeights();
+    });
+    if (detailFormPaneEl) {
+      resizeObserver.observe(detailFormPaneEl);
     }
-  });
+    if (detailStatusPaneEl) {
+      resizeObserver.observe(detailStatusPaneEl);
+    }
+  }
+  window.addEventListener('resize', syncClientDetailPaneHeights);
+  syncClientDetailPaneHeights();
 }
 
 async function initClientResultPage() {

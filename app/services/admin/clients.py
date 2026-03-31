@@ -159,8 +159,9 @@ def get_admin_client_report_llm_context(
         raise HTTPException(status_code=404, detail="내담자를 찾을 수 없습니다.")
 
     report_name = str(report or "").strip().upper()
-    if report_name != "GOLDEN":
-        raise HTTPException(status_code=400, detail="현재는 GOLDEN 리포트만 지원합니다.")
+    supported_reports = {"GOLDEN", "STS"}
+    if report_name not in supported_reports:
+        raise HTTPException(status_code=400, detail="현재는 GOLDEN, STS 리포트만 지원합니다.")
 
     scoring_rows = list_submission_scoring_results_by_client(
         db,

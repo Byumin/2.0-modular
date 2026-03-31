@@ -1360,7 +1360,7 @@ button:disabled:hover {
   border-color: #dde5ef;
   background: #fbfdff;
   padding: 12px;
-  min-height: clamp(460px, 66vh, 620px);
+  min-height: 0;
 }
 
 .client-detail-form-pane {
@@ -1373,7 +1373,6 @@ button:disabled:hover {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 10px;
-  max-height: clamp(460px, 66vh, 620px);
 }
 
 .client-detail-memo {
@@ -1412,7 +1411,25 @@ button:disabled:hover {
 }
 
 .client-log-row-grid {
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 16px;
+}
+
+.client-log-row-grid .main-col {
+  min-width: 0;
+}
+
+.client-log-row-grid .main-col strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-log-row-grid .date-col {
+  justify-self: end;
+  white-space: nowrap;
 }
 
 .client-result-sections {
@@ -1479,6 +1496,30 @@ button:disabled:hover {
 
 .parent-result-actions {
   justify-content: flex-end;
+}
+
+.client-result-viewer-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.client-result-viewer-actions {
+  margin-top: 0;
+  margin-left: auto;
+}
+
+.client-result-viewer-info {
+  margin: 0;
+  font-size: 12px;
+  color: #667385;
+  line-height: 1.4;
+}
+
+.client-result-viewer-actions .uniform-btn {
+  margin-top: 0;
 }
 
 .parent-result-scale-list {
