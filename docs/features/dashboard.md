@@ -39,3 +39,10 @@
 ## Notes
 - 이 기능은 독립 도메인이라기보다 여러 기능의 운영 현황을 묶어서 보여주는 집계 레이어에 가깝다.
 - summary 값은 단일 테이블에서 바로 오지 않고 여러 서비스 결과를 조합해서 계산된다.
+
+## Related Documents
+- [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
+- [docs/features/custom-test-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/custom-test-management.md)
+- [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
+- [docs/database/schema-overview.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/schema-overview.md)
+- [docs/design/design-system.md](/mnt/c/Users/user/workspace/2.0-modular/docs/design/design-system.md)

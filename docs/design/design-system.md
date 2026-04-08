@@ -228,3 +228,10 @@
 - `static/style.css`에서 전역 토큰을 먼저 선언하고 화면별 스타일은 그 토큰을 재사용한다.
 - 새 HTML/JS 화면을 추가할 때는 기존 클래스 네이밍 규칙과 간격 체계를 우선 재사용한다.
 - 화면별 예외 스타일은 최소화하고 공통 컴포넌트 스타일을 늘리는 방향으로 정리한다.
+
+## Related Documents
+- [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
+- [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)
+- [QUALIT_SCORE.md](/mnt/c/Users/user/workspace/2.0-modular/QUALIT_SCORE.md)
+- [scripts/README_CAPTURE.md](/mnt/c/Users/user/workspace/2.0-modular/scripts/README_CAPTURE.md)
+- [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)

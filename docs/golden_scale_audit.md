@@ -78,6 +78,12 @@
   - 성인형과 좌우가 반대로 저장되어 있다.
   - variant별로도 item 단위 판정을 따로 해야 한다.
 
+## Related Documents
+- [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
+- [docs/golden_shared_item_audit.md](/mnt/c/Users/user/workspace/2.0-modular/docs/golden_shared_item_audit.md)
+- [docs/features/scoring-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/scoring-flow.md)
+- [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)
+
 ### Tense1 / Calm1
 - 공유 문항: `5, 10, 15, 48`
 - item `5`

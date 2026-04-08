@@ -107,3 +107,11 @@
 4. startup 보정 코드
 
 테이블 이름과 코드 모델명이 다를 수 있으므로, 설명 시 둘 다 같이 적는 편이 안전하다.
+
+## Related Documents
+- [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)
+- [docs/database/runtime-db.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/runtime-db.md)
+- [docs/database/assets-inventory.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/assets-inventory.md)
+- [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
+- [docs/features/custom-test-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/custom-test-management.md)
+- [docs/features/scoring-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/scoring-flow.md)

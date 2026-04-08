@@ -49,3 +49,12 @@
 - 채점 로직은 parent 검사 원본의 `scale_struct`를 해석하는 과정이 중요하다.
 - 응답 키 형식, variant 분기, 척도 선택 코드가 틀어지면 채점 결과가 달라질 수 있다.
 - 기능 설명 시에는 채점 엔진뿐 아니라 "채점 전 컨텍스트 조립" 단계를 함께 봐야 한다.
+
+## Related Documents
+- [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
+- [docs/features/assessment-link-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/assessment-link-flow.md)
+- [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
+- [docs/diagrams/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/diagrams/README.md)
+- [docs/database/schema-overview.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/schema-overview.md)
+- [docs/golden_scale_audit.md](/mnt/c/Users/user/workspace/2.0-modular/docs/golden_scale_audit.md)
+- [docs/golden_shared_item_audit.md](/mnt/c/Users/user/workspace/2.0-modular/docs/golden_shared_item_audit.md)

@@ -52,3 +52,11 @@
 ## Notes
 - 이 기능은 단순 링크 조회가 아니라 프로필 기반 variant 선택이 핵심이다.
 - 수검자 화면의 질문 구성은 고정이 아니라 입력 프로필에 따라 달라질 수 있다.
+
+## Related Documents
+- [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
+- [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
+- [docs/features/custom-test-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/custom-test-management.md)
+- [docs/features/scoring-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/scoring-flow.md)
+- [docs/diagrams/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/diagrams/README.md)
+- [docs/design/design-system.md](/mnt/c/Users/user/workspace/2.0-modular/docs/design/design-system.md)

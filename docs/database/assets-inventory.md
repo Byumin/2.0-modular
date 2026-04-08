@@ -81,3 +81,10 @@
 - `docs/modular.db`가 단순 참고본인지, 특정 시점 스냅샷인지
 
 따라서 지금 단계에서는 이 파일들을 운영 기준으로 단정하지 말고, 참고 자산으로 분류하는 것이 안전하다.
+
+## Related Documents
+- [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)
+- [docs/database/runtime-db.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/runtime-db.md)
+- [docs/database/schema-overview.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/schema-overview.md)
+- [docs/exec-plans/2026-04-08-runtime-db-switch-to-modular.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-08-runtime-db-switch-to-modular.md)
+- [AGENTS.md](/mnt/c/Users/user/workspace/2.0-modular/AGENTS.md)

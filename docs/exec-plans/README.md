@@ -15,6 +15,7 @@
 - 문서는 작업 시작 시 1차 작성하고, 작업 중간에 반드시 갱신한다.
 - 작업 도중 계획이 바뀌면 바뀐 사실과 이유를 기록한다.
 - 최종적으로 결과가 기대와 다르면 원인을 반드시 분류한다.
+- DB 경로를 건드리는 작업이면 운영 기준 DB가 루트 `modular.db` 하나라는 원칙을 깨지 않는지 먼저 확인한다.
 
 ## Retrospective Classification
 회고 시 아래처럼 분류한다.
@@ -61,3 +62,10 @@
 
 ## Template
 새 문서를 만들 때는 `_template.md`를 기준으로 복사해서 사용한다.
+
+## Related Documents
+- [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
+- [AGENTS.md](/mnt/c/Users/user/workspace/2.0-modular/AGENTS.md)
+- [QUALIT_SCORE.md](/mnt/c/Users/user/workspace/2.0-modular/QUALIT_SCORE.md)
+- [docs/exec-plans/_template.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/_template.md)
+- [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)

@@ -41,3 +41,10 @@
 ## Notes
 - 현재 인증 상태는 DB 세션 테이블이 아니라 메모리 기반이다.
 - 운영 환경이 확장되면 세션 저장소 분리가 필요할 수 있다.
+
+## Related Documents
+- [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
+- [docs/database/runtime-db.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/runtime-db.md)
+- [docs/database/schema-overview.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/schema-overview.md)
+- [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)
+- [docs/debug/explanation-rule.md](/mnt/c/Users/user/workspace/2.0-modular/docs/debug/explanation-rule.md)
