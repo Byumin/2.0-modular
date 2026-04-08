@@ -2,6 +2,8 @@
 
 ## Files
 - `assessment-profile-runtime-sequence.mmd`: 인적사항 화면부터 validate-profile 이후 문항 렌더까지의 시퀀스 다이어그램
+- `assessment-question-runtime-sequence.mmd`: validate-profile 이후 실제 문항 조회/조립/렌더 흐름 시퀀스 다이어그램
+- `assessment-question-build-flow.mmd`: `build_custom_assessment_question_payload` 내부 처리 플로우
 - `assessment-profile-validate-flow.mmd`: validate-profile 내부 함수 호출/분기 플로우
 - `custom-test-create-runtime-sequence.mmd`: 커스텀 검사 생성(프론트 submit -> 백엔드 저장 -> 목록 갱신) 시퀀스 다이어그램
 - `custom-test-create-service-flow.mmd`: `create_admin_custom_test_batch` 내부 처리 플로우
@@ -34,6 +36,8 @@
 ## Render commands
 ```bash
 npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/assessment-profile-runtime-sequence.mmd -o docs/diagrams/assessment-profile-runtime-sequence.svg -b transparent
+npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/assessment-question-runtime-sequence.mmd -o docs/diagrams/assessment-question-runtime-sequence.svg -b transparent
+npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/assessment-question-build-flow.mmd -o docs/diagrams/assessment-question-build-flow.svg -b transparent
 npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/assessment-profile-validate-flow.mmd -o docs/diagrams/assessment-profile-validate-flow.svg -b transparent
 npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/custom-test-create-runtime-sequence.mmd -o docs/diagrams/custom-test-create-runtime-sequence.svg -b transparent
 npx mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/custom-test-create-service-flow.mmd -o docs/diagrams/custom-test-create-service-flow.svg -b transparent

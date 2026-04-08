@@ -1,0 +1,43 @@
+%%{init: {'flowchart': {'nodeSpacing': 18, 'rankSpacing': 28}}}%%
+flowchart TD
+    A["입력 profile 예시\n(static/assessment-custom.js)\n{ gender, birth_date, school_age }"] --> A1["POST /api/assessment-links/{token}/validate-profile\n(app/router/assessment_link_router.py)<br/><span style='color:#6c757d'>목적: profile payload를 서비스로 전달</span>"]
+    A1 --> A2["validate_custom_test_profile_by_access_link\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: 링크/검사/배정 검증 후 문항 payload 반환</span>"]
+    A2 -.-> A2_SIDE["함수 내부 순서\n1) access link 조회\n2) custom_test 조회\n3) 배정 profile 검증\n4) build_custom_assessment_question_payload 호출\n5) { message, assessment_payload } 반환"]
+    A2 --> B["build_custom_assessment_question_payload\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: profile에 맞는 실시 구간 문항 payload 조립</span>"]
+    B -.-> B_SIDE["함수 내부 순서\n1) test_configs 로드\n2) base meta 생성\n3) active variants 결정\n4) variant loop\n5) items/parts 조립\n6) payload 반환"]
+
+    B --> C["load_custom_test_configs\n(app/services/admin/common.py)<br/><span style='color:#6c757d'>목적: custom_test의 검사 구성 복원</span>"]
+    C --> D{"test_configs 존재?\n(분기 함수: build_custom_assessment_question_payload\napp/services/admin/assessment_links.py)"}
+    D -- 아니오 --> D1[404 검사 구성 정보를 찾을 수 없습니다.]
+    D -- 예 --> E["_build_custom_assessment_profile_meta\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: 공통 메타 payload 생성</span>"]
+
+    E --> F["_resolve_active_variants\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: profile 기준 활성 variant 목록 선택</span>"]
+    F -.-> F_SIDE["함수 내부 순서\n1) test_configs loop\n2) _select_sub_test_variant_for_profile 호출\n3) selected_sub_test_json 추출\n4) selected_scale_codes 포함해 resolved append"]
+    F --> G["_select_sub_test_variant_for_profile\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: test_id 내부에서 일치 variant 1건 선택</span>"]
+    G --> H["_profile_matches_sub_test\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: sub_test 조건 JSON과 입력 profile 비교</span>"]
+    H --> I{"일치 variant 존재?\n(분기 함수: _select_sub_test_variant_for_profile\napp/services/admin/assessment_links.py)"}
+    I -- 아니오 --> I1[400 일치 구간 없음]
+    I -- 예 --> J["variant loop 시작\n(build_custom_assessment_question_payload)"]
+
+    J --> K["_load_question_bundle\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: 1개 variant의 문항/척도/보기 bundle 로드</span>"]
+    K -.-> K_SIDE["함수 내부 순서\n1) fetch_parent_item_bundle\n2) item_json / item_meta_json / scale_struct json.loads\n3) _build_item_text_and_matrix_meta\n4) _parse_item_response_options\n5) _parse_render_rules\n6) response_key 계산"]
+    K --> L["fetch_parent_item_bundle\n(app/repositories/parent_test_repository.py)<br/><span style='color:#6c757d'>목적: parent_item + parent_scale + parent_item_choice 조인 조회</span>"]
+    L --> M{"row 존재?\n(분기 함수: _load_question_bundle\napp/services/admin/assessment_links.py)"}
+    M -- 아니오 --> M1[404 검사 원본 데이터를 찾을 수 없습니다.]
+    M -- 예 --> N["_build_item_text_and_matrix_meta\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: item_json을 item_map / matrix_row_meta로 정규화</span>"]
+    N --> O["_parse_item_response_options\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: item_template을 item별 response_options로 변환</span>"]
+    O --> P["_parse_render_rules\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: render_rules_json을 range rule 목록으로 변환</span>"]
+
+    P --> Q["_build_variant_items_and_scales\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: 선택 척도 기준 문항/척도 목록 조립</span>"]
+    Q -.-> Q_SIDE["함수 내부 순서\n1) _resolve_scale_item_ids\n2) selected_scales 구성\n3) item_id 정렬\n4) render rule / matrix meta 반영\n5) item.id = TEST::SUBTEST::ITEM 생성"]
+    Q --> R["_resolve_scale_item_ids\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: scale_struct에서 선택 척도별 item_id 추출</span>"]
+    R --> S["_append_items_as_render_parts\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: 동일 render_type/response_options 기준 part 버퍼 조립</span>"]
+    S --> T{"all_items 존재?\n(분기 함수: build_custom_assessment_question_payload\napp/services/admin/assessment_links.py)"}
+    T -- 아니오 --> T1[400 표시할 문항이 없습니다.]
+    T -- 예 --> U["_assemble_parts\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: part buffer를 최종 parts 배열로 변환</span>"]
+
+    U --> V["출력 assessment_payload 예시\n{ sub_test_json, selected_scale_codes,\nselected_scales[], items[], parts[], item_count, part_count }"]
+    V --> V2["validate_custom_test_profile_by_access_link 반환\n(app/services/admin/assessment_links.py)\n{ message, assessment_payload }"]
+    V2 --> W["프론트 applyAssessmentPayload\n(static/assessment-custom.js)<br/><span style='color:#6c757d'>목적: 서버 payload를 프론트 상태로 반영</span>"]
+    W --> X["프론트 renderQuestionCards\n(static/assessment-custom.js)<br/><span style='color:#6c757d'>목적: parts/items 기준 문항 카드 렌더</span>"]
+    X --> Y[실제 검사 문항 화면 표시]
