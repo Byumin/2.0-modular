@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.models import AdminCustomTest
+from app.repositories.assessment_repository import create_assessment_log
 from app.repositories.custom_test_repository import (
     create_access_link,
     create_submission,
@@ -803,6 +804,14 @@ def submit_custom_test_by_access_link(
         admin_user_id=link.admin_user_id,
         submission_id=submission.id,
     )
+
+    if client.id is not None:
+        create_assessment_log(
+            db,
+            admin_user_id=link.admin_user_id,
+            client_id=client.id,
+            assessed_on=date.today(),
+        )
 
     return {
         "message": "검사가 제출되었습니다.",
