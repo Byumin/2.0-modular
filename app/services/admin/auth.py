@@ -11,7 +11,7 @@ from app.services.admin.modular_auth import (
     verify_modular_admin_login,
 )
 
-ADMIN_SESSIONS: dict[str, str] = {}
+ADMIN_SESSIONS: dict[str, int] = {}
 
 
 def make_password_hash(raw: str) -> str:

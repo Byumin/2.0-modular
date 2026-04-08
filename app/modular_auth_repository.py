@@ -4,12 +4,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULAR_DB_PATH = ROOT / "docs" / "modular.db"
+MODULAR_DB_PATH = ROOT / "modular.db"
 
 
 @dataclass(slots=True)
 class ModularAdminUser:
-    id: str
+    id: int
     username: str
     password_hash: str
     created_at: str
@@ -25,7 +25,7 @@ def _to_admin_user(row: sqlite3.Row | None) -> ModularAdminUser | None:
     if row is None:
         return None
     return ModularAdminUser(
-        id=str(row["id"]),
+        id=int(row["id"]),
         username=str(row["username"]),
         password_hash=str(row["password_hash"]),
         created_at=str(row["created_at"]),
@@ -45,7 +45,7 @@ def get_modular_admin_by_username(username: str) -> ModularAdminUser | None:
     return _to_admin_user(row)
 
 
-def get_modular_admin_by_id(admin_id: str) -> ModularAdminUser | None:
+def get_modular_admin_by_id(admin_id: int) -> ModularAdminUser | None:
     with connect_modular_db() as conn:
         row = conn.execute(
             """
@@ -58,17 +58,17 @@ def get_modular_admin_by_id(admin_id: str) -> ModularAdminUser | None:
     return _to_admin_user(row)
 
 
-def create_modular_admin_user(*, admin_id: str, username: str, password_hash: str, created_at: str) -> ModularAdminUser:
+def create_modular_admin_user(*, username: str, password_hash: str, created_at: str) -> ModularAdminUser:
     with connect_modular_db() as conn:
         conn.execute(
             """
-            INSERT INTO admin_user (id, username, password_hash, created_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO admin_user (username, password_hash, created_at)
+            VALUES (?, ?, ?)
             """,
-            (admin_id, username, password_hash, created_at),
+            (username, password_hash, created_at),
         )
         conn.commit()
-    row = get_modular_admin_by_id(admin_id)
+    row = get_modular_admin_by_username(username)
     if row is None:
         raise RuntimeError("failed to create modular admin user")
     return row

@@ -19,7 +19,6 @@ def ensure_default_modular_admin(admin_id: str, admin_pw: str) -> ModularAdminUs
     from datetime import datetime
 
     return create_modular_admin_user(
-        admin_id=admin_id,
         username=admin_id,
         password_hash=make_modular_password_hash(admin_pw),
         created_at=datetime.utcnow().isoformat(sep=" ", timespec="seconds"),
@@ -35,5 +34,5 @@ def verify_modular_admin_login(admin_id: str, admin_pw: str) -> ModularAdminUser
     return row
 
 
-def get_modular_current_admin(admin_id: str) -> ModularAdminUser | None:
+def get_modular_current_admin(admin_id: int) -> ModularAdminUser | None:
     return get_modular_admin_by_id(admin_id)

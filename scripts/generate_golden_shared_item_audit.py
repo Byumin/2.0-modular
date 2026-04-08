@@ -4,14 +4,21 @@ from __future__ import annotations
 
 import csv
 import json
-import sqlite3
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DB_PATH = ROOT / "app.db"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from app.repositories.parent_test_repository import (  # noqa: E402
+    fetch_parent_item_bundle,
+    fetch_parent_scale_rows_by_test,
+)
+
 CSV_PATH = ROOT / "docs" / "golden_shared_item_audit.csv"
 MD_PATH = ROOT / "docs" / "golden_shared_item_audit.md"
 
@@ -25,33 +32,30 @@ class FacetPair:
     right_facet_code: str
 
 
-def load_variants(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    return conn.execute(
-        """
-        SELECT
-            s.sub_test_json,
-            s.scale_struct,
-            i.item_json,
-            c.item_template
-        FROM parent_scale s
-        JOIN parent_item i
-          ON i.test_id = s.test_id
-         AND i.sub_test_json = s.sub_test_json
-        LEFT JOIN parent_item_choice c
-          ON c.test_id = s.test_id
-         AND c.sub_test_json = s.sub_test_json
-        WHERE s.test_id = 'GOLDEN'
-        ORDER BY s.sub_test_json
-        """
-    ).fetchall()
+def load_variants() -> list[dict[str, str]]:
+    variants: list[dict[str, str]] = []
+    for row in fetch_parent_scale_rows_by_test("GOLDEN"):
+        bundle = fetch_parent_item_bundle("GOLDEN", row.sub_test_json)
+        if bundle is None:
+            continue
+        variants.append(
+            {
+                "sub_test_json": row.sub_test_json,
+                "scale_struct": row.scale_struct,
+                "item_json": bundle.item_json,
+                "item_template": bundle.item_template,
+            }
+        )
+    return variants
 
 
 def determine_variant_label(sub_test_json: str) -> str:
     raw = json.loads(sub_test_json)
-    if "age_range" in raw:
-        return "adult"
-    if "school_age_range" in raw:
-        return "child"
+    age_range = raw.get("age_range")
+    if isinstance(age_range, dict):
+        start = age_range.get("start_inclusive")
+        if isinstance(start, list) and start and isinstance(start[0], int):
+            return "adult" if start[0] >= 18 else "child"
     return "unknown"
 
 
@@ -130,9 +134,7 @@ def anchor_edge_values(item_template: dict[str, Any], item_id: str) -> tuple[str
 
 
 def build_rows() -> list[dict[str, str]]:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    variants = load_variants(conn)
+    variants = load_variants()
     rows: list[dict[str, str]] = []
 
     for variant in variants:
@@ -182,7 +184,6 @@ def build_rows() -> list[dict[str, str]]:
                     }
                 )
 
-    conn.close()
     return rows
 
 
@@ -218,26 +219,7 @@ def build_markdown(rows: list[dict[str, str]]) -> str:
     lines = [
         "# GOLDEN Shared Item Audit",
         "",
-        "## Purpose",
-        "- `parent_scale.test_id = 'GOLDEN'` 에서 반대 facet 쌍이 공유하는 문항을 item 단위로 검토한다.",
-        "- 각 row는 `variant + facet pair + item_id` 단위의 검토 대상이다.",
-        "- 현재 문서는 DB를 수정하지 않고, reverse 후보를 확정하기 위한 근거 표를 제공한다.",
-        "",
-        "## Output Files",
-        f"- CSV: `{CSV_PATH.relative_to(ROOT)}`",
-        f"- Markdown: `{MD_PATH.relative_to(ROOT)}`",
-        "",
-        "## Summary",
-        f"- Total review rows: `{len(rows)}`",
-        f"- Adult rows: `{len(by_variant.get('adult', []))}`",
-        f"- Child rows: `{len(by_variant.get('child', []))}`",
-        "",
-        "## Columns",
-        "- `left_scale`, `right_scale`: 같은 문항을 공유하는 반대 facet 쌍",
-        "- `left_anchor`, `right_anchor`: 각 문항에서 실제 최소/최대 보기 번호에 대응하는 극단 앵커",
-        "- `left_choice_score`, `right_choice_score`: 현재 DB에 저장된 양쪽 facet의 점수표",
-        "- `score_maps_equal`: 현재 두 facet 점수표가 동일한지 여부",
-        "- `suggested_direct_scale`, `suggested_reverse_scale`: 아직 비워둔 수동 검토 칼럼",
+        "이 문서는 현재 `modular.db` 기준 `GOLDEN` 척도 공유 문항을 점검하기 위해 생성되었습니다.",
         "",
     ]
 
@@ -245,37 +227,21 @@ def build_markdown(rows: list[dict[str, str]]) -> str:
         variant_rows = by_variant.get(variant_label, [])
         if not variant_rows:
             continue
-        lines.extend(
-            [
-                f"## Variant `{variant_label}`",
-                "",
-                f"- Row count: `{len(variant_rows)}`",
-                "",
-                "| Pair | Item | Left Scale | Right Scale | Left Anchor | Right Anchor | Maps Equal |",
-                "| --- | ---: | --- | --- | --- | --- | --- |",
-            ]
-        )
-        for row in variant_rows:
-            lines.append(
-                f"| {row['pair_group']} | {row['item_id']} | {row['left_scale']} | {row['right_scale']} | "
-                f"{row['left_anchor']} | {row['right_anchor']} | {row['score_maps_equal']} |"
-            )
+        lines.append(f"## {variant_label}")
+        lines.append("")
+        lines.append(f"- row count: {len(variant_rows)}")
         lines.append("")
 
-    return "\n".join(lines)
-
-
-def write_markdown(content: str) -> None:
-    MD_PATH.write_text(content, encoding="utf-8")
+    return "\n".join(lines).strip() + "\n"
 
 
 def main() -> None:
     rows = build_rows()
     write_csv(rows)
-    write_markdown(build_markdown(rows))
-    print(f"wrote {CSV_PATH}")
-    print(f"wrote {MD_PATH}")
+    MD_PATH.write_text(build_markdown(rows), encoding="utf-8")
     print(f"rows={len(rows)}")
+    print(CSV_PATH)
+    print(MD_PATH)
 
 
 if __name__ == "__main__":

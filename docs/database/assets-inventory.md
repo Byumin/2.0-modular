@@ -6,8 +6,12 @@
 ### Runtime / Root
 - `modular.db`
   - 현재 코드 기준 기본 런타임 SQLite DB
+  - `scripts/create_modular_db.py`는 기본적으로 기존 파일을 덮어쓰지 않으며, 재생성이 필요할 때만 `--force`를 명시해서 사용해야 함
 - `app.db`
   - 과거 런타임 기준 또는 보조 자산으로 남아 있는 파일
+- `legacy_parent.db`
+  - 구 `parent_*` 테이블 실험/참고용으로만 사용하는 레거시 DB 경로
+  - 현재 운영 코드에서는 사용하지 않음
 - `modular.mwb`
   - MySQL Workbench 모델 파일로 보이는 참고 자산
 
@@ -51,6 +55,8 @@
 
 - 운영 기준 DB:
   - `modular.db`
+- 레거시 parent 참고 DB:
+  - `legacy_parent.db`
 - 참고 스키마/모델링 자산:
   - `modular.mwb`
   - `app/modular.mwb`

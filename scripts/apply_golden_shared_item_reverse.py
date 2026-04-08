@@ -10,7 +10,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DB_PATH = ROOT / "app.db"
+DB_PATH = ROOT / "modular.db"
 
 
 @dataclass(frozen=True)
@@ -25,20 +25,24 @@ class FacetPair:
 def load_golden_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         """
-        SELECT test_id, sub_test_json, scale_struct
-        FROM parent_scale
-        WHERE test_id = 'GOLDEN'
-        ORDER BY sub_test_json
+        SELECT s."test.id" AS test_id, sc.condition AS sub_test_json, s.struct AS scale_struct, s."condition.id" AS condition_id
+        FROM SCALE s
+        JOIN SCALECONDITION sc
+          ON sc.id = s."condition.id"
+         AND sc."test.id" = s."test.id"
+        WHERE s."test.id" = 'GOLDEN'
+        ORDER BY s."condition.id"
         """
     ).fetchall()
 
 
 def determine_variant_label(sub_test_json: str) -> str:
     raw = json.loads(sub_test_json)
-    if "age_range" in raw:
-        return "adult"
-    if "school_age_range" in raw:
-        return "child"
+    age_range = raw.get("age_range")
+    if isinstance(age_range, dict):
+        start = age_range.get("start_inclusive")
+        if isinstance(start, list) and start and isinstance(start[0], int):
+            return "adult" if start[0] >= 18 else "child"
     return "unknown"
 
 
@@ -156,19 +160,19 @@ def main() -> None:
             continue
         conn.execute(
             """
-            UPDATE parent_scale
-            SET scale_struct = ?
-            WHERE test_id = ? AND sub_test_json = ?
+            UPDATE SCALE
+            SET struct = ?
+            WHERE "test.id" = ? AND "condition.id" = ?
             """,
             (
                 json.dumps(updated_scale_struct, ensure_ascii=False),
                 row["test_id"],
-                row["sub_test_json"],
+                row["condition_id"],
             ),
         )
         total_changed_items += changed_item_count
         print(
-            f"updated variant={variant_label} test_id={row['test_id']} changed_shared_items={changed_item_count}"
+            f"updated variant={variant_label} test_id={row['test_id']} condition_id={row['condition_id']} changed_shared_items={changed_item_count}"
         )
 
     conn.commit()
