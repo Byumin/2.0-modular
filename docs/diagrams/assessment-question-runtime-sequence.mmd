@@ -1,0 +1,84 @@
+sequenceDiagram
+    autonumber
+    actor U as User(실시자)
+    participant B as Browser\nstatic/assessment-custom.js
+    participant R as Router\napp/router/assessment_link_router.py\nvalidate_profile
+    participant S as Service\napp/services/admin/assessment_links.py\nvalidate_custom_test_profile_by_access_link
+    participant CR as Repo\napp/repositories/custom_test_repository.py
+    participant CL as Service\napp/services/admin/clients.py\nfind_assigned_client_for_profile
+    participant CLR as Repo\napp/repositories/client_repository.py
+    participant AL as Service\napp/services/admin/assessment_links.py\nbuild_custom_assessment_question_payload
+    participant PR as Repo\napp/repositories/parent_test_repository.py\nfetch_parent_item_bundle
+
+    rect rgb(240,248,255)
+    Note over U,B: 1) 인적사항 제출\n입력: POST /api/assessment-links/{access_token}/validate-profile\nbody 예시: { profile: { gender, birth_date, school_age } }
+    U->>B: 다음 버튼 클릭
+    B->>R: POST /api/assessment-links/{token}/validate-profile\n{ profile }
+    R->>S: validate_custom_test_profile_by_access_link(db, token, payload.profile)
+    end
+
+    rect rgb(245,255,245)
+    Note over S,CL: 2) access token / custom_test / 배정 내담자 검증
+    S->>CR: get_active_access_link_by_token(token)
+    CR-->>S: AccessLink | None
+    alt link 없음
+        S-->>R: HTTP 404\ndetail='유효하지 않은 검사 URL입니다.'
+        R-->>B: 404 JSON
+        B-->>U: 에러 메시지 표시
+    else link 존재
+        S->>CR: get_custom_test_by_id_and_admin(link.admin_custom_test_id, link.admin_user_id)
+        CR-->>S: AdminCustomTest | None
+        alt custom_test 없음
+            S-->>R: HTTP 404\ndetail='검사를 찾을 수 없습니다.'
+            R-->>B: 404 JSON
+            B-->>U: 에러 메시지 표시
+        else custom_test 존재
+            S->>CL: find_assigned_client_for_profile(db, admin_user_id, custom_test.id, profile)
+            CL->>CLR: get_assigned_clients_for_profile(admin_user_id, custom_test.id)
+            CLR-->>CL: assigned_clients[]
+            CL-->>S: (matched_client, error_message)
+            alt 배정 불일치
+                S-->>R: HTTP 403\ndetail=error_message
+                R-->>B: 403 JSON
+                B-->>U: 배정 불일치 메시지 표시
+            else 배정 일치
+                S->>AL: build_custom_assessment_question_payload(custom_test, profile)
+            end
+        end
+    end
+    end
+
+    rect rgb(255,250,240)
+    Note over AL,PR: 3) profile 기준 active variant 결정 + parent_* bundle 조회
+    AL->>AL: load_custom_test_configs(custom_test)
+    AL->>AL: _build_custom_assessment_profile_meta(custom_test, test_configs)
+    AL->>AL: _resolve_active_variants(test_configs, profile)
+    AL->>AL: _select_sub_test_variant_for_profile(variants, profile)
+    AL->>AL: _profile_matches_sub_test(profile, sub_test_json)
+    loop resolved_variants 각 구간 반복
+        AL->>PR: fetch_parent_item_bundle(test_id, sub_test_json)
+        PR-->>AL: row\n{ item_json, item_meta_json, scale_struct,\nitem_template, render_rules_json }
+        AL->>AL: _load_question_bundle(test_id, sub_test_json)
+        AL->>AL: json.loads(item_json / item_meta_json / scale_struct)
+        AL->>AL: _build_item_text_and_matrix_meta(item_json)
+        AL->>AL: _parse_item_response_options(item_template)
+        AL->>AL: _parse_render_rules(render_rules_json)
+    end
+    end
+
+    rect rgb(245,255,245)
+    Note over AL,B: 4) 문항/척도/파트 조립 후 브라우저 렌더
+    loop resolved_variants 각 구간 반복
+        AL->>AL: _build_variant_items_and_scales(test_id, sub_test_json, selected_scale_codes, bundle, custom_test.custom_test_name)
+        Note over AL: item.id 생성 규칙\n'{test_id}::{sub_test_json}::{item_id}'
+        AL->>AL: _resolve_scale_item_ids(scale_struct, selected_codes)
+        AL->>AL: _append_items_as_render_parts(parts_buffer, items, response_options, selected_sub_test)
+    end
+    AL->>AL: _assemble_parts(parts_buffer)
+    AL-->>S: assessment_payload\n{ items[], selected_scales[], selected_sub_tests[],\nparts[], item_count, response_options, part_count }
+    S-->>R: { message, assessment_payload }
+    R-->>B: 200 OK
+    B->>B: applyAssessmentPayload(payload)
+    B->>B: renderQuestionCards(...)
+    B-->>U: 실시 구간에 맞는 문항 화면 표시
+    end

@@ -5,11 +5,13 @@ import secrets
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.db.models import AdminUser
-from app.db.session import SessionLocal
-from app.repositories.auth_repository import create_admin_user, get_admin_by_id, get_admin_by_username
+from app.services.admin.modular_auth import (
+    ensure_default_modular_admin,
+    get_modular_current_admin,
+    verify_modular_admin_login,
+)
 
-ADMIN_SESSIONS: dict[str, int] = {}
+ADMIN_SESSIONS: dict[str, str] = {}
 
 
 def make_password_hash(raw: str) -> str:
@@ -19,14 +21,10 @@ def make_password_hash(raw: str) -> str:
 def seed_default_admin() -> None:
     default_id = os.getenv("DEFAULT_ADMIN_ID", "admin")
     default_pw = os.getenv("DEFAULT_ADMIN_PW", "admin1234")
-    with SessionLocal() as db:
-        exists = get_admin_by_username(db, default_id)
-        if exists is not None:
-            return
-        create_admin_user(db, username=default_id, password_hash=make_password_hash(default_pw))
+    ensure_default_modular_admin(default_id, default_pw)
 
 
-def get_current_admin(db: Session, admin_session: str | None) -> AdminUser:
+def get_current_admin(db: Session, admin_session: str | None):
     if not admin_session or admin_session not in ADMIN_SESSIONS:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -34,7 +32,7 @@ def get_current_admin(db: Session, admin_session: str | None) -> AdminUser:
         )
 
     admin_id = ADMIN_SESSIONS[admin_session]
-    admin = get_admin_by_id(db, admin_id)
+    admin = get_modular_current_admin(admin_id)
     if admin is None:
         ADMIN_SESSIONS.pop(admin_session, None)
         raise HTTPException(
@@ -45,8 +43,8 @@ def get_current_admin(db: Session, admin_session: str | None) -> AdminUser:
 
 
 def admin_login(db: Session, admin_id: str, admin_pw: str) -> dict[str, str]:
-    admin = get_admin_by_username(db, admin_id)
-    if admin is None or admin.password_hash != make_password_hash(admin_pw):
+    admin = verify_modular_admin_login(admin_id, admin_pw)
+    if admin is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="관리자 ID 또는 비밀번호가 올바르지 않습니다.",
