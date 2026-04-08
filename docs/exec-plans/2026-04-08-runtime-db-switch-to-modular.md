@@ -57,3 +57,10 @@
 
 ### Next Time
 - 런타임 기준 파일을 바꾸는 작업에서는 스크립트/노트북/문서까지 한 번에 검색해서 기준과 예외를 명확히 남긴다
+
+## Related Documents
+- [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
+- [docs/exec-plans/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/README.md)
+- [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)
+- [docs/database/runtime-db.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/runtime-db.md)
+- [QUALIT_SCORE.md](/mnt/c/Users/user/workspace/2.0-modular/QUALIT_SCORE.md)

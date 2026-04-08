@@ -7,6 +7,10 @@
 - `app/db/session.py`
 - `DATABASE_URL = "sqlite:///./modular.db"`
 
+## Single DB Rule
+앞으로 운영 기준 DB 연결은 루트 `modular.db` 하나로 통일한다.
+별도 `.db` 파일이 있어도 실제 운영 연결과 혼용하지 않는다.
+
 ## Runtime Code Path
 실행 시 DB 관련 기준 코드는 아래 순서로 본다.
 
@@ -39,3 +43,11 @@
 ## Caution
 - DB 구조를 설명할 때는 `modular.db`를 현재 운영 DB 기준으로 본다.
 - 과거 `app.db` 기준 문서나 스크립트가 남아 있을 수 있으므로 실제 판단은 `app/db/*` 코드와 함께 본다.
+- 인증/관리자 검증처럼 우회 경로로 SQLite를 직접 여는 코드도 같은 `modular.db` 기준을 따라야 한다.
+
+## Related Documents
+- [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)
+- [docs/database/schema-overview.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/schema-overview.md)
+- [docs/database/assets-inventory.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/assets-inventory.md)
+- [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)
+- [docs/features/admin-auth.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/admin-auth.md)

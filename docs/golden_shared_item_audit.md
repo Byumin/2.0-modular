@@ -78,6 +78,12 @@
 | E/I | 44 | E3 | I3 | 내 주변 사람들과 함께 일하는 곳이다. | 혼자서 일하는 곳이다. | no |
 | E/I | 57 | E3 | I3 | 평화롭고 조용하며 많은 일들이 일어나지 않는 곳이다. | 볼거리와 할 것들이 많은 곳이다. | no |
 | E/I | 66 | E3 | I3 | 다른 팬들과 함께 경기장에서 보는 것이 좋다. | 텔레비전으로 집에서 보는 것이 좋다. | no |
+
+## Related Documents
+- [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
+- [docs/golden_scale_audit.md](/mnt/c/Users/user/workspace/2.0-modular/docs/golden_scale_audit.md)
+- [docs/features/scoring-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/scoring-flow.md)
+- [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)
 | E/I | 79 | E3 | I3 | 전혀 나 같지 않음 | 매우 나 같음 | no |
 | E/I | 102 | E3 | I3 | 전혀 나 같지 않음 | 매우 나 같음 | no |
 | E/I | 104 | E3 | I3 | 전혀 나 같지 않음 | 매우 나 같음 | no |

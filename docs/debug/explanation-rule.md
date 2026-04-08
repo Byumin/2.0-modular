@@ -36,3 +36,11 @@
 - 사용자가 특정 클래스, 함수, 필드, 라우터를 물으면 그 정의 위치뿐 아니라 실제 호출 위치도 함께 적는다.
 - `파일명:줄번호` 같은 일반 텍스트 표기만 쓰지 않는다. 반드시 `[라벨](/absolute/path/to/file.py#L123)` 형식의 클릭 가능한 링크로 적는다.
 - 줄 번호를 언급할 때는 가능한 한 매번 링크 형식을 유지하고, 사용자가 바로 해당 줄로 이동할 수 없게 만드는 축약 표기는 피한다.
+
+## Related Documents
+- [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
+- [AGENTS.md](/mnt/c/Users/user/workspace/2.0-modular/AGENTS.md)
+- [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)
+- [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
+- [docs/diagrams/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/diagrams/README.md)
+- [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)

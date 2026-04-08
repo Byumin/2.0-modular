@@ -64,3 +64,10 @@
 ## Notes
 - 클라이언트 기능은 단순 주소록이 아니라 검사 운영과 연결된 중심 도메인이다.
 - 배정 정보, 제출 이력, 채점 결과, 리포트 컨텍스트가 함께 엮여 있다.
+
+## Related Documents
+- [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
+- [docs/features/assessment-link-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/assessment-link-flow.md)
+- [docs/features/dashboard.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/dashboard.md)
+- [docs/features/scoring-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/scoring-flow.md)
+- [docs/database/schema-overview.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/schema-overview.md)

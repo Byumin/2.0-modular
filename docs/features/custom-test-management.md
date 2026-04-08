@@ -53,3 +53,10 @@
 ## Notes
 - 검사 생성 로직은 단순 CRUD보다 구성 정규화가 중요하다.
 - 문항 구간, 척도 코드, 추가 인적사항 필드를 함께 보지 않으면 동작을 잘못 이해하기 쉽다.
+
+## Related Documents
+- [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
+- [docs/features/assessment-link-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/assessment-link-flow.md)
+- [docs/features/dashboard.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/dashboard.md)
+- [docs/database/schema-overview.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/schema-overview.md)
+- [docs/diagrams/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/diagrams/README.md)

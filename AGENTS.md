@@ -53,6 +53,11 @@
 사용자 요청을 처리할 때 현재 프로젝트의 기본 기준점은 `app/main.py`를 중심으로 한 모듈형 구조다.
 동일하거나 유사한 기능이 루트 `main.py`에도 남아 있어도, 특별히 사용자가 해당 파일을 지정하지 않는 한 현재 운영 기준은 `app/` 하위 구조를 우선해서 해석한다.
 
+## Database Single Source Rule
+앞으로 이 프로젝트의 모든 DB 연결 기준은 루트 `modular.db` 하나로 통일한다.
+새 코드, 기존 코드 수정, 스크립트, 인증 로직, 문서 설명 모두 기본 기준은 동일하게 `modular.db`여야 한다.
+별도 백업/테스트/참고 자산이 필요하더라도, 그것을 실제 운영 연결 기준처럼 섞어 쓰지 않는다.
+
 ## Explanation Rule
 기능 설명, 디버깅 흐름 추적, 소스 정리 전 구조 분석이 필요하면 상세 규칙은 `docs/debug/explanation-rule.md`를 먼저 확인하고 그 기준을 따른다.
 루트 `AGENTS.md`에는 요약 규칙만 두고, 상세 분석/설명 규칙은 디버깅 문서로 분리해서 관리한다.
@@ -76,3 +81,11 @@
 
 ## Debug Docs
 - `docs/debug/explanation-rule.md`: 기능 설명, 호출 흐름 추적, 디버깅/분석 응답 작성 규칙
+
+## Related Documents
+- [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
+- [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)
+- [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)
+- [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
+- [docs/exec-plans/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/README.md)
+- [QUALIT_SCORE.md](/mnt/c/Users/user/workspace/2.0-modular/QUALIT_SCORE.md)

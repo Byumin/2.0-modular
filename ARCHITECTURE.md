@@ -146,10 +146,16 @@ DB 생성, E2E 점검, 화면 캡처, 검증 스크립트를 둔다.
 
 ## Data and State
 - DB는 SQLite 기반으로 사용된다.
+- 운영 기준 DB 연결은 루트 `modular.db` 하나로 통일한다.
 - ORM은 SQLAlchemy를 사용한다.
 - 요청/응답 검증은 Pydantic이 담당한다.
 - 관리자 인증 상태는 `admin_session` 쿠키로 전달된다.
 - 정적 리소스는 FastAPI `StaticFiles`로 서빙한다.
+
+## Database Rule
+- 애플리케이션 런타임 DB 기준은 루트 `modular.db`다.
+- 인증, 세션 검증 보조 조회, 일반 서비스, 스크립트, 문서 모두 이 기준에 맞춰 정리하는 것을 원칙으로 한다.
+- `app.db`, `docs/*.db`, `.mwb`, `.sql`은 운영 기준 DB와 혼동되지 않게 명확히 구분한다.
 
 ## Startup Responsibilities
 애플리케이션 startup 시 다음 작업을 수행한다.
@@ -179,5 +185,10 @@ DB 생성, E2E 점검, 화면 캡처, 검증 스크립트를 둔다.
 7. 구조 설명이나 추적 규칙이 필요하면 `docs/`에 문서를 보강한다.
 
 ## Related Documents
-- `AGENTS.md`: 작업 시작 전 확인할 저장소 공통 규칙
-- `docs/debug/explanation-rule.md`: 기능 설명, 디버깅, 호출 흐름 추적 규칙
+- [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
+- [AGENTS.md](/mnt/c/Users/user/workspace/2.0-modular/AGENTS.md)
+- [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
+- [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)
+- [docs/design/design-system.md](/mnt/c/Users/user/workspace/2.0-modular/docs/design/design-system.md)
+- [docs/debug/explanation-rule.md](/mnt/c/Users/user/workspace/2.0-modular/docs/debug/explanation-rule.md)
+- [QUALIT_SCORE.md](/mnt/c/Users/user/workspace/2.0-modular/QUALIT_SCORE.md)
