@@ -207,6 +207,7 @@ UI 디버깅이나 수정 작업은 아래 순서를 기본으로 한다.
 - [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
 - [AGENTS.md](/mnt/c/Users/user/workspace/2.0-modular/AGENTS.md)
 - [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)
+- [claude/README.md](/mnt/c/Users/user/workspace/2.0-modular/claude/README.md)
 - [docs/design/design-system.md](/mnt/c/Users/user/workspace/2.0-modular/docs/design/design-system.md)
 - [docs/exec-plans/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/README.md)
 - [scripts/README_CAPTURE.md](/mnt/c/Users/user/workspace/2.0-modular/scripts/README_CAPTURE.md)

@@ -1,8 +1,10 @@
 .venv/
+.venv-claude/
 playwright-report/
 .playwright-browsers/
 test-results/
 artifacts/screenshots/
+claude/reviews/runs/
 node_modules/.bin/playwright
 node_modules/.bin/playwright-core
 node_modules/playwright/

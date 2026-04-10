@@ -2,6 +2,9 @@ import json
 from types import SimpleNamespace
 from typing import Any
 
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
 from app.db.session import engine
 
 
@@ -131,13 +134,19 @@ def _build_render_rules(items: list[dict[str, Any]]) -> str:
     return json.dumps(rules, ensure_ascii=False)
 
 
-def _load_variant_rows(test_id: str) -> list[dict[str, Any]]:
+def _execute_sql(query: str, params: dict[str, Any], db: Session | None = None):
+    if db is not None:
+        return db.execute(text(query), params)
+    with engine.connect() as conn:
+        return conn.execute(text(query), params)
+
+
+def _load_variant_rows(test_id: str, db: Session | None = None) -> list[dict[str, Any]]:
     normalized = _normalize_test_id(test_id)
     if not normalized:
         return []
 
-    with engine.connect() as conn:
-        result = conn.exec_driver_sql(
+    result = _execute_sql(
             """
             SELECT
                 s."test.id" AS test_id,
@@ -149,21 +158,21 @@ def _load_variant_rows(test_id: str) -> list[dict[str, Any]]:
             LEFT JOIN SCALECONDITION sc
               ON sc.id = s."condition.id"
              AND sc."test.id" = s."test.id"
-            WHERE s."test.id" = ?
+            WHERE s."test.id" = :test_id
             ORDER BY s."condition.id"
             """,
-            (normalized,),
+            {"test_id": normalized},
+            db,
         )
-        return [dict(row._mapping) for row in result]
+    return [dict(row._mapping) for row in result]
 
 
-def _load_items_by_variant(test_id: str) -> dict[str, list[dict[str, Any]]]:
+def _load_items_by_variant(test_id: str, db: Session | None = None) -> dict[str, list[dict[str, Any]]]:
     normalized = _normalize_test_id(test_id)
     if not normalized:
         return {}
 
-    with engine.connect() as conn:
-        result = conn.exec_driver_sql(
+    result = _execute_sql(
             """
             SELECT
                 i.id AS item_id,
@@ -182,16 +191,17 @@ def _load_items_by_variant(test_id: str) -> dict[str, list[dict[str, Any]]]:
               ON c.id = i."choice.id"
             LEFT JOIN TEMPLATE t
               ON t.id = i.template_id
-            WHERE i."test.id" = ?
+            WHERE i."test.id" = :test_id
             ORDER BY i."condition.id", CAST(i.no AS INTEGER), i.no
             """,
-            (normalized,),
+            {"test_id": normalized},
+            db,
         )
-        grouped: dict[str, list[dict[str, Any]]] = {}
-        for row in result:
-            mapping = dict(row._mapping)
-            grouped.setdefault(str(mapping["condition_id"]), []).append(mapping)
-        return grouped
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in result:
+        mapping = dict(row._mapping)
+        grouped.setdefault(str(mapping["condition_id"]), []).append(mapping)
+    return grouped
 
 
 def _build_variant_record(
@@ -214,9 +224,9 @@ def _build_variant_record(
     )
 
 
-def _build_records_for_test(test_id: str, *, grouped_item_json: bool) -> list[SimpleNamespace]:
-    variant_rows = _load_variant_rows(test_id)
-    items_by_variant = _load_items_by_variant(test_id)
+def _build_records_for_test(test_id: str, *, grouped_item_json: bool, db: Session | None = None) -> list[SimpleNamespace]:
+    variant_rows = _load_variant_rows(test_id, db)
+    items_by_variant = _load_items_by_variant(test_id, db)
     records: list[SimpleNamespace] = []
 
     for variant in variant_rows:
@@ -242,8 +252,8 @@ def _build_records_for_test(test_id: str, *, grouped_item_json: bool) -> list[Si
     return records
 
 
-def fetch_parent_scale_rows_by_test(test_id: str):
-    rows = _load_variant_rows(test_id)
+def fetch_parent_scale_rows_by_test(test_id: str, db: Session | None = None):
+    rows = _load_variant_rows(test_id, db)
     return [
         SimpleNamespace(
             test_id=str(row.get("test_id") or "").strip(),
@@ -255,33 +265,33 @@ def fetch_parent_scale_rows_by_test(test_id: str):
     ]
 
 
-def fetch_parent_scale_struct(test_id: str, sub_test_json: str):
+def fetch_parent_scale_struct(test_id: str, sub_test_json: str, db: Session | None = None):
     normalized = _normalize_test_id(test_id)
     target_json = str(sub_test_json or "").strip()
-    for row in _load_variant_rows(normalized):
+    for row in _load_variant_rows(normalized, db):
         if str(row.get("sub_test_json") or "").strip() != target_json:
             continue
         return SimpleNamespace(scale_struct=str(row.get("scale_struct") or "").strip())
     return None
 
 
-def fetch_parent_catalog_rows():
+def fetch_parent_catalog_rows(db: Session | None = None):
     records: list[SimpleNamespace] = []
-    with engine.connect() as conn:
-        test_ids = [
-            str(row[0]).strip()
-            for row in conn.exec_driver_sql('SELECT id FROM TEST ORDER BY id').fetchall()
-            if row and str(row[0]).strip()
-        ]
+    result = _execute_sql('SELECT id FROM TEST ORDER BY id', {}, db)
+    test_ids = [
+        str(row[0]).strip()
+        for row in result.fetchall()
+        if row and str(row[0]).strip()
+    ]
     for test_id in test_ids:
-        records.extend(_build_records_for_test(test_id, grouped_item_json=False))
+        records.extend(_build_records_for_test(test_id, grouped_item_json=False, db=db))
     return records
 
 
-def fetch_parent_item_bundle(test_id: str, sub_test_json: str):
+def fetch_parent_item_bundle(test_id: str, sub_test_json: str, db: Session | None = None):
     normalized = _normalize_test_id(test_id)
     target_json = str(sub_test_json or "").strip()
-    for record in _build_records_for_test(normalized, grouped_item_json=True):
+    for record in _build_records_for_test(normalized, grouped_item_json=True, db=db):
         if str(record.sub_test_json).strip() == target_json:
             return record
     return None

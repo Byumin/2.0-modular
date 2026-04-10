@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class AdditionalProfileFieldIn(BaseModel): # 추가 인적사항 필드 스키마
@@ -19,10 +19,20 @@ class AdditionalProfileFieldIn(BaseModel): # 추가 인적사항 필드 스키�
     placeholder: str = Field(default="", max_length=120)
     options: list[str] = Field(default_factory=list)
 
+    @model_validator(mode="after")
+    def validate_options_for_choice_types(self):
+        if self.type not in {"select", "multi_select"}:
+            return self
+        normalized_options = [str(item).strip() for item in self.options if str(item).strip()]
+        if not normalized_options:
+            raise ValueError("select/multi_select type requires at least one option")
+        return self
+
 
 class CreateCustomTestConfigIn(BaseModel):
     test_id: str = Field(min_length=1, max_length=50)
     selected_scale_codes: list[str] = Field(min_length=1)
+    excluded_sub_test_jsons: list[str] = Field(default_factory=list)
 
 
 class CreateCustomTestBatchIn(BaseModel):
@@ -31,10 +41,8 @@ class CreateCustomTestBatchIn(BaseModel):
     additional_profile_fields: list[AdditionalProfileFieldIn] = Field(default_factory=list)
 
 
-class UpdateCustomTestIn(BaseModel):
+class UpdateCustomTestNameIn(BaseModel):
     custom_test_name: str = Field(min_length=1, max_length=120)
-    selected_scale_codes: list[str] = Field(default_factory=list)
-    test_configs: list[CreateCustomTestConfigIn] = Field(default_factory=list)
 
 
 class BulkDeleteCustomTestsIn(BaseModel):

@@ -2371,6 +2371,13 @@ body[data-page='admin-client-result'] .top-actions {
   color: #5f6673;
 }
 
+.subtle-note {
+  margin: -8px 0 14px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #606d7b;
+}
+
 .detail-summary-grid {
   grid-template-columns: minmax(0, 0.65fr) minmax(0, 0.9fr) minmax(0, 1.45fr);
 }
@@ -2677,6 +2684,47 @@ body[data-page='admin-client-result'] .top-actions {
   overflow-y: auto;
   padding-right: 6px;
   align-content: start;
+}
+
+.variant-confirm-modal {
+  width: min(720px, 92vw);
+}
+
+.variant-confirm-form {
+  gap: 14px;
+}
+
+.variant-confirm-lead {
+  margin: 0;
+  color: #394150;
+  line-height: 1.55;
+}
+
+.variant-confirm-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.variant-confirm-item {
+  list-style: none;
+  border: 1px solid #dfe6ef;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fcfdff 0%, #f5f8fc 100%);
+  padding: 12px 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.variant-confirm-item strong {
+  color: #243041;
+}
+
+.variant-confirm-item .variant-confirm-meta {
+  color: #5e6775;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .create-test-form .check-item {

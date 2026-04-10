@@ -172,6 +172,25 @@
             </div>
           </section>
         </div>
+
+        <div id="variantConfirmModal" class="modal-backdrop hidden" aria-hidden="true">
+          <section class="modal-card variant-confirm-modal" role="dialog" aria-modal="true" aria-label="실시구간 제외 확인">
+            <div class="panel-title-row">
+              <h2>실시구간 제외 확인</h2>
+            </div>
+            <div class="form variant-confirm-form">
+              <p class="variant-confirm-lead">
+                선택한 척도가 없는 실시구간이 있습니다. 아래 실시구간을 제외하고 검사를 생성할지 확인해주세요.
+              </p>
+              <ul id="variantConfirmList" class="simple-list variant-confirm-list"></ul>
+              <p id="variantConfirmMessage" class="message" aria-live="polite"></p>
+              <div class="row-actions">
+                <button type="button" id="variantConfirmProceedBtn" class="uniform-btn primary-action">해당 실시구간 제외 후 생성</button>
+                <button type="button" id="variantConfirmCancelBtn" class="outline-btn uniform-btn">돌아가기</button>
+              </div>
+            </div>
+          </section>
+        </div>
       </section>
     </main>
 

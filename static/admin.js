@@ -1225,6 +1225,11 @@ async function initCreatePage() {
   const manageSelectAll = document.getElementById('manageSelectAll');
   const createTestModal = document.getElementById('createTestModal');
   const closeCreateModalBtn = document.getElementById('closeCreateModalBtn');
+  const variantConfirmModal = document.getElementById('variantConfirmModal');
+  const variantConfirmList = document.getElementById('variantConfirmList');
+  const variantConfirmMessage = document.getElementById('variantConfirmMessage');
+  const variantConfirmProceedBtn = document.getElementById('variantConfirmProceedBtn');
+  const variantConfirmCancelBtn = document.getElementById('variantConfirmCancelBtn');
   const managedTestsList = document.getElementById('managedTestsList');
   const managedTestsEmpty = document.getElementById('managedTestsEmpty');
 
@@ -1250,6 +1255,7 @@ async function initCreatePage() {
   let managedItems = [];
   let customFields = [];
   let customFieldSeq = 1;
+  let pendingCreatePayload = null;
   const selectedManagedTestIds = new Set();
   const selectedRootSubIdxByTest = new Map();
   let modalSelectedSubIdx = 0;
@@ -1637,6 +1643,8 @@ async function initCreatePage() {
   });
 
   function openCreateModal() {
+    pendingCreatePayload = null;
+    closeVariantConfirmModal();
     message.textContent = '';
     message.className = 'message';
     renderCustomFieldEditors();
@@ -1645,10 +1653,51 @@ async function initCreatePage() {
   }
 
   function closeCreateModal() {
+    pendingCreatePayload = null;
+    closeVariantConfirmModal();
     message.textContent = '';
     message.className = 'message';
     createTestModal.classList.add('hidden');
     createTestModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function openVariantConfirmModal(items) {
+    variantConfirmList.innerHTML = items.map((item) => `
+      <li class="variant-confirm-item">
+        <strong>${escapeHtml(item.label)}</strong>
+        <div class="variant-confirm-meta">선택한 척도가 없어 이 실시구간은 생성 대상에서 제외됩니다.</div>
+        <div class="variant-confirm-meta">가능 척도: ${escapeHtml((item.available_scale_codes || []).join(', ') || '없음')}</div>
+      </li>
+    `).join('');
+    variantConfirmMessage.textContent = '';
+    variantConfirmMessage.className = 'message';
+    variantConfirmModal.classList.remove('hidden');
+    variantConfirmModal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeVariantConfirmModal() {
+    variantConfirmList.innerHTML = '';
+    variantConfirmMessage.textContent = '';
+    variantConfirmMessage.className = 'message';
+    variantConfirmModal.classList.add('hidden');
+    variantConfirmModal.setAttribute('aria-hidden', 'true');
+  }
+
+  async function submitCreatePayload(payload) {
+    await api('/api/admin/custom-tests', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    createBtn.disabled = false;
+    createBtn.textContent = '생성';
+    form.reset();
+    scaleListEl.innerHTML = '';
+    customFields = [];
+    renderCustomFieldEditors();
+    closeVariantConfirmModal();
+    closeCreateModal();
+    await refreshManagedTests();
   }
 
   toggleCreateFormBtn.addEventListener('click', openCreateModal);
@@ -1661,6 +1710,44 @@ async function initCreatePage() {
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !createTestModal.classList.contains('hidden')) {
       closeCreateModal();
+      return;
+    }
+    if (event.key === 'Escape' && !variantConfirmModal.classList.contains('hidden')) {
+      pendingCreatePayload = null;
+      closeVariantConfirmModal();
+    }
+  });
+
+  variantConfirmCancelBtn.addEventListener('click', () => {
+    pendingCreatePayload = null;
+    closeVariantConfirmModal();
+  });
+
+  variantConfirmProceedBtn.addEventListener('click', async () => {
+    if (!pendingCreatePayload) {
+      closeVariantConfirmModal();
+      return;
+    }
+    variantConfirmProceedBtn.disabled = true;
+    variantConfirmCancelBtn.disabled = true;
+    try {
+      await submitCreatePayload(pendingCreatePayload);
+      pendingCreatePayload = null;
+    } catch (error) {
+      variantConfirmMessage.textContent = error.message;
+      variantConfirmMessage.className = 'message error';
+      createBtn.disabled = false;
+      createBtn.textContent = '생성';
+    } finally {
+      variantConfirmProceedBtn.disabled = false;
+      variantConfirmCancelBtn.disabled = false;
+    }
+  });
+
+  variantConfirmModal.addEventListener('click', (event) => {
+    if (event.target === variantConfirmModal) {
+      pendingCreatePayload = null;
+      closeVariantConfirmModal();
     }
   });
 
@@ -1770,6 +1857,84 @@ async function initCreatePage() {
 
   function collectScalesForTests(testIds) {
     return collectScaleGroupsForTests(testIds).flatMap((group) => group.scales);
+  }
+
+  function buildVariantLabel(testId, subTestJson) {
+    return `${testId} / ${extractEligibilityText(subTestJson) || '알 수 없는 실시구간'}`;
+  }
+
+  function buildCreateRequestPayload() {
+    const selectedTests = selectedTestIds();
+    if (!selectedTests.length) {
+      throw new Error('최소 1개 이상의 검사를 선택해주세요.');
+    }
+
+    const selectedScaleKeys = [...form.querySelectorAll('input[name="selected_scale_key"]:checked')].map((n) => n.value);
+    if (!selectedScaleKeys.length) {
+      throw new Error('최소 1개 이상의 척도를 선택해주세요.');
+    }
+
+    const scalePool = collectScalesForTests(selectedTests);
+    const scaleMap = new Map(scalePool.map((s) => [s.key, s]));
+    const baseName = form.custom_test_name.value.trim();
+    if (!baseName) {
+      throw new Error('검사 이름을 입력해주세요.');
+    }
+
+    let normalizedCustomFields = [];
+    try {
+      normalizedCustomFields = sanitizeAndValidateCustomFields();
+    } catch (error) {
+      throw new Error(error.message);
+    }
+
+    const missingVariants = [];
+    const test_configs = selectedTests
+      .map((testId) => {
+        const selectedScales = selectedScaleKeys
+          .map((key) => scaleMap.get(key))
+          .filter((item) => item && item.test_id === testId);
+        const selectedCodes = [...new Set(selectedScales.map((item) => item.code))];
+        const test = catalog.tests.find((item) => item.test_id === testId);
+        const excludedSubTestJsons = [];
+
+        (test?.sub_tests || []).forEach((subTest) => {
+          const availableCodes = [...new Set((subTest.scales || []).map((scale) => String(scale.code || '').trim()).filter(Boolean))];
+          const matchedCodes = selectedCodes.filter((code) => availableCodes.includes(code));
+          if (matchedCodes.length === 0) {
+            excludedSubTestJsons.push(subTest.sub_test_json);
+            missingVariants.push({
+              test_id: testId,
+              label: buildVariantLabel(testId, subTest.sub_test_json),
+              available_scale_codes: availableCodes,
+            });
+          }
+        });
+
+        if ((test?.sub_tests || []).length > 0 && excludedSubTestJsons.length === (test?.sub_tests || []).length) {
+          throw new Error(`${testId}: 선택한 척도로 생성 가능한 실시구간이 없습니다.`);
+        }
+
+        return {
+          test_id: testId,
+          selected_scale_codes: selectedCodes,
+          excluded_sub_test_jsons: excludedSubTestJsons,
+        };
+      })
+      .filter((config) => config.selected_scale_codes.length > 0);
+
+    if (!test_configs.length) {
+      throw new Error('검사별로 최소 1개 이상의 척도를 선택해주세요.');
+    }
+
+    return {
+      requestBody: {
+        custom_test_name: baseName,
+        test_configs,
+        additional_profile_fields: normalizedCustomFields,
+      },
+      missingVariants,
+    };
   }
 
   function snapshotScaleTreeState() {
@@ -2210,75 +2375,19 @@ async function initCreatePage() {
     event.preventDefault();
     message.textContent = '';
 
-    const selectedTests = selectedTestIds();
-    if (!selectedTests.length) {
-      message.textContent = '최소 1개 이상의 검사를 선택해주세요.';
-      message.className = 'message error';
-      return;
-    }
-
-    const selectedScaleKeys = [...form.querySelectorAll('input[name="selected_scale_key"]:checked')].map((n) => n.value);
-    if (!selectedScaleKeys.length) {
-      message.textContent = '최소 1개 이상의 척도를 선택해주세요.';
-      message.className = 'message error';
-      return;
-    }
-    const scalePool = collectScalesForTests(selectedTests);
-    const scaleMap = new Map(scalePool.map((s) => [s.key, s]));
-
-    const baseName = form.custom_test_name.value.trim();
-    if (!baseName) {
-      message.textContent = '검사 이름을 입력해주세요.';
-      message.className = 'message error';
-      return;
-    }
-
-    let normalizedCustomFields = [];
-    try {
-      normalizedCustomFields = sanitizeAndValidateCustomFields();
-    } catch (error) {
-      message.textContent = error.message;
-      message.className = 'message error';
-      return;
-    }
-
     createBtn.disabled = true;
     createBtn.textContent = '생성 중...';
     try {
-      const test_configs = selectedTests
-        .map((testId) => {
-          const selectedScales = selectedScaleKeys
-            .map((key) => scaleMap.get(key))
-            .filter((item) => item && item.test_id === testId);
-          const selectedCodes = [...new Set(selectedScales.map((item) => item.code))];
-          return {
-            test_id: testId,
-            selected_scale_codes: selectedCodes
-          };
-        })
-        .filter((config) => config.selected_scale_codes.length > 0);
-
-      if (!test_configs.length) {
-        throw new Error('검사별로 최소 1개 이상의 척도를 선택해주세요.');
+      const { requestBody, missingVariants } = buildCreateRequestPayload();
+      if (missingVariants.length) {
+        pendingCreatePayload = requestBody;
+        openVariantConfirmModal(missingVariants);
+        createBtn.disabled = false;
+        createBtn.textContent = '생성';
+        return;
       }
-
-      await api('/api/admin/custom-tests', {
-        method: 'POST',
-        body: JSON.stringify({
-          custom_test_name: baseName,
-          test_configs,
-          additional_profile_fields: normalizedCustomFields
-        })
-      });
-
-      createBtn.disabled = false;
-      createBtn.textContent = '생성';
-      form.reset();
-      scaleListEl.innerHTML = '';
-      customFields = [];
-      renderCustomFieldEditors();
-      closeCreateModal();
-      await refreshManagedTests();
+      pendingCreatePayload = null;
+      await submitCreatePayload(requestBody);
     } catch (error) {
       message.textContent = error.message;
       message.className = 'message error';
@@ -3906,13 +4015,14 @@ async function initTestDetailPage() {
 
   const params = new URLSearchParams(window.location.search);
   const id = params.get('id');
-  if (!id) {
+  if (!id || !/^\d+$/.test(id)) {
     window.location.href = '/admin/workspace';
     return;
   }
 
   const form = document.getElementById('testDetailForm');
   const nameInput = document.getElementById('detail_custom_test_name');
+  const saveBtn = document.getElementById('testDetailSaveBtn');
   const scaleList = document.getElementById('detailScaleList');
   const detailMeta = document.getElementById('detailMeta');
   const detailSelectedScaleCount = document.getElementById('detailSelectedScaleCount');
@@ -3920,13 +4030,65 @@ async function initTestDetailPage() {
   const detailResponseType = document.getElementById('detailResponseType');
   const msg = document.getElementById('testDetailMessage');
 
-  const [detail, catalog] = await Promise.all([
-    api(`/api/admin/custom-tests/${id}`),
-    api('/api/admin/tests/catalog')
-  ]);
+  let detail;
+  let catalog;
+  try {
+    [detail, catalog] = await Promise.all([
+      api(`/api/admin/custom-tests/${id}`),
+      api('/api/admin/tests/catalog')
+    ]);
+  } catch (error) {
+    msg.textContent = error.message;
+    msg.className = 'message error';
+    detailMeta.textContent = '검사 상세 정보를 불러오지 못했습니다.';
+    detailSelectedScaleCount.textContent = '-';
+    detailSelectedItemCount.textContent = '-';
+    detailResponseType.textContent = '-';
+    scaleList.innerHTML = '';
+    return;
+  }
 
-  nameInput.value = detail.custom_test_name;
-  detailMeta.textContent = `기반 검사: ${detail.test_id} | 현재 척도 수: ${detail.scale_count}개`;
+  let currentName = toText(detail.custom_test_name).trim();
+  nameInput.value = currentName;
+  detailMeta.textContent = `기반 검사: ${detail.test_id} | 현재 척도 수: ${detail.scale_count}개 | 구성 변경은 새 검사 생성으로 처리`;
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const nextName = nameInput.value.trim();
+    if (!nextName) {
+      msg.textContent = '검사명은 공백만 입력할 수 없습니다.';
+      msg.className = 'message error';
+      nameInput.focus();
+      return;
+    }
+    if (nextName === currentName) {
+      msg.textContent = '변경된 검사명이 없습니다.';
+      msg.className = 'message';
+      return;
+    }
+
+    if (saveBtn) {
+      saveBtn.disabled = true;
+    }
+    try {
+      const result = await api(`/api/admin/custom-tests/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ custom_test_name: nextName })
+      });
+      currentName = nextName;
+      nameInput.value = nextName;
+      msg.textContent = result.message || '검사명이 수정되었습니다.';
+      msg.className = 'message success';
+      showAdminToast(result.message || '검사명이 수정되었습니다.', 'success');
+    } catch (error) {
+      msg.textContent = error.message;
+      msg.className = 'message error';
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+      }
+    }
+  });
+
   if (!Array.isArray(detail.test_configs) || !detail.test_configs.length) {
     msg.textContent = '원본 검사 정보를 찾을 수 없습니다.';
     msg.className = 'message error';
@@ -4007,10 +4169,6 @@ async function initTestDetailPage() {
 
   msg.textContent = '';
   msg.className = 'message';
-
-  form.addEventListener('submit', (event) => {
-    event.preventDefault();
-  });
 }
 
 (async function init() {
