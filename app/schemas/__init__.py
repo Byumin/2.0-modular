@@ -6,7 +6,7 @@ from app.schemas.custom_tests import (
     BulkDeleteCustomTestsIn,
     CreateCustomTestBatchIn,
     CreateCustomTestConfigIn,
-    UpdateCustomTestIn,
+    UpdateCustomTestNameIn,
 )
 from app.schemas.values import Gender, SchoolAge, normalize_gender_value
 
@@ -20,7 +20,7 @@ __all__ = [
     "CreateCustomTestBatchIn",
     "AdminClientIn",
     "AdminAssessmentLogIn",
-    "UpdateCustomTestIn",
+    "UpdateCustomTestNameIn",
     "BulkDeleteCustomTestsIn",
     "UpdateClientAssignmentIn",
     "SubmitCustomAssessmentIn",

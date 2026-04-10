@@ -1,0 +1,1541 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>관리자 로그인 검증과 세션 생성 흐름</title>
+    <style>
+      :root {
+        --bg: #f6efe5;
+        --paper: rgba(255, 250, 244, 0.82);
+        --paper-strong: #fffaf3;
+        --ink: #1d2326;
+        --muted: #6f6861;
+        --line: rgba(29, 35, 38, 0.12);
+        --accent: #bf5127;
+        --accent-soft: rgba(191, 81, 39, 0.14);
+        --accent-2: #0f617a;
+        --accent-2-soft: rgba(15, 97, 122, 0.14);
+        --success: #256c4f;
+        --danger: #ae3c32;
+        --warn: #9b6510;
+        --shadow: 0 28px 80px rgba(70, 43, 20, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "Trebuchet MS", "Noto Sans KR", sans-serif;
+        background:
+          radial-gradient(circle at 12% 12%, rgba(15, 97, 122, 0.17), transparent 28%),
+          radial-gradient(circle at 88% 18%, rgba(191, 81, 39, 0.18), transparent 24%),
+          radial-gradient(circle at 55% 80%, rgba(188, 156, 108, 0.18), transparent 26%),
+          linear-gradient(180deg, #fbf4ea 0%, var(--bg) 100%);
+      }
+
+      .page {
+        width: min(1460px, calc(100% - 28px));
+        margin: 18px auto 44px;
+      }
+
+      .hero,
+      .panel,
+      .detail-panel,
+      .branch-card,
+      .node-card {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+      }
+
+      .hero {
+        position: relative;
+        overflow: hidden;
+        border-radius: 30px;
+        padding: 30px;
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -6% -36% auto;
+        width: 340px;
+        height: 340px;
+        background: radial-gradient(circle, rgba(191, 81, 39, 0.22), transparent 66%);
+        pointer-events: none;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        font-size: 12px;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(22px, 3vw, 34px);
+        line-height: 0.98;
+      }
+
+      .hero-copy {
+        max-width: 920px;
+        margin: 14px 0 0;
+        font-size: 16px;
+        line-height: 1.75;
+        color: var(--muted);
+      }
+
+      .hero-grid,
+      .main-grid,
+      .branch-grid,
+      .info-grid {
+        display: grid;
+        gap: 18px;
+      }
+
+      .hero-grid {
+        grid-template-columns: 1.4fr 1fr;
+        margin-top: 24px;
+      }
+
+      .main-grid {
+        grid-template-columns: minmax(0, 1.42fr) minmax(380px, 0.9fr);
+        margin-top: 22px;
+        align-items: start;
+      }
+
+      .panel,
+      .detail-panel {
+        border-radius: 26px;
+        padding: 22px;
+      }
+
+      .panel h2,
+      .detail-panel h2 {
+        margin: 0 0 12px;
+        font-size: 19px;
+      }
+
+      .control-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .chip,
+      .zoom-btn {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        font: inherit;
+        color: var(--ink);
+        background: rgba(29, 35, 38, 0.08);
+        cursor: pointer;
+        transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+      }
+
+      .chip:hover,
+      .chip:focus-visible,
+      .zoom-btn:hover,
+      .zoom-btn:focus-visible {
+        transform: translateY(-2px);
+      }
+
+      .chip.active {
+        color: #fffaf4;
+        background: linear-gradient(135deg, var(--accent), #de8550);
+      }
+
+      .chip.active.success {
+        background: linear-gradient(135deg, var(--success), #39a06f);
+      }
+
+      .chip.active.failure {
+        background: linear-gradient(135deg, var(--danger), #d56858);
+      }
+
+      .chip.active.existing {
+        background: linear-gradient(135deg, var(--accent-2), #3f8da3);
+      }
+
+      .summary-box {
+        margin-top: 14px;
+        padding: 16px;
+        border-radius: 18px;
+        background: linear-gradient(140deg, rgba(15, 97, 122, 0.12), rgba(191, 81, 39, 0.1));
+        color: #3e433f;
+        line-height: 1.7;
+      }
+
+      .summary-box strong {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--ink);
+      }
+
+      .meta-list,
+      .reference-list {
+        margin: 0;
+        padding-left: 18px;
+        line-height: 1.72;
+        color: var(--muted);
+      }
+
+      .graph-shell {
+        position: relative;
+        border-radius: 28px;
+        padding: 18px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.04)),
+          radial-gradient(circle at 20% 10%, rgba(15, 97, 122, 0.1), transparent 22%),
+          radial-gradient(circle at 78% 24%, rgba(191, 81, 39, 0.1), transparent 22%),
+          rgba(255, 250, 244, 0.46);
+      }
+
+      .graph-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+
+      .graph-header p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .graph-tools {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: end;
+      }
+
+      .zoom-indicator {
+        display: inline-flex;
+        align-items: center;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(15, 97, 122, 0.1);
+        color: var(--accent-2);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .graph-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .legend-chip {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(29, 35, 38, 0.06);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .legend-chip::before {
+        content: "";
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+
+      .legend-chip.schema::before { background: #6c55d9; }
+      .legend-chip.db::before { background: var(--accent-2); }
+      .legend-chip.memory::before { background: #1c7c54; }
+      .legend-chip.response::before { background: #d18c18; }
+
+      .graph-stage {
+        overflow: auto;
+        border-radius: 22px;
+        padding: 8px;
+        background: rgba(255, 255, 255, 0.28);
+      }
+
+      .graph-canvas {
+        position: relative;
+        width: 1240px;
+        height: 1400px;
+        transform-origin: left top;
+        transition: transform 180ms ease;
+      }
+
+      .edge-layer {
+        position: absolute;
+        inset: 0;
+        width: 1240px;
+        height: 1400px;
+        pointer-events: none;
+      }
+
+      .edge-layer defs path {
+        stroke: none;
+      }
+
+      .edge-layer path {
+        fill: none;
+        stroke: rgba(29, 35, 38, 0.18);
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-dasharray: 8 10;
+        transition: stroke 220ms ease, stroke-width 220ms ease, opacity 220ms ease;
+      }
+
+      .edge-layer path.active {
+        stroke: var(--accent);
+        stroke-width: 4;
+        opacity: 1;
+      }
+
+      .edge-layer path.active.success {
+        stroke: var(--success);
+      }
+
+      .edge-layer path.active.failure {
+        stroke: var(--danger);
+      }
+
+      .edge-layer path.active.existing {
+        stroke: var(--accent-2);
+      }
+
+      .edge-layer path.dimmed {
+        opacity: 0.24;
+      }
+
+      .node-layer {
+        position: relative;
+        width: 1240px;
+        height: 1400px;
+      }
+
+      .node-card {
+        position: absolute;
+        width: 256px;
+        min-height: 188px;
+        border-radius: 24px;
+        padding: 18px;
+        cursor: pointer;
+        transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease, min-height 180ms ease, width 180ms ease;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .node-card:hover,
+      .node-card:focus-visible {
+        transform: translateY(-4px) scale(1.01);
+      }
+
+      .node-card.active {
+        width: 320px;
+        min-height: 326px;
+        border-color: rgba(191, 81, 39, 0.48);
+        background: linear-gradient(160deg, rgba(191, 81, 39, 0.14), rgba(255, 250, 244, 0.96));
+        box-shadow: 0 20px 42px rgba(191, 81, 39, 0.16);
+        z-index: 4;
+      }
+
+      .node-card.neighbor {
+        border-color: rgba(15, 97, 122, 0.28);
+        box-shadow: 0 16px 30px rgba(15, 97, 122, 0.1);
+      }
+
+      .node-card.browser { border-left: 5px solid var(--accent); }
+      .node-card.router { border-left: 5px solid #8742bc; }
+      .node-card.schema { border-left: 5px solid #6c55d9; }
+      .node-card.service { border-left: 5px solid #23815a; }
+      .node-card.db { border-left: 5px solid var(--accent-2); }
+      .node-card.memory { border-left: 5px solid #1c7c54; }
+      .node-card.response { border-left: 5px solid #d18c18; }
+
+      .node-top {
+        display: grid;
+        gap: 10px;
+      }
+
+      .node-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        width: fit-content;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(29, 35, 38, 0.06);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .node-title {
+        margin: 0;
+        font-size: 17px;
+        line-height: 1.32;
+      }
+
+      .node-copy {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.58;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      .node-card.active .node-copy {
+        -webkit-line-clamp: 4;
+      }
+
+      .node-status {
+        margin-top: 12px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--accent-2);
+      }
+
+      .subnode-grid {
+        display: none;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .node-card.active .subnode-grid {
+        display: grid;
+      }
+
+      .subnode {
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.74);
+        border: 1px solid rgba(29, 35, 38, 0.08);
+      }
+
+      .subnode-label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--accent-2);
+      }
+
+      .subnode-title {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--ink);
+      }
+
+      .detail-panel {
+        position: sticky;
+        top: 18px;
+        max-height: calc(100vh - 36px);
+        overflow-y: auto;
+      }
+
+      .detail-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .detail-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .detail-summary {
+        margin: 0 0 18px;
+        color: var(--muted);
+        line-height: 1.75;
+      }
+
+      .focus-line {
+        margin: 18px 0;
+        padding: 14px 16px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, rgba(15, 97, 122, 0.12), rgba(255, 255, 255, 0.72));
+        color: #304148;
+        line-height: 1.7;
+      }
+
+      .info-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .info-card {
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.56);
+      }
+
+      .info-card h3 {
+        margin: 0 0 10px;
+        font-size: 15px;
+      }
+
+      .fold-group {
+        display: grid;
+        gap: 10px;
+      }
+
+      .fold-card {
+        border-radius: 16px;
+        border: 1px solid rgba(29, 35, 38, 0.08);
+        background: rgba(255, 255, 255, 0.7);
+        overflow: hidden;
+      }
+
+      .fold-card summary {
+        list-style: none;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        padding: 14px 16px;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+
+      .fold-card summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .fold-card summary::after {
+        content: "펼치기";
+        font-size: 12px;
+        color: var(--accent-2);
+      }
+
+      .fold-card[open] summary::after {
+        content: "접기";
+      }
+
+      .fold-body {
+        padding: 0 16px 16px;
+      }
+
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: "Consolas", "Courier New", monospace;
+        font-size: 13px;
+        line-height: 1.62;
+        color: #2b3337;
+      }
+
+      .reference-list {
+        margin-top: 0;
+      }
+
+      .reference-list li + li {
+        margin-top: 6px;
+      }
+
+      .branch-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin-top: 18px;
+      }
+
+      .branch-card {
+        border-radius: 20px;
+        padding: 18px;
+      }
+
+      .branch-card.success { border-color: rgba(37, 108, 79, 0.24); }
+      .branch-card.fail { border-color: rgba(174, 60, 50, 0.24); }
+
+      .branch-tag {
+        display: inline-block;
+        margin-bottom: 10px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .branch-card.success .branch-tag {
+        background: rgba(37, 108, 79, 0.12);
+        color: var(--success);
+      }
+
+      .branch-card.fail .branch-tag {
+        background: rgba(174, 60, 50, 0.12);
+        color: var(--danger);
+      }
+
+      .callout {
+        margin-top: 18px;
+        border-left: 4px solid var(--warn);
+        border-radius: 0 14px 14px 0;
+        padding: 14px 16px;
+        background: rgba(155, 101, 16, 0.08);
+        color: #604713;
+        line-height: 1.72;
+      }
+
+      .callout:empty {
+        display: none;
+      }
+
+      code {
+        padding: 2px 6px;
+        border-radius: 8px;
+        background: rgba(29, 35, 38, 0.08);
+        font-family: "Consolas", "Courier New", monospace;
+        font-size: 0.94em;
+      }
+
+      @media (max-width: 1220px) {
+        .hero-grid,
+        .main-grid,
+        .branch-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .detail-panel {
+          position: static;
+        }
+      }
+
+      @media (max-width: 860px) {
+        .page {
+          width: min(100% - 16px, 100%);
+        }
+
+        .hero,
+        .panel,
+        .detail-panel {
+          padding: 18px;
+        }
+
+        .graph-canvas,
+        .node-layer,
+        .edge-layer {
+          width: 100%;
+          height: auto;
+        }
+
+        .graph-stage {
+          overflow: visible;
+        }
+
+        .node-card {
+          position: relative;
+          left: auto !important;
+          top: auto !important;
+          width: 100% !important;
+          min-height: 188px;
+          margin-bottom: 12px;
+        }
+
+        .edge-layer {
+          display: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+          animation: none !important;
+          scroll-behavior: auto !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <section class="hero">
+        <p class="eyebrow">Interactive Flow Demo</p>
+        <h1>관리자 로그인 검증과 세션 생성</h1>
+        <p class="hero-copy">
+          관리자 로그인 화면 진입부터 기존 세션 확인, 로그인 요청, 스키마 검증, 관리자 조회,
+          SHA-256 비밀번호 비교, 메모리 세션 저장, HttpOnly 쿠키 발급, 후속 인증 재사용까지의
+          실제 런타임 흐름을 단계별로 설명한다.
+        </p>
+
+        <div class="hero-grid">
+          <div class="panel">
+            <h2>시나리오 선택</h2>
+            <div class="control-row" id="scenarioControls"></div>
+            <div class="summary-box" id="scenarioSummary"></div>
+          </div>
+
+          <div class="panel">
+            <h2>핵심 구조</h2>
+            <ul class="meta-list">
+              <li><code>/api/admin/me</code>로 기존 세션을 먼저 확인한다.</li>
+              <li><code>AdminLoginIn</code>이 요청 body 최소 길이를 검증한다.</li>
+              <li><code>admin_user</code> 조회는 루트 <code>modular.db</code> 직접 접근이다.</li>
+              <li>로그인 성공 세션은 DB가 아니라 <code>ADMIN_SESSIONS</code> 메모리 딕셔너리에 저장된다.</li>
+              <li>최종 인증 토큰은 <code>admin_session</code> HttpOnly 쿠키로 브라우저에 전달된다.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="main-grid">
+        <section class="panel graph-shell">
+          <div class="graph-header">
+            <div>
+              <h2>런타임 그래프</h2>
+              <p>노드를 클릭하면 내부 함수와 요소가 큰 노드 안에서 펼쳐집니다. 확대/축소로 전체 흐름과 세부 흐름을 오가며 볼 수 있습니다.</p>
+            </div>
+            <div class="graph-tools">
+              <button class="zoom-btn" type="button" id="zoomOutBtn">축소</button>
+              <span class="zoom-indicator" id="zoomIndicator">100%</span>
+              <button class="zoom-btn" type="button" id="zoomInBtn">확대</button>
+              <button class="zoom-btn" type="button" id="zoomResetBtn">기본 배율</button>
+            </div>
+          </div>
+
+          <div class="graph-legend">
+            <span class="legend-chip">Browser</span>
+            <span class="legend-chip schema">Schema</span>
+            <span class="legend-chip db">DB</span>
+            <span class="legend-chip memory">Memory</span>
+            <span class="legend-chip response">Response</span>
+          </div>
+
+          <div class="graph-stage" id="graphStage">
+            <div class="graph-canvas" id="graphCanvas">
+              <svg class="edge-layer" id="edgeLayer" viewBox="0 0 1240 1400" preserveAspectRatio="none">
+                <defs>
+                  <marker id="arrow-neutral" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(29, 35, 38, 0.24)"></path>
+                  </marker>
+                  <marker id="arrow-success" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#256c4f"></path>
+                  </marker>
+                  <marker id="arrow-failure" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#ae3c32"></path>
+                  </marker>
+                  <marker id="arrow-existing" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f617a"></path>
+                  </marker>
+                </defs>
+              </svg>
+              <div class="node-layer" id="nodeLayer"></div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="detail-panel">
+          <div class="detail-meta">
+            <span class="detail-pill" id="detailStepPill"></span>
+            <span class="detail-pill" style="background: var(--accent-2-soft); color: var(--accent-2);" id="detailLanePill"></span>
+          </div>
+
+          <h2 id="detailTitle"></h2>
+          <p class="detail-summary" id="detailSummary"></p>
+          <div class="focus-line" id="focusLine"></div>
+
+          <div class="info-grid">
+            <section class="info-card">
+              <h3>입력 / 현재 상태</h3>
+              <pre id="detailInput"></pre>
+            </section>
+            <section class="info-card">
+              <h3>데이터 예시</h3>
+              <div class="fold-group">
+                <details class="fold-card">
+                  <summary>요청 데이터 예시</summary>
+                  <div class="fold-body">
+                    <pre id="detailRequestExample"></pre>
+                  </div>
+                </details>
+                <details class="fold-card">
+                  <summary>응답 데이터 예시</summary>
+                  <div class="fold-body">
+                    <pre id="detailResponseExample"></pre>
+                  </div>
+                </details>
+                <details class="fold-card">
+                  <summary>내부 상태 / 저장 예시</summary>
+                  <div class="fold-body">
+                    <pre id="detailStateExample"></pre>
+                  </div>
+                </details>
+              </div>
+            </section>
+            <section class="info-card">
+              <h3>내부 처리</h3>
+              <pre id="detailWork"></pre>
+            </section>
+            <section class="info-card">
+              <h3>출력 / 다음 단계</h3>
+              <pre id="detailOutput"></pre>
+            </section>
+            <section class="info-card">
+              <h3>실제 소스 기준점</h3>
+              <ul class="reference-list" id="referenceList"></ul>
+            </section>
+          </div>
+
+          <div class="branch-grid" id="branchGrid"></div>
+          <div class="callout" id="callout"></div>
+        </aside>
+      </section>
+    </div>
+
+    <script>
+      const scenarios = {
+        success: {
+          label: "정상 로그인",
+          summary:
+            "관리자 ID와 비밀번호가 맞으면 토큰이 생성되고, 메모리 세션 매핑과 브라우저 쿠키가 함께 준비된 뒤 /admin/workspace로 이동한다.",
+          branchMode: "success"
+        },
+        invalidPassword: {
+          label: "비밀번호 오류",
+          summary:
+            "admin_user는 찾았지만 비밀번호 해시가 일치하지 않아 401이 발생하고, 브라우저는 에러 메시지만 표시한 채 현재 화면에 머문다.",
+          branchMode: "failure"
+        },
+        existingSession: {
+          label: "기존 세션 있음",
+          summary:
+            "로그인 폼 제출 전에 /api/admin/me가 성공해 현재 세션을 확인하면, 로그인 요청 없이 바로 /admin/workspace로 이동한다.",
+          branchMode: "existing"
+        }
+      };
+
+      const steps = [
+        {
+          id: 1,
+          x: 56,
+          y: 64,
+          lane: "browser",
+          stage: "사전 확인",
+          short: "페이지 진입",
+          title: "페이지 진입과 기존 세션 확인",
+          summary:
+            "admin-login 페이지가 열리면 initLoginPage가 먼저 /api/admin/me를 호출해 이미 로그인된 세션이 있는지 확인한다.",
+          input: `브라우저 이벤트:\n- GET /admin\n- body[data-page=\"admin-login\"]`,
+          work: `1. admin-login.html이 admin.js를 로드\n2. initLoginPage() 실행\n3. api('/api/admin/me') 호출 시도\n4. 성공하면 로그인 폼을 건너뜀`,
+          output: `성공:\n- /admin/workspace 로 즉시 이동\n\n실패:\n- 로그인 폼 유지\n- 사용자가 ID/PW 입력 가능`,
+          requestExample: `GET /admin HTTP/1.1
+Host: localhost:8000
+
+브라우저 초기 상태
+{
+  "page": "/admin",
+  "document.body.dataset.page": "admin-login",
+  "cookies": {
+    "admin_session": "eyJhbGciOi...existing-token" 
+  }
+}`,
+          responseExample: `GET /api/admin/me 성공 시
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "id": 1,
+  "username": "admin"
+}
+
+GET /api/admin/me 실패 시
+HTTP/1.1 401 Unauthorized
+{
+  "detail": "관리자 로그인이 필요합니다."
+}`,
+          stateExample: `DOM 참조 예시
+{
+  "form": "#adminLoginForm",
+  "button": "#adminLoginBtn",
+  "message": "#adminLoginMessage"
+}
+
+분기
+- 200이면 window.location.href = "/admin/workspace"
+- 401이면 로그인 폼 유지`,
+          refs: [
+            "/mnt/c/Users/user/workspace/2.0-modular/static/admin-login.html#L9",
+            "/mnt/c/Users/user/workspace/2.0-modular/static/admin.js#L234",
+            "/mnt/c/Users/user/workspace/2.0-modular/app/router/auth_router.py#L37"
+          ],
+          callout: "이 사전 확인 때문에 이미 유효한 admin_session 쿠키가 있으면 로그인 버튼을 다시 누르지 않아도 된다.",
+          detailNodes: [
+            { label: "Element", title: "body[data-page='admin-login'] 와 #adminLoginForm" },
+            { label: "Function", title: "initLoginPage()가 첫 진입 시 세션 확인을 선행" },
+            { label: "Request", title: "api('/api/admin/me') 성공 시 바로 /admin/workspace 이동" }
+          ]
+        },
+        {
+          id: 2,
+          x: 390,
+          y: 130,
+          lane: "browser",
+          stage: "브라우저 입력",
+          short: "폼 제출",
+          title: "폼 제출과 클라이언트 기본 검증",
+          summary:
+            "폼 submit 시 admin_id는 trim 처리되고, 둘 중 하나라도 비어 있으면 브라우저가 즉시 에러 문구를 보여주며 API 호출을 중단한다.",
+          input: `예시 payload:\n{\n  \"admin_id\": \"admin\",\n  \"admin_pw\": \"admin1234\"\n}`,
+          work: `1. event.preventDefault()\n2. form.admin_id.value.trim()\n3. 빈 값이면 메시지 출력\n4. 아니면 버튼 비활성화 + \"로그인 중...\"`,
+          output: `정상 입력:\n- POST /api/admin/login 준비\n\n빈 값:\n- 현재 페이지에 에러 메시지 표시`,
+          requestExample: `폼 입력 값 예시
+{
+  "admin_id_raw": " admin ",
+  "admin_pw_raw": "admin1234"
+}
+
+submit 직전 payload
+{
+  "admin_id": "admin",
+  "admin_pw": "admin1234"
+}`,
+          responseExample: `클라이언트 자체 검증 실패 시 서버 요청 없음
+
+화면 메시지 예시
+{
+  "textContent": "관리자 ID와 비밀번호를 입력해주세요.",
+  "className": "message error"
+}`,
+          stateExample: `버튼 상태 변화
+초기:
+{
+  "disabled": false,
+  "textContent": "로그인"
+}
+
+전송 중:
+{
+  "disabled": true,
+  "textContent": "로그인 중..."
+}`,
+          refs: [
+            "/mnt/c/Users/user/workspace/2.0-modular/static/admin.js#L246",
+            "/mnt/c/Users/user/workspace/2.0-modular/static/admin.js#L255"
+          ],
+          callout: "여기서의 검증은 최소 UX 보호다. 실제 서버 측 필수 검증은 다음 단계 Pydantic 스키마가 다시 맡는다.",
+          detailNodes: [
+            { label: "Element", title: "#adminLoginForm submit 이벤트" },
+            { label: "State", title: "loginBtn.disabled = true / textContent = '로그인 중...'" },
+            { label: "Payload", title: "admin_id는 trim, admin_pw는 원문 유지" }
+          ]
+        },
+        {
+          id: 3,
+          x: 774,
+          y: 72,
+          lane: "schema",
+          stage: "스키마 검증",
+          short: "AdminLoginIn",
+          title: "AdminLoginIn 요청 스키마 검증",
+          summary:
+            "라우터에 들어온 JSON 본문은 AdminLoginIn으로 파싱된다. admin_id와 admin_pw는 각각 최소 1자 이상이어야 한다.",
+          input: `스키마:\nadmin_id: min_length=1, max_length=50\nadmin_pw: min_length=1, max_length=100`,
+          work: `1. FastAPI가 JSON body를 AdminLoginIn으로 변환\n2. 길이 조건 위반 시 422 반환\n3. 정상일 때만 login() 라우터 함수 진입`,
+          output: `정상:\n- payload.admin_id / payload.admin_pw 사용 가능\n\n실패:\n- 422 validation error`,
+          requestExample: `JSON body 예시
+{
+  "admin_id": "admin",
+  "admin_pw": "admin1234"
+}
+
+잘못된 예시
+{
+  "admin_id": "",
+  "admin_pw": ""
+}`,
+          responseExample: `검증 실패 응답 예시
+HTTP/1.1 422 Unprocessable Entity
+{
+  "detail": [
+    {
+      "loc": ["body", "admin_id"],
+      "msg": "String should have at least 1 character",
+      "type": "string_too_short"
+    }
+  ]
+}`,
+          stateExample: `Pydantic 모델 매핑 결과
+AdminLoginIn(
+  admin_id="admin",
+  admin_pw="admin1234"
+)`,
+          refs: [
+            "/mnt/c/Users/user/workspace/2.0-modular/app/schemas/auth.py#L4",
+            "/mnt/c/Users/user/workspace/2.0-modular/app/router/auth_router.py#L12"
+          ],
+          callout: "브라우저에서 비어 있는 값은 미리 걸러도, API 직호출이나 변조 요청은 이 스키마 검증을 다시 통과해야 한다.",
+          detailNodes: [
+            { label: "Field", title: "admin_id: 1~50자" },
+            { label: "Field", title: "admin_pw: 1~100자" },
+            { label: "Error", title: "형식 위반 시 FastAPI가 422 응답" }
+          ]
+        },
+        {
+          id: 4,
+          x: 154,
+          y: 408,
+          lane: "router",
+          stage: "서비스 진입",
+          short: "login 라우터",
+          title: "auth_router에서 admin_login 서비스 호출",
+          summary:
+            "login 라우터는 스키마에서 꺼낸 admin_id, admin_pw를 admin_login 서비스로 전달한다. 여기서 실제 인증이 시작된다.",
+          input: `라우터 입력:\npayload.admin_id\npayload.admin_pw\ndb: Session`,
+          work: `1. POST /api/admin/login 수신\n2. admin_login(db, payload.admin_id, payload.admin_pw)\n3. 서비스 결과를 JSONResponse로 감쌀 준비`,
+          output: `다음:\n- 관리자 조회 및 비밀번호 검증\n- 성공 시 token / next_url 확보`,
+          requestExample: `FastAPI 함수 인자 예시
+payload = AdminLoginIn(
+  admin_id="admin",
+  admin_pw="admin1234"
+)
+db = <sqlalchemy.orm.session.Session>`,
+          responseExample: `서비스 성공 반환 예시
+{
+  "token": "Qx7...example...A9",
+  "message": "로그인되었습니다.",
+  "next_url": "/admin/workspace"
+}`,
+          stateExample: `라우터 내부 준비 상태
+{
+  "cookie_key": "admin_session",
+  "cookie_max_age": 28800,
+  "json_body_keys": ["message", "next_url"]
+}`,
+          refs: [
+            "/mnt/c/Users/user/workspace/2.0-modular/app/router/auth_router.py#L12",
+            "/mnt/c/Users/user/workspace/2.0-modular/app/services/admin/auth.py#L45"
+          ],
+          callout: "여기서 전달되는 db 세션은 로그인 함수 시그니처에 남아 있지만, 실제 관리자 검증은 sqlite 직접 조회 경로를 사용한다.",
+          detailNodes: [
+            { label: "Route", title: "POST /api/admin/login" },
+            { label: "Call", title: "admin_login(db, admin_id, admin_pw)" },
+            { label: "Response", title: "JSONResponse와 Set-Cookie 준비 단계" }
+          ]
+        },
+        {
+          id: 5,
+          x: 618,
+          y: 400,
+          lane: "db",
+          stage: "DB 조회",
+          short: "admin_user 조회",
+          title: "modular.db 의 admin_user 조회",
+          summary:
+            "verify_modular_admin_login은 modular_auth_repository를 통해 루트 modular.db에 직접 연결하고 admin_user 테이블에서 username으로 관리자를 찾는다.",
+          input: `조회 키:\nusername = \"admin\"\n\n대상 테이블:\nadmin_user`,
+          work: `1. get_modular_admin_by_username(username)\n2. sqlite3.connect(ROOT/modular.db)\n3. SELECT ... FROM admin_user WHERE username = ?`,
+          output: `성공:\n- ModularAdminUser 반환\n\n실패:\n- None 반환`,
+          requestExample: `sqlite 질의 파라미터 예시
+{
+  "sql": "SELECT id, username, password_hash, created_at FROM admin_user WHERE username = ?",
+  "params": ["admin"]
+}`,
+          responseExample: `조회 성공 row 예시
+{
+  "id": 1,
+  "username": "admin",
+  "password_hash": "240be518fabd2724ddb6f04eeb4cf8c20a5f0d5f...",
+  "created_at": "2026-04-01 09:15:00"
+}`,
+          stateExample: `dataclass 변환 예시
+ModularAdminUser(
+  id=1,
+  username="admin",
+  password_hash="240be518fabd2724ddb6f04eeb4cf8c20a5f0d5f...",
+  created_at="2026-04-01 09:15:00"
+)`,
+          refs: [
+            "/mnt/c/Users/user/workspace/2.0-modular/app/services/admin/modular_auth.py#L24",
+            "/mnt/c/Users/user/workspace/2.0-modular/app/modular_auth_repository.py#L28",
+            "/mnt/c/Users/user/workspace/2.0-modular/app/db/models.py#L9"
+          ],
+          callout: "관리자 인증 데이터의 단일 기준은 루트 modular.db다. 이 흐름에서는 ORM 레이어보다 sqlite 직접 조회가 핵심이다.",
+          detailNodes: [
+            { label: "Function", title: "get_modular_admin_by_username(username)" },
+            { label: "SQL", title: "SELECT id, username, password_hash, created_at FROM admin_user" },
+            { label: "Model", title: "ModularAdminUser dataclass 로 변환" }
+          ]
+        },
+        {
+          id: 6,
+          x: 918,
+          y: 610,
+          lane: "service",
+          stage: "비밀번호 검증",
+          short: "SHA-256 비교",
+          title: "SHA-256 해시 비교로 로그인 판정",
+          summary:
+            "관리자 행을 찾으면 입력 비밀번호를 SHA-256으로 해시한 뒤 DB의 password_hash와 비교한다. 다르면 즉시 실패한다.",
+          input: `입력 비밀번호:\n\"admin1234\"\n\n비교 대상:\nrow.password_hash`,
+          work: `1. make_modular_password_hash(admin_pw)\n2. row.password_hash와 문자열 비교\n3. 다르면 None 반환\n4. admin_login에서 401 HTTPException 발생`,
+          output: `성공:\n- admin 객체 유지\n\n실패:\n- detail: \"관리자 ID 또는 비밀번호가 올바르지 않습니다.\"`,
+          requestExample: `해시 비교 입력 예시
+{
+  "admin_pw": "admin1234",
+  "sha256(admin_pw)": "240be518fabd2724ddb6f04eeb4cf8c20a5f0d5f..."
+}`,
+          responseExample: `실패 응답 예시
+HTTP/1.1 401 Unauthorized
+{
+  "detail": "관리자 ID 또는 비밀번호가 올바르지 않습니다."
+}`,
+          stateExample: `검증 분기 예시
+{
+  "row_found": true,
+  "hash_matches": true,
+  "result": "admin authenticated"
+}
+
+또는
+{
+  "row_found": true,
+  "hash_matches": false,
+  "result": "raise 401"
+}`,
+          refs: [
+            "/mnt/c/Users/user/workspace/2.0-modular/app/services/admin/modular_auth.py#L11",
+            "/mnt/c/Users/user/workspace/2.0-modular/app/services/admin/modular_auth.py#L24",
+            "/mnt/c/Users/user/workspace/2.0-modular/app/services/admin/auth.py#L45"
+          ],
+          callout: "비밀번호 오류와 존재하지 않는 관리자 ID는 같은 401 메시지로 합쳐져 노출된다.",
+          detailNodes: [
+            { label: "Hash", title: "make_modular_password_hash(admin_pw)" },
+            { label: "Compare", title: "row.password_hash 와 문자열 일치 비교" },
+            { label: "Error", title: "불일치 시 HTTP 401 detail 반환" }
+          ]
+        },
+        {
+          id: 7,
+          x: 74,
+          y: 864,
+          lane: "memory",
+          stage: "세션 생성",
+          short: "메모리 토큰",
+          title: "랜덤 토큰 발급과 메모리 세션 저장",
+          summary:
+            "로그인이 성공하면 admin_login 서비스가 secrets.token_urlsafe(32)로 토큰을 만들고, ADMIN_SESSIONS[token] = admin.id 형태로 메모리에 저장한다.",
+          input: `예시:\nadmin.id = 1\ntoken = \"Qx7...example...A9\"`,
+          work: `1. token = secrets.token_urlsafe(32)\n2. ADMIN_SESSIONS[token] = admin.id\n3. {\"token\", \"message\", \"next_url\"} 반환`,
+          output: `메모리 상태:\n{\n  \"Qx7...example...A9\": 1\n}`,
+          requestExample: `성공 인증 직후 입력 상태
+{
+  "admin.id": 1,
+  "username": "admin"
+}`,
+          responseExample: `서비스 반환 예시
+{
+  "token": "Qx7fD3exampleA9pL2...snip...",
+  "message": "로그인되었습니다.",
+  "next_url": "/admin/workspace"
+}`,
+          stateExample: `메모리 세션 예시
+ADMIN_SESSIONS = {
+  "Qx7fD3exampleA9pL2...snip...": 1,
+  "olderTokenValue...": 2
+}
+
+주의
+- 프로세스 메모리 저장
+- 서버 재시작 시 유지되지 않음`,
+          refs: [
+            "/mnt/c/Users/user/workspace/2.0-modular/app/services/admin/auth.py#L10",
+            "/mnt/c/Users/user/workspace/2.0-modular/app/services/admin/auth.py#L45"
+          ],
+          callout: "이 세션 저장소는 DB 테이블이 아니다. 프로세스 재시작 시 메모리 세션은 사라질 수 있다는 점이 구조적 특징이다.",
+          detailNodes: [
+            { label: "Token", title: "secrets.token_urlsafe(32)" },
+            { label: "Memory", title: "ADMIN_SESSIONS[token] = admin.id" },
+            { label: "Payload", title: "{\"token\", \"message\", \"next_url\"} 반환" }
+          ]
+        },
+        {
+          id: 8,
+          x: 468,
+          y: 952,
+          lane: "response",
+          stage: "응답 구성",
+          short: "쿠키 설정",
+          title: "admin_session 쿠키 설정과 JSON 응답 반환",
+          summary:
+            "라우터는 서비스가 돌려준 token을 Set-Cookie로 내려주고, 본문에는 message와 next_url을 담아 브라우저로 반환한다.",
+          input: `응답 본문:\n{\n  \"message\": \"로그인되었습니다.\",\n  \"next_url\": \"/admin/workspace\"\n}`,
+          work: `1. JSONResponse 생성\n2. set_cookie(\n   key=\"admin_session\",\n   httponly=True,\n   samesite=\"lax\",\n   secure=False,\n   max_age=28800\n )`,
+          output: `브라우저 수신:\n- Set-Cookie: admin_session=<token>\n- JSON body with next_url`,
+          requestExample: `라우터가 받은 서비스 결과
+{
+  "token": "Qx7fD3exampleA9pL2...snip...",
+  "message": "로그인되었습니다.",
+  "next_url": "/admin/workspace"
+}`,
+          responseExample: `최종 HTTP 응답 예시
+HTTP/1.1 200 OK
+Set-Cookie: admin_session=Qx7fD3exampleA9pL2...snip...; HttpOnly; Max-Age=28800; Path=/; SameSite=Lax
+Content-Type: application/json
+
+{
+  "message": "로그인되었습니다.",
+  "next_url": "/admin/workspace"
+}`,
+          stateExample: `브라우저 저장 예시
+{
+  "cookieJar": {
+    "admin_session": {
+      "httponly": true,
+      "samesite": "lax",
+      "max_age": 28800
+    }
+  }
+}`,
+          refs: [
+            "/mnt/c/Users/user/workspace/2.0-modular/app/router/auth_router.py#L14"
+          ],
+          callout: "쿠키는 HttpOnly라서 JS가 직접 읽지 않고, 이후 요청에서 브라우저가 자동 전송한다.",
+          detailNodes: [
+            { label: "Cookie", title: "admin_session / httponly / samesite=lax / max_age=8h" },
+            { label: "Body", title: "{\"message\", \"next_url\"} JSONResponse" },
+            { label: "Boundary", title: "브라우저 저장은 쿠키, 서버 저장은 메모리" }
+          ]
+        },
+        {
+          id: 9,
+          x: 832,
+          y: 1134,
+          lane: "browser",
+          stage: "후속 이동",
+          short: "workspace 이동",
+          title: "브라우저 리다이렉트와 이후 세션 사용",
+          summary:
+            "클라이언트는 data.next_url을 받아 /admin/workspace로 이동한다. 이후 보호된 관리자 API는 Cookie(admin_session)를 읽어 get_current_admin으로 인증한다.",
+          input: `브라우저 후속 요청 예시:\nGET /api/admin/me\nCookie: admin_session=<token>`,
+          work: `1. window.location.href = data.next_url\n2. 이후 API에서 Cookie(default=None)로 admin_session 수신\n3. get_current_admin이 ADMIN_SESSIONS[token] 검사\n4. 없거나 잘못되면 401`,
+          output: `정상:\n- {\"id\": 1, \"username\": \"admin\"}\n\n실패:\n- \"관리자 로그인이 필요합니다.\"\n- 또는 \"유효하지 않은 관리자 세션입니다.\"`,
+          requestExample: `후속 요청 예시
+GET /api/admin/me HTTP/1.1
+Cookie: admin_session=Qx7fD3exampleA9pL2...snip...
+
+또는
+GET /api/admin/dashboard HTTP/1.1
+Cookie: admin_session=Qx7fD3exampleA9pL2...snip...`,
+          responseExample: `세션 유효 시
+{
+  "id": 1,
+  "username": "admin"
+}
+
+세션 무효 시
+{
+  "detail": "유효하지 않은 관리자 세션입니다."
+}`,
+          stateExample: `get_current_admin 내부 상태 예시
+{
+  "incoming_cookie": "Qx7fD3exampleA9pL2...snip...",
+  "admin_id_from_memory": 1,
+  "db_lookup_result": {
+    "id": 1,
+    "username": "admin"
+  }
+}`,
+          refs: [
+            "/mnt/c/Users/user/workspace/2.0-modular/static/admin.js#L265",
+            "/mnt/c/Users/user/workspace/2.0-modular/app/router/auth_router.py#L37",
+            "/mnt/c/Users/user/workspace/2.0-modular/app/services/admin/auth.py#L27"
+          ],
+          callout: "로그인 성공 이후의 관리자 인증은 모두 admin_session 쿠키 -> ADMIN_SESSIONS -> admin_user 재조회 흐름을 공유한다.",
+          detailNodes: [
+            { label: "Redirect", title: "window.location.href = data.next_url" },
+            { label: "Cookie", title: "브라우저가 admin_session 쿠키를 자동 전송" },
+            { label: "Auth", title: "get_current_admin()이 메모리 세션과 관리자 존재를 재검증" }
+          ]
+        }
+      ];
+
+      const edges = [
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [4, 5],
+        [5, 6],
+        [6, 7],
+        [7, 8],
+        [8, 9]
+      ];
+
+      const branches = {
+        success: [
+          {
+            kind: "success",
+            tag: "성공 분기",
+            title: "정상 로그인 완료",
+            body: "사용자 이름과 비밀번호가 맞으면 토큰이 발급되고, 메모리 세션과 브라우저 쿠키가 함께 준비된다. 이후 브라우저는 /admin/workspace로 이동한다."
+          },
+          {
+            kind: "success",
+            tag: "후속 인증",
+            title: "/api/admin/me 와 보호 API 재사용",
+            body: "workspace 진입 후 브라우저가 admin_session 쿠키를 자동 전송하면, 서버는 get_current_admin으로 관리자 존재를 다시 확인한다."
+          }
+        ],
+        failure: [
+          {
+            kind: "fail",
+            tag: "실패 분기",
+            title: "관리자 ID 또는 비밀번호 불일치",
+            body: "verify_modular_admin_login이 None을 반환하면 admin_login이 401 예외를 발생시키고, 브라우저는 error.message를 adminLoginMessage에 표시한다."
+          },
+          {
+            kind: "fail",
+            tag: "폼 상태",
+            title: "버튼 상태 복구",
+            body: "실패 시 admin.js는 로그인 버튼을 다시 활성화하고 텍스트를 '로그인'으로 되돌린다. 쿠키와 세션 매핑은 생성되지 않는다."
+          }
+        ],
+        existing: [
+          {
+            kind: "success",
+            tag: "세션 재사용",
+            title: "기존 세션이 이미 유효함",
+            body: "페이지 첫 진입 시 /api/admin/me가 성공하면 로그인 요청은 아예 발생하지 않는다. 폼 제출 단계 이전에 /admin/workspace로 이동한다."
+          },
+          {
+            kind: "fail",
+            tag: "무효 세션",
+            title: "토큰은 있으나 현재 관리자 없음",
+            body: "get_current_admin에서 ADMIN_SESSIONS는 찾았지만 get_modular_current_admin이 None이면 세션을 제거하고 401을 반환한다."
+          }
+        ]
+      };
+
+      const laneLabel = {
+        browser: "Browser",
+        router: "Router",
+        schema: "Schema",
+        service: "Service",
+        db: "DB",
+        memory: "Memory",
+        response: "Response"
+      };
+
+      const scenarioControls = document.getElementById("scenarioControls");
+      const scenarioSummary = document.getElementById("scenarioSummary");
+      const graphCanvas = document.getElementById("graphCanvas");
+      const edgeLayer = document.getElementById("edgeLayer");
+      const nodeLayer = document.getElementById("nodeLayer");
+      const zoomIndicator = document.getElementById("zoomIndicator");
+      const detailStepPill = document.getElementById("detailStepPill");
+      const detailLanePill = document.getElementById("detailLanePill");
+      const detailTitle = document.getElementById("detailTitle");
+      const detailSummary = document.getElementById("detailSummary");
+      const focusLine = document.getElementById("focusLine");
+      const detailInput = document.getElementById("detailInput");
+      const detailRequestExample = document.getElementById("detailRequestExample");
+      const detailResponseExample = document.getElementById("detailResponseExample");
+      const detailStateExample = document.getElementById("detailStateExample");
+      const detailWork = document.getElementById("detailWork");
+      const detailOutput = document.getElementById("detailOutput");
+      const referenceList = document.getElementById("referenceList");
+      const branchGrid = document.getElementById("branchGrid");
+      const callout = document.getElementById("callout");
+
+      let currentScenario = "success";
+      let currentStep = 1;
+      let zoomLevel = 1;
+
+      function getNeighbors(stepId) {
+        return edges.flatMap(([a, b]) => {
+          if (a === stepId) return [b];
+          if (b === stepId) return [a];
+          return [];
+        });
+      }
+
+      function getNodeSize(stepId) {
+        return stepId === currentStep ? { width: 320, height: 326 } : { width: 256, height: 188 };
+      }
+
+      function getAnchor(step) {
+        const size = getNodeSize(step.id);
+        return {
+          x: step.x + size.width / 2,
+          y: step.y + size.height / 2
+        };
+      }
+
+      function buildPath(from, to) {
+        const start = getAnchor(from);
+        const end = getAnchor(to);
+        const midX = (start.x + end.x) / 2;
+        const curve = Math.max(70, Math.abs(end.y - start.y) * 0.26);
+        return `M ${start.x} ${start.y} C ${midX} ${start.y + curve}, ${midX} ${end.y - curve}, ${end.x} ${end.y}`;
+      }
+
+      function setZoom(nextZoom) {
+        zoomLevel = Math.min(1.6, Math.max(0.75, nextZoom));
+        graphCanvas.style.transform = `scale(${zoomLevel})`;
+        zoomIndicator.textContent = `${Math.round(zoomLevel * 100)}%`;
+      }
+
+      function renderScenarioControls() {
+        scenarioControls.innerHTML = "";
+        Object.entries(scenarios).forEach(([key, scenario]) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `chip${key === currentScenario ? ` active ${key}` : ""}`;
+          button.textContent = scenario.label;
+          button.addEventListener("click", () => {
+            currentScenario = key;
+            renderAll();
+          });
+          scenarioControls.appendChild(button);
+        });
+      }
+
+      function renderScenarioSummary() {
+        const scenario = scenarios[currentScenario];
+        scenarioSummary.innerHTML = `<strong>${scenario.label}</strong>${scenario.summary}`;
+      }
+
+      function renderEdges() {
+        const neighbors = new Set(getNeighbors(currentStep));
+        const activeArrow = `url(#arrow-${currentScenario})`;
+        edgeLayer.innerHTML = "";
+        edges.forEach(([fromId, toId]) => {
+          const from = steps.find((step) => step.id === fromId);
+          const to = steps.find((step) => step.id === toId);
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          const isActive = fromId === currentStep || toId === currentStep;
+          const isNeighborEdge = neighbors.has(fromId) || neighbors.has(toId);
+          path.setAttribute("d", buildPath(from, to));
+          path.setAttribute("class", isActive ? `active ${currentScenario}` : isNeighborEdge ? "" : "dimmed");
+          path.setAttribute("marker-end", isActive ? activeArrow : "url(#arrow-neutral)");
+          edgeLayer.appendChild(path);
+        });
+      }
+
+      function formatRef(ref) {
+        return ref.replace("/mnt/c/Users/user/workspace/2.0-modular/", "");
+      }
+
+      function renderSubnodes(detailNodes) {
+        return detailNodes.map((node) => `
+          <div class="subnode">
+            <span class="subnode-label">${node.label}</span>
+            <p class="subnode-title">${node.title}</p>
+          </div>
+        `).join("");
+      }
+
+      function renderNodes() {
+        const neighbors = new Set(getNeighbors(currentStep));
+        nodeLayer.innerHTML = "";
+
+        steps.forEach((step) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `node-card ${step.lane}${step.id === currentStep ? " active" : ""}${neighbors.has(step.id) ? " neighbor" : ""}`;
+          button.style.left = `${step.x}px`;
+          button.style.top = `${step.y}px`;
+          button.innerHTML = `
+            <div class="node-top">
+              <span class="node-kicker">Step ${step.id} · ${step.stage}</span>
+              <h3 class="node-title">${step.short}</h3>
+              <p class="node-copy">${step.summary}</p>
+            </div>
+            <div>
+              <div class="node-status">${laneLabel[step.lane]} Layer</div>
+              <div class="subnode-grid">${renderSubnodes(step.detailNodes)}</div>
+            </div>
+          `;
+          button.addEventListener("click", () => {
+            currentStep = step.id;
+            renderAll();
+          });
+          nodeLayer.appendChild(button);
+        });
+      }
+
+      function renderDetail() {
+        const step = steps.find((item) => item.id === currentStep);
+        detailStepPill.textContent = `Step ${step.id} · ${step.stage}`;
+        detailLanePill.textContent = `${laneLabel[step.lane]} Layer`;
+        detailTitle.textContent = step.title;
+        detailSummary.textContent = step.summary;
+        detailInput.textContent = step.input;
+        detailRequestExample.textContent = step.requestExample;
+        detailResponseExample.textContent = step.responseExample;
+        detailStateExample.textContent = step.stateExample;
+        detailWork.textContent = step.work;
+        detailOutput.textContent = step.output;
+        focusLine.textContent = `현재 선택된 노드는 ${laneLabel[step.lane]} 계층의 ${step.stage} 단계입니다. 큰 노드 안에 관련 함수, 요소, 상태 변화가 서브노드로 펼쳐진 상태를 함께 확인할 수 있습니다.`;
+        callout.textContent = step.callout;
+
+        referenceList.innerHTML = "";
+        step.refs.forEach((ref) => {
+          const item = document.createElement("li");
+          item.textContent = formatRef(ref);
+          referenceList.appendChild(item);
+        });
+      }
+
+      function renderBranches() {
+        const mode = scenarios[currentScenario].branchMode;
+        branchGrid.innerHTML = "";
+        branches[mode].forEach((branch) => {
+          const card = document.createElement("section");
+          card.className = `branch-card ${branch.kind === "success" ? "success" : "fail"}`;
+          card.innerHTML = `
+            <span class="branch-tag">${branch.tag}</span>
+            <h2>${branch.title}</h2>
+            <p>${branch.body}</p>
+          `;
+          branchGrid.appendChild(card);
+        });
+      }
+
+      function renderAll() {
+        renderScenarioControls();
+        renderScenarioSummary();
+        renderNodes();
+        renderEdges();
+        renderDetail();
+        renderBranches();
+        setZoom(zoomLevel);
+      }
+
+      document.getElementById("zoomInBtn").addEventListener("click", () => setZoom(zoomLevel + 0.1));
+      document.getElementById("zoomOutBtn").addEventListener("click", () => setZoom(zoomLevel - 0.1));
+      document.getElementById("zoomResetBtn").addEventListener("click", () => setZoom(1));
+
+      renderAll();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "job_type": "review",
+  "description": "Read-only architecture or risk review.",
+  "permission_mode": "default",
+  "max_turns": 6,
+  "allowed_tools": [
+    "Read",
+    "Glob",
+    "Grep"
+  ],
+  "prompt_preamble": [
+    "AGENTS.md를 먼저 읽는다.",
+    "이 작업은 읽기 전용 리뷰 작업으로 취급한다.",
+    "사용자가 명시적으로 방향을 바꾸지 않는 한 파일 수정이나 프로젝트 명령 실행을 하지 않는다.",
+    "DB 가정이 필요하면 저장소 루트 modular.db를 단일 런타임 DB로 간주한다.",
+    "최종 응답은 반드시 한국어로 작성한다."
+  ],
+  "report_sections": [
+    "발견한 이슈 또는 위험",
+    "약한 가정 또는 결합도 위험",
+    "누락된 검증 단계",
+    "다음에 확인할 파일 또는 흐름"
+  ]
+}

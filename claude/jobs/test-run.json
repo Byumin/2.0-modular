@@ -1,0 +1,26 @@
+{
+  "job_type": "test-run",
+  "description": "Run project tests via the target Python environment and analyze failures.",
+  "permission_mode": "default",
+  "max_turns": 8,
+  "allowed_tools": [
+    "Read",
+    "Glob",
+    "Grep",
+    "Bash(.venv/bin/python:*)"
+  ],
+  "prompt_preamble": [
+    "AGENTS.md를 먼저 읽는다.",
+    "Claude 실행에는 하네스 환경만 사용한다.",
+    "프로젝트 코드나 테스트 실행이 필요하면 `.venv/bin/python ...`만 사용한다.",
+    "사용자가 명시적으로 요청하지 않는 한 파일을 수정하지 않는다.",
+    "DB 확인이 필요하면 저장소 루트 modular.db를 런타임 DB로 간주한다.",
+    "최종 응답은 반드시 한국어로 작성한다."
+  ],
+  "report_sections": [
+    "실행한 내용",
+    "발견한 실패 또는 위험",
+    "가능성이 높은 원인",
+    "다음 검증 또는 수정 대상"
+  ]
+}

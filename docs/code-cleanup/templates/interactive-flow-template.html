@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{FLOW_TITLE}}</title>
+    <style>
+      :root {
+        --bg: #f6efe5;
+        --paper: rgba(255, 250, 244, 0.82);
+        --paper-strong: #fffaf3;
+        --line: rgba(29, 35, 38, 0.12);
+        --ink: #1d2326;
+        --muted: #6f6861;
+        --accent: #bf5127;
+        --accent-soft: rgba(191, 81, 39, 0.14);
+        --accent-2: #0f617a;
+        --accent-2-soft: rgba(15, 97, 122, 0.14);
+        --success: #256c4f;
+        --success-soft: rgba(37, 108, 79, 0.12);
+        --danger: #ae3c32;
+        --danger-soft: rgba(174, 60, 50, 0.14);
+        --warn: #9b6510;
+        --warn-soft: rgba(155, 101, 16, 0.12);
+        --violet: #7047c7;
+        --violet-soft: rgba(112, 71, 199, 0.13);
+        --shadow: 0 28px 80px rgba(70, 43, 20, 0.14);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: "Trebuchet MS", "Noto Sans KR", sans-serif;
+        background:
+          radial-gradient(circle at 12% 12%, rgba(15, 97, 122, 0.17), transparent 28%),
+          radial-gradient(circle at 88% 18%, rgba(191, 81, 39, 0.18), transparent 24%),
+          radial-gradient(circle at 55% 80%, rgba(188, 156, 108, 0.18), transparent 26%),
+          linear-gradient(180deg, #fbf4ea 0%, var(--bg) 100%);
+        color: var(--ink);
+      }
+
+      .page { width: min(1460px, calc(100% - 28px)); margin: 18px auto 44px; }
+
+      .hero,
+      .panel,
+      .detail-panel,
+      .node-card,
+      .branch-card {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+      }
+
+      .hero,
+      .panel,
+      .detail-panel { padding: 22px; }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        font-size: 12px;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(22px, 3vw, 34px);
+        line-height: 0.98;
+      }
+
+      .hero-copy {
+        max-width: 920px;
+        margin: 14px 0 0;
+        font-size: 16px;
+        line-height: 1.75;
+        color: var(--muted);
+      }
+
+      .hero-grid,
+      .main-grid,
+      .branch-grid,
+      .info-grid {
+        display: grid;
+        gap: 18px;
+      }
+
+      .hero-grid {
+        grid-template-columns: 1.4fr 1fr;
+        margin-top: 24px;
+      }
+
+      .main-grid {
+        grid-template-columns: minmax(0, 1.42fr) minmax(380px, 0.9fr);
+        gap: 18px;
+        margin-top: 22px;
+      }
+
+      .control-row,
+      .graph-tools,
+      .graph-legend,
+      .detail-meta { display: flex; flex-wrap: wrap; gap: 10px; }
+
+      .graph-tools {
+        flex-wrap: nowrap;
+        align-items: center;
+      }
+
+      .chip,
+      .zoom-btn {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        font: inherit;
+        background: rgba(29, 35, 38, 0.08);
+        color: var(--ink);
+        cursor: pointer;
+      }
+
+      .chip.active {
+        color: #fffaf4;
+        background: linear-gradient(135deg, var(--accent), #de8550);
+      }
+
+      .chip.active.success {
+        background: linear-gradient(135deg, var(--success), #39a06f);
+      }
+
+      .chip.active.failure,
+      .chip.active.validation {
+        background: linear-gradient(135deg, var(--danger), #d56858);
+      }
+
+      .chip.active.existing,
+      .chip.active.variant {
+        background: linear-gradient(135deg, var(--accent-2), #3f8da3);
+      }
+
+      .summary-box {
+        margin-top: 14px;
+        padding: 16px;
+        border-radius: 18px;
+        background: linear-gradient(140deg, rgba(15, 97, 122, 0.12), rgba(191, 81, 39, 0.1));
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .graph-shell { padding: 18px; }
+
+      .graph-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+
+      .graph-stage {
+        overflow: auto;
+        border-radius: 22px;
+        padding: 8px;
+        background: rgba(255, 255, 255, 0.28);
+      }
+
+      .graph-canvas {
+        position: relative;
+        width: 1240px;
+        height: 1400px;
+        transform-origin: left top;
+      }
+
+      .edge-layer,
+      .node-layer {
+        position: absolute;
+        inset: 0;
+        width: 1240px;
+        height: 1400px;
+      }
+
+      .edge-layer defs path {
+        stroke: none;
+      }
+
+      .edge-layer path {
+        fill: none;
+        stroke: rgba(29, 35, 38, 0.18);
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-dasharray: 8 10;
+        marker-end: url(#arrow-neutral);
+      }
+
+      .edge-layer path.active {
+        stroke: var(--accent);
+        stroke-width: 4;
+        opacity: 1;
+      }
+
+      .edge-layer path.active.success {
+        stroke: var(--success);
+      }
+
+      .edge-layer path.active.failure,
+      .edge-layer path.active.validation {
+        stroke: var(--danger);
+      }
+
+      .edge-layer path.active.existing,
+      .edge-layer path.active.variant {
+        stroke: var(--accent-2);
+      }
+
+      .edge-layer path.dimmed {
+        opacity: 0.22;
+      }
+
+      .node-card {
+        position: absolute;
+        width: 256px;
+        min-height: 188px;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, width 180ms ease, min-height 180ms ease;
+      }
+
+      .node-card.active {
+        width: 320px;
+        min-height: 326px;
+      }
+
+      .node-kicker {
+        display: inline-flex;
+        width: fit-content;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(29, 35, 38, 0.06);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .node-title {
+        margin: 10px 0 0;
+        font-size: 17px;
+        line-height: 1.32;
+      }
+
+      .node-copy {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.58;
+      }
+
+      .subnode-grid,
+      .fold-group {
+        display: grid;
+        gap: 8px;
+      }
+
+      .subnode {
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.74);
+        border: 1px solid rgba(29, 35, 38, 0.08);
+      }
+
+      .detail-panel {
+        position: sticky;
+        top: 18px;
+        max-height: calc(100vh - 36px);
+        overflow-y: auto;
+      }
+
+      .detail-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .info-card {
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.56);
+      }
+
+      .fold-card {
+        border-radius: 16px;
+        border: 1px solid rgba(29, 35, 38, 0.08);
+        background: rgba(255, 255, 255, 0.7);
+        overflow: hidden;
+      }
+
+      .fold-card summary {
+        list-style: none;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        padding: 14px 16px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .fold-card summary::-webkit-details-marker { display: none; }
+
+      .fold-card summary::after {
+        content: "펼치기";
+        font-size: 12px;
+        color: var(--accent-2);
+      }
+
+      .fold-card[open] summary::after {
+        content: "접기";
+      }
+
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: "Consolas", "Courier New", monospace;
+        font-size: 13px;
+        line-height: 1.62;
+      }
+
+      .branch-card { padding: 18px; }
+
+      .callout {
+        margin-top: 18px;
+        border-left: 4px solid var(--warn);
+        border-radius: 0 14px 14px 0;
+        padding: 14px 16px;
+        background: rgba(155, 101, 16, 0.08);
+        color: #604713;
+        line-height: 1.72;
+      }
+
+      .callout:empty {
+        display: none;
+      }
+
+      @media (max-width: 1220px) {
+        .hero-grid,
+        .main-grid,
+        .branch-grid { grid-template-columns: 1fr; }
+
+        .detail-panel { position: static; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <section class="hero">
+        <p class="eyebrow">Interactive Flow Template</p>
+        <h1>{{FLOW_TITLE}}</h1>
+        <p class="hero-copy">{{FLOW_SUMMARY_FUNCTION_FIRST_NO_BUILD_MEMO}}</p>
+
+        <div class="hero-grid">
+          <div class="panel">
+            <h2>시나리오 선택</h2>
+            <div class="control-row">{{SCENARIO_CONTROLS}}</div>
+            <div class="summary-box">{{SCENARIO_SUMMARY}}</div>
+          </div>
+          <div class="panel">
+            <h2>핵심 구조</h2>
+            <ul>
+              <li>{{KEY_POINT_1}}</li>
+              <li>{{KEY_POINT_2}}</li>
+              <li>{{KEY_POINT_3}}</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="main-grid">
+        <section class="panel graph-shell">
+          <div class="graph-header">
+            <div>
+              <h2>런타임 그래프</h2>
+              <p>{{GRAPH_HELP}}</p>
+            </div>
+            <div class="graph-tools">
+              <button class="zoom-btn" type="button" aria-label="축소">-</button>
+              <span class="detail-pill">{{ZOOM_LEVEL_DEFAULT_100_PERCENT}}</span>
+              <button class="zoom-btn" type="button" aria-label="확대">+</button>
+            </div>
+          </div>
+          <div class="graph-legend">{{GRAPH_LEGEND_REQUIRED_WHEN_LANE_COLORS_USED}}</div>
+          <div class="graph-stage">
+            <div class="graph-canvas">
+              <svg class="edge-layer">
+                <defs>
+                  <marker id="arrow-neutral" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(29, 35, 38, 0.24)"></path>
+                  </marker>
+                  <marker id="arrow-success" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#256c4f"></path>
+                  </marker>
+                  <marker id="arrow-failure" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#ae3c32"></path>
+                  </marker>
+                  <marker id="arrow-existing" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f617a"></path>
+                  </marker>
+                </defs>
+              </svg>
+              <div class="node-layer">
+                <button class="node-card active" style="left: 60px; top: 80px;">
+                  <div>
+                    <span class="node-kicker">Step 1 · {{NODE_STAGE}}</span>
+                    <h3 class="node-title">{{NODE_TITLE}}</h3>
+                    <p class="node-copy">{{NODE_SUMMARY}}</p>
+                  </div>
+                  <div class="subnode-grid">{{SUBNODE_GROUP}}</div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="detail-panel">
+          <div class="detail-meta">
+            <span class="detail-pill">{{DETAIL_STEP}}</span>
+            <span class="detail-pill">{{DETAIL_LAYER}}</span>
+          </div>
+          <h2>{{DETAIL_TITLE}}</h2>
+          <p>{{DETAIL_SUMMARY}}</p>
+
+          <div class="info-grid">
+            <section class="info-card">
+              <h3>입력 / 현재 상태</h3>
+              <pre>{{DETAIL_INPUT}}</pre>
+            </section>
+            <section class="info-card">
+              <h3>데이터 예시</h3>
+              <div class="fold-group">
+                <details class="fold-card">
+                  <summary>요청 데이터 예시</summary>
+                  <pre>{{REQUEST_EXAMPLE}}</pre>
+                </details>
+                <details class="fold-card">
+                  <summary>응답 데이터 예시</summary>
+                  <pre>{{RESPONSE_EXAMPLE}}</pre>
+                </details>
+                <details class="fold-card">
+                  <summary>내부 상태 / 저장 예시</summary>
+                  <pre>{{STATE_EXAMPLE}}</pre>
+                </details>
+              </div>
+            </section>
+            <section class="info-card">
+              <h3>내부 처리</h3>
+              <pre>{{DETAIL_WORK}}</pre>
+            </section>
+            <section class="info-card">
+              <h3>출력 / 다음 단계</h3>
+              <pre>{{DETAIL_OUTPUT}}</pre>
+            </section>
+            <section class="info-card">
+              <h3>실제 소스 기준점</h3>
+              <pre>{{REFERENCE_RELATIVE_PATHS_ONLY_EXAMPLE_static/admin.js:2207}}</pre>
+            </section>
+          </div>
+
+          <div class="branch-grid">{{BRANCH_GROUP}}</div>
+          <div class="callout">{{CALLOUT_OPTIONAL_HIDE_WHEN_EMPTY}}</div>
+        </aside>
+      </section>
+    </div>
+  </body>
+</html>

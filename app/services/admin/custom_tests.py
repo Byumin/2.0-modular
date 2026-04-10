@@ -22,6 +22,7 @@ from app.repositories.parent_test_repository import (
     fetch_parent_scale_rows_by_test,
     fetch_parent_scale_struct,
 )
+from app.schemas.custom_tests import CreateCustomTestBatchIn, UpdateCustomTestNameIn
 from app.services.admin.auth import get_current_admin
 from app.services.admin.common import (
     _normalize_item_map,
@@ -99,7 +100,7 @@ def _format_school_age_range_label(school_age_range: dict) -> str:
 def get_admin_test_catalog(db: Session, admin_session: str | None) -> dict:
     get_current_admin(db, admin_session)
 
-    rows = fetch_parent_catalog_rows()
+    rows = fetch_parent_catalog_rows(db=db)
 
     def format_age_label(sub_test_json: str) -> str:
         try:
@@ -247,10 +248,61 @@ def _age_start_from_sub_test_json(sub_test_json: str) -> int:
         return start[0] # 시작 연령/학령이 가장 어린 것을 우선으로 하기 위해 start_inclusive의 첫 번째 요소(연령/학령 정보)를 반환
     return 9999
 
-def _resolve_sub_test_variant_configs(admin_selected_test_id: str, admin_selected_scale_codes: list[str]) -> list[dict]:
+
+def _describe_sub_test_variant(sub_test_json: str) -> str:
+    try:
+        parsed = json.loads(sub_test_json or "{}")
+    except json.JSONDecodeError:
+        return "알 수 없는 실시구간"
+    if not isinstance(parsed, dict):
+        return "알 수 없는 실시구간"
+
+    age_range = parsed.get("age_range", {})
+    start = age_range.get("start_inclusive", [])
+    end_exclusive = age_range.get("end_exclusive", [])
+    if (
+        isinstance(start, list)
+        and isinstance(end_exclusive, list)
+        and start
+        and end_exclusive
+        and isinstance(start[0], int)
+        and isinstance(end_exclusive[0], int)
+    ):
+        start_year = start[0]
+        end_year = end_exclusive[0]
+        if end_year >= 100:
+            return f"만 {start_year}세 이상"
+        return f"만 {start_year}~{max(start_year, end_year - 1)}세"
+
+    school_age_range = parsed.get("school_age_range")
+    if isinstance(school_age_range, dict):
+        school_text = _format_school_age_range_label(school_age_range)
+        if school_text:
+            return school_text
+
+    return "알 수 없는 실시구간"
+
+
+def _canonicalize_sub_test_json(raw: str) -> str:
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return text
+    return json.dumps(parsed, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _resolve_sub_test_variant_configs(
+    admin_selected_test_id: str,
+    admin_selected_scale_codes: list[str],
+    excluded_sub_test_jsons: list[str] | None = None,
+    db: Session | None = None,
+) -> list[dict]:
     # 관리자가 고른 test_id들과 척도코드들을 db의 정보와 비교하여 실시 가능한 정보 목록으로 정규화하는 함수
     #! 주의 : admin_selected_test_id는 test_id 1개만 받음 / 복수 검사 단위를 처리하는게 아님 -> create_admin_custom_test_batch에서 검사별로 반복되도록 설계되어 있음
-    rows = fetch_parent_scale_rows_by_test(admin_selected_test_id) # 선택한 test_id에 해당하는 모든 sub_test_json과 scale_struct를 DB에서 가져옴
+    rows = fetch_parent_scale_rows_by_test(admin_selected_test_id, db=db) # 선택한 test_id에 해당하는 모든 sub_test_json과 scale_struct를 DB에서 가져옴
     # 예시 admin_selected_test_id : golden
     # 예시 admin_selected_scale_codes : ["G1", "G2", "G5"]
     # 예시 rows : 
@@ -258,11 +310,18 @@ def _resolve_sub_test_variant_configs(admin_selected_test_id: str, admin_selecte
         raise HTTPException(status_code=404, detail="선택한 검사 데이터가 존재하지 않습니다.")
 
     selected_codes = {str(code) for code in admin_selected_scale_codes} # 선택한 척도 코드들을 문자열 형태로 집합에 저장 -> 만약 다른 검사의 척도 코드가 같은 경우면 구분이 안되네?
+    excluded_variants = {
+        _canonicalize_sub_test_json(item)
+        for item in (excluded_sub_test_jsons or [])
+        if _canonicalize_sub_test_json(item)
+    }
     if not selected_codes:
         raise HTTPException(status_code=400, detail="최소 1개 이상의 척도를 선택해주세요.")
 
     candidates: list[dict] = []
     seen: set[str] = set()
+    missing_variants: list[dict] = []
+    invalid_exclusions: list[str] = []
     for row in rows: # rows : db에서 가져온 각 행에 대해 반복, 각 행은 특정 sub_test_json과 scale_struct를 포함
         try:
             logger.info(f"Processing row: {row}")
@@ -273,16 +332,27 @@ def _resolve_sub_test_variant_configs(admin_selected_test_id: str, admin_selecte
             continue
 
         candidate_json = str(row.sub_test_json) # sub_test_json을 문자열로 변환하여 중복 검사에 사용
+        candidate_key = _canonicalize_sub_test_json(candidate_json)
         # seen 집합을 활용하여 중복된 sub_test_json이 이미 처리되었는지 확인, 중복된 경우 해당 행은 건너뛰고 다음 행으로 넘어감
-        if candidate_json in seen:
+        if candidate_key in seen:
             continue
-        seen.add(candidate_json)
+        seen.add(candidate_key)
 
         available_codes = sorted({str(code) for code in scale_struct.keys()}) # 이걸 왜 정렬하는거지..?
         selected_for_variant = sorted(selected_codes.intersection(available_codes))  # intersection : 호출 주체와 인자간의 공통된 요소를 새로운 집합으로 반환
-        if not selected_for_variant: 
-            # 구간별 척도구조가 상이할 때 실시 가능성을 위해 해당 구간 척도 전체를 보존한다.
-            selected_for_variant = available_codes.copy()
+        if not selected_for_variant:
+            if candidate_key in excluded_variants:
+                continue
+            missing_variants.append(
+                {
+                    "label": _describe_sub_test_variant(candidate_json),
+                    "available_scale_codes": available_codes,
+                }
+            )
+            continue
+        if candidate_key in excluded_variants:
+            invalid_exclusions.append(_describe_sub_test_variant(candidate_json))
+            continue
 
         candidates.append(
             {
@@ -293,6 +363,22 @@ def _resolve_sub_test_variant_configs(admin_selected_test_id: str, admin_selecte
             }
         )
 
+    if missing_variants:
+        details = ", ".join(
+            [
+                f"{item['label']}(가능 척도: {', '.join(item['available_scale_codes'])})"
+                for item in missing_variants
+            ]
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"{admin_selected_test_id}: 선택한 척도가 없는 실시구간이 있습니다. {details}",
+        )
+    if invalid_exclusions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{admin_selected_test_id}: 선택 척도가 존재하는 실시구간은 제외할 수 없습니다. {', '.join(invalid_exclusions)}",
+        )
     if not candidates:
         raise HTTPException(status_code=400, detail=f"{admin_selected_test_id}: 사용 가능한 문항 구간이 없습니다.")
     # 연령 시작값 기준 정렬
@@ -340,9 +426,12 @@ def _build_merged_sub_test_json(variants: list[dict]) -> str:
 def create_admin_custom_test_batch(
     db: Session,
     admin_session: str | None,
-    payload,
+    payload: CreateCustomTestBatchIn,
 ) -> dict:
     admin = get_current_admin(db, admin_session) # 현재 로그인한 관리자 정보 인증
+    trimmed_name = payload.custom_test_name.strip()
+    if not trimmed_name:
+        raise HTTPException(status_code=400, detail="검사명은 공백만 입력할 수 없습니다.")
 
     # payload의 additional_profile_fields 필드에 대해 normalize_additional_profile_fields 함수를 적용하여,
     # 입력된 추가 프로필 필드 데이터를 최대한 유연하게 처리하여 정규화된 형태로 반환
@@ -361,6 +450,8 @@ def create_admin_custom_test_batch(
         resolved_variant_configs = _resolve_sub_test_variant_configs(
             config.test_id,
             config.selected_scale_codes,
+            excluded_sub_test_jsons=config.excluded_sub_test_jsons,
+            db=db,
         ) # resolved_variant_configs : 정규화 처리된 test_id와 척도코드 - 리스트[딕셔너리]
         logger.info(resolved_variant_configs)
         resolved_test_configs.append(
@@ -396,7 +487,7 @@ def create_admin_custom_test_batch(
         admin_user_id=admin.id,
         test_id=json.dumps(sorted(sys_test_ids), ensure_ascii=False), # 실시 가능한 모든 test_id를 JSON 배열 형태로 저장
         sub_test_json=_build_merged_sub_test_json(flattened_variants), # 실시 가능한 모든 sub_test_json 키/값 병합 결과 저장
-        custom_test_name=payload.custom_test_name,
+        custom_test_name=trimmed_name,
         selected_scales_json=json.dumps(selected_scales_struct_json, ensure_ascii=False),
         additional_profile_fields_json=serialize_additional_profile_payload(
             normalized_fields,
@@ -454,7 +545,12 @@ def get_admin_custom_test(db: Session, admin_session: str | None, custom_test_id
     }
 
 
-def update_admin_custom_test(db: Session, admin_session: str | None, custom_test_id: int, payload) -> dict:
+def update_admin_custom_test(
+    db: Session,
+    admin_session: str | None,
+    custom_test_id: int,
+    payload: UpdateCustomTestNameIn,
+) -> dict:
     admin = get_current_admin(db, admin_session)
     row = get_custom_test_by_id_and_admin(
         db,
@@ -464,66 +560,13 @@ def update_admin_custom_test(db: Session, admin_session: str | None, custom_test
     if row is None:
         raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
 
-    row.custom_test_name = payload.custom_test_name.strip()
-    test_configs = load_custom_test_configs(row)
-    if getattr(payload, "test_configs", None):
-        resolved_test_configs: list[dict] = []
-        flattened_variants: list[dict] = []
-        for config in payload.test_configs:
-            resolved_variants = _resolve_sub_test_variant_configs(config.test_id, config.selected_scale_codes)
-            resolved_test_configs.append({"test_id": config.test_id, "sub_test_variants": resolved_variants})
-            flattened_variants.extend(resolved_variants)
+    trimmed_name = payload.custom_test_name.strip()
+    if not trimmed_name:
+        raise HTTPException(status_code=400, detail="검사명은 공백만 입력할 수 없습니다.")
 
-        row.test_id = json.dumps(sorted({item["test_id"] for item in flattened_variants}), ensure_ascii=False)
-        row.sub_test_json = _build_merged_sub_test_json(flattened_variants)
-        row.selected_scales_json = json.dumps(
-            {
-                str(config["test_id"]): [
-                    {
-                        "sub_test_json": json.loads(variant["sub_test_json"]),
-                        "variable": {
-                            "available_scale_codes": variant["available_scale_codes"],
-                            "selected_scale_codes": variant["selected_scale_codes"],
-                        },
-                    }
-                    for variant in config["sub_test_variants"]
-                ]
-                for config in resolved_test_configs
-            },
-            ensure_ascii=False,
-        )
-        raw_additional_payload = json.loads(getattr(row, "additional_profile_fields_json", "[]") or "[]")
-        normalized_fields = normalize_additional_profile_fields(raw_additional_payload)
-        row.additional_profile_fields_json = serialize_additional_profile_payload(
-            normalized_fields,
-        )
-    elif len(test_configs) <= 1 and payload.selected_scale_codes:
-        base_test_id = test_configs[0]["test_id"] if test_configs else row.test_id
-        resolved_variants = _resolve_sub_test_variant_configs(base_test_id, payload.selected_scale_codes)
-        row.test_id = base_test_id
-        row.sub_test_json = resolved_variants[0]["sub_test_json"]
-        row.selected_scales_json = json.dumps(
-            {
-                base_test_id: [
-                    {
-                        "sub_test_json": json.loads(variant["sub_test_json"]),
-                        "variable": {
-                            "available_scale_codes": variant["available_scale_codes"],
-                            "selected_scale_codes": variant["selected_scale_codes"],
-                        },
-                    }
-                    for variant in resolved_variants
-                ]
-            },
-            ensure_ascii=False,
-        )
-        raw_additional_payload = json.loads(getattr(row, "additional_profile_fields_json", "[]") or "[]")
-        normalized_fields = normalize_additional_profile_fields(raw_additional_payload)
-        row.additional_profile_fields_json = serialize_additional_profile_payload(
-            normalized_fields,
-        )
+    row.custom_test_name = trimmed_name
     commit(db)
-    return {"message": "검사 설정이 수정되었습니다."}
+    return {"message": "검사명이 수정되었습니다."}
 
 
 def delete_admin_custom_test(db: Session, admin_session: str | None, custom_test_id: int) -> dict:

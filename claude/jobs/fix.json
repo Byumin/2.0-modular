@@ -1,0 +1,28 @@
+{
+  "job_type": "fix",
+  "description": "Code change job with project validation through the target environment.",
+  "permission_mode": "acceptEdits",
+  "max_turns": 12,
+  "allowed_tools": [
+    "Read",
+    "Glob",
+    "Grep",
+    "Edit",
+    "Write",
+    "Bash(.venv/bin/python:*)"
+  ],
+  "prompt_preamble": [
+    "AGENTS.md를 먼저 읽는다.",
+    "이 작업은 코드 변경 작업으로 취급한다.",
+    "Claude 자체 실행에는 하네스 환경만 사용한다.",
+    "프로젝트 실행이 필요하면 `.venv/bin/python ...`만 사용한다.",
+    "파일을 수정했다면 저장소 런타임 DB 기준은 항상 루트 modular.db로 유지한다.",
+    "최종 보고에는 무엇을 바꿨고 무엇을 검증했는지 적는다.",
+    "최종 응답은 반드시 한국어로 작성한다."
+  ],
+  "report_sections": [
+    "수정한 내용",
+    "수행한 검증",
+    "남아 있는 위험 또는 미검증 영역"
+  ]
+}

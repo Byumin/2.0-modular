@@ -1,0 +1,23 @@
+Read AGENTS.md first.
+
+Use the orchestrator environment only to run Claude.
+When you need to execute project code or tests, use the target project environment:
+- .venv/bin/python
+
+Inspect:
+- app/main.py
+- app/router/
+- app/services/
+- app/repositories/
+- modular.db if DB assumptions are relevant
+
+Task:
+- Run project tests with `.venv/bin/python -m pytest` if pytest is available.
+- If tests are not available, inspect the code and identify the safest next verification steps.
+- Do not modify files unless the prompt explicitly asks for edits.
+
+Report:
+1. What was executed
+2. Failures or risks found
+3. Likely root causes
+4. Next verification or fix targets
