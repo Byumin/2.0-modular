@@ -69,7 +69,7 @@
 
 7. 소스 기준점 표시
 - 실제 파일/라인 기준점은 넣되, 브라우저 표시용 텍스트는 저장소 상대 경로 형태로 보여야 한다.
-- 예: `static/admin-login.html:9`
+- 예: `frontend/src/pages/Login.tsx:1`
 - `/mnt/c/...` 같은 로컬 절대 경로를 그대로 노출하지 않는다.
 
 ## Step Granularity Rule

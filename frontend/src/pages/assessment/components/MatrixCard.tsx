@@ -62,7 +62,14 @@ export function MatrixCard({ groupItems, options, answerState, onAnswer, startGl
                     const checked = answerState[item.id] === opt.value
                     return (
                       <td key={i} className="px-2 py-2.5 text-center">
-                        <label className={`inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg border transition-colors ${checked ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/50 hover:bg-accent"}`}>
+                        <label
+                          data-item-id={item.id}
+                          data-option-index={i}
+                          tabIndex={0}
+                          role="radio"
+                          aria-checked={checked}
+                          className={`assessment-option-card inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg border transition-colors ${checked ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/50 hover:bg-accent"}`}
+                        >
                           <input
                             type="radio"
                             name={`q_${item.id}`}

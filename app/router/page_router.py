@@ -4,7 +4,6 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-STATIC_DIR = BASE_DIR / "static"
 REACT_DIST_DIR = BASE_DIR / "frontend" / "dist"
 
 router = APIRouter()
@@ -23,7 +22,7 @@ def _react_index() -> FileResponse:
 
 @router.get("/")
 def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    return _react_index()
 
 
 @router.get("/assessment/custom/{access_token}")

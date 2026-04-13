@@ -18,7 +18,7 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
-      // 기존 정적 자원 (admin 화면이 참조하는 CSS/JS)
+      // 레거시 보고서 정적 자원
       '/static': {
         target: 'http://localhost:8000',
         changeOrigin: true,

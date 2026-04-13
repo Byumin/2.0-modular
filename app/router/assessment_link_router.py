@@ -31,7 +31,11 @@ def validate_profile(
     payload: ValidateAssessmentProfileIn,
     db: Session = Depends(get_db),
 ) -> dict:
-    return validate_custom_test_profile_by_access_link(db, access_token, payload.profile or {})
+    return validate_custom_test_profile_by_access_link(
+        db, access_token, payload.profile or {},
+        selected_client_id=payload.client_id,
+        responder_choice=payload.responder_choice,
+    )
 
 
 @router.post("/api/assessment-links/{access_token}/register-client")
@@ -55,4 +59,8 @@ def submit_assessment(
         payload.responder_name,
         payload.profile,
         payload.answers,
+        client_id=payload.client_id,
+        is_ambiguous_match=payload.is_ambiguous_match,
+        responder_choice=payload.responder_choice,
+        candidate_client_ids=payload.candidate_client_ids,
     )

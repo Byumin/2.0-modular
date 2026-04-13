@@ -11,11 +11,13 @@ import { AssessmentPage } from "@/pages/assessment/AssessmentPage"
 import { ArtifactViewer } from "@/pages/ArtifactViewer"
 import { LegacyRedirect } from "@/pages/LegacyRedirect"
 import { Settings } from "@/pages/Settings"
+import { IdentityReviews } from "@/pages/IdentityReviews"
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="/admin" element={<Login />} />
         <Route path="/assessment/custom/:accessToken" element={<AssessmentPage />} />
         <Route element={<AppLayout />}>
@@ -29,6 +31,7 @@ export default function App() {
           <Route path="/admin/test-detail" element={<LegacyRedirect type="test-detail" />} />
           <Route path="/admin/create/:id" element={<TestDetail />} />
           <Route path="/admin/artifact-viewer" element={<ArtifactViewer />} />
+          <Route path="/admin/identity-reviews" element={<IdentityReviews />} />
           <Route path="/admin/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin" replace />} />
