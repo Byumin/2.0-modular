@@ -224,10 +224,114 @@
 ## Implementation Recommendation
 실제 구현 시 아래 방식을 권장한다.
 
-- 색상, radius, spacing, shadow는 CSS 변수로 먼저 정의한다.
-- `static/style.css`에서 전역 토큰을 먼저 선언하고 화면별 스타일은 그 토큰을 재사용한다.
-- 새 HTML/JS 화면을 추가할 때는 기존 클래스 네이밍 규칙과 간격 체계를 우선 재사용한다.
+- 색상, radius, spacing, shadow는 CSS 변수 또는 Tailwind theme token으로 먼저 정의한다.
+- 현재 React 화면은 `frontend/src/index.css`의 theme token과 `frontend/src/components/ui/` 컴포넌트를 우선 재사용한다.
+- `static/style.css`는 레거시 HTML/JS 화면 기준 파일이며, 새 주요 관리자/수검자 화면의 기본 수정 대상은 `frontend/src/`다.
+- 새 React 화면을 추가할 때는 기존 React 컴포넌트 네이밍 규칙과 간격 체계를 우선 재사용한다.
 - 화면별 예외 스타일은 최소화하고 공통 컴포넌트 스타일을 늘리는 방향으로 정리한다.
+
+---
+
+## React Migration
+
+### 전환 배경
+장기적인 기능 확장성을 위해 현재 정적 HTML + vanilla JS 구조에서 Vite + React + Shadcn UI 기반으로 전환한다.
+FastAPI 백엔드 API(`/api/...`)는 그대로 유지하고 프론트엔드만 교체한다.
+전환 실행 계획은 [docs/exec-plans/2026-04-10-react-migration.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-10-react-migration.md)를 기준으로 한다.
+
+### Tech Stack
+| 역할 | 선택 |
+|---|---|
+| 빌드 | Vite + React 18 |
+| 언어 | TypeScript |
+| 스타일 | Tailwind CSS v4 |
+| UI 라이브러리 | Shadcn UI (new-york-v4) |
+| 라우팅 | React Router v7 |
+| 아이콘 | @tabler/icons-react |
+| HTTP | fetch API |
+
+### React 전환 누락 방지 규칙
+React 전환 작업은 "컴포넌트 파일 생성"이 아니라 실제 브라우저 진입점 전환까지 완료된 상태를 기준으로 한다.
+아래 항목 중 하나라도 빠지면 전환 완료로 표시하지 않는다.
+
+- `app/router/page_router.py`에서 해당 browser route가 React SPA `frontend/dist/index.html`로 서빙되는지 확인한다.
+- `frontend/src/App.tsx`에 같은 route가 등록되어 있고 wildcard redirect로 빠지지 않는지 확인한다.
+- 기존 정적 HTML URL이 query string 기반이면 React route에서 동일 URL을 처리하거나 명시적 redirect/compat route를 둔다.
+- React UI에 노출된 버튼과 사이드바 링크는 실제 route, modal, API action 중 하나에 연결되어야 한다. 클릭해도 아무 일도 안 하는 placeholder 버튼은 전환 완료 범위에 포함하지 않는다.
+- 기존 정적 HTML/JS 파일이 남아 있어도 실제 browser route가 React로 서빙되면 "레거시 잔존 파일"로 분류하고, 반대로 정적 파일이 실제 라우터에서 서빙되면 "미전환"으로 분류한다.
+- 전환 완료 전 `npm run build`, `npm run lint`, 주요 route Playwright 스크린샷을 확인한다.
+- 관리자 화면은 `/admin`, `/admin/*` route를, 수검자 화면은 `/assessment/custom/{token}` route를 별도로 확인한다.
+- 신규/수정 route가 `frontend/dist` 빌드 산출물에 의존하면 빌드 누락 시 명확한 오류를 반환해야 한다.
+
+### 레퍼런스 소스 구조
+로컬 레퍼런스 경로: `docs/design/reference/ui-main/`
+원본: [shadcn-ui/ui](https://github.com/shadcn-ui/ui)
+
+```
+ui-main/apps/v4/
+├── app/(app)/examples/
+│   ├── dashboard/                  ← 대시보드 예제 (메인 레이아웃 참고)
+│   │   ├── page.tsx                ← SidebarProvider + SidebarInset 구조
+│   │   └── components/
+│   │       ├── app-sidebar.tsx     ← 사이드바 (navMain, navSecondary, NavUser)
+│   │       ├── site-header.tsx     ← 상단 헤더
+│   │       ├── section-cards.tsx   ← 통계 카드 (Card + Badge)
+│   │       ├── data-table.tsx      ← 데이터 테이블 (TanStack Table 기반)
+│   │       ├── nav-main.tsx        ← 주 메뉴 네비게이션
+│   │       ├── nav-secondary.tsx   ← 하단 보조 메뉴
+│   │       └── nav-user.tsx        ← 유저 프로필 영역
+│   ├── authentication/             ← 로그인 페이지 예제
+│   └── tasks/                      ← 필터 + 테이블 예제
+└── registry/new-york-v4/
+    ├── ui/                         ← 개별 컴포넌트 소스 (40+개)
+    │   ├── sidebar.tsx             ← 사이드바 기반 컴포넌트
+    │   ├── card.tsx                ← 카드
+    │   ├── table.tsx               ← 테이블
+    │   ├── dialog.tsx              ← 모달
+    │   ├── button.tsx              ← 버튼
+    │   ├── input.tsx               ← 입력 필드
+    │   ├── select.tsx              ← 셀렉트
+    │   ├── badge.tsx               ← 배지/상태 표시
+    │   ├── form.tsx                ← 폼 래퍼
+    │   └── empty.tsx               ← 빈 상태 컴포넌트
+    └── blocks/
+        ├── login-01/ ~ login-05/   ← 로그인 화면 블록 5종
+        ├── dashboard-01/           ← 대시보드 블록
+        └── sidebar-01/ ~ sidebar-13/ ← 사이드바 레이아웃 블록 13종
+```
+
+### 페이지별 컴포넌트 매핑
+| 화면 | React 페이지 | 주요 Shadcn 컴포넌트 | 레퍼런스 |
+|---|---|---|---|
+| 로그인 | `Login.tsx` | Card, Input, Button, Label | `blocks/login-01~05/` |
+| 대시보드 | `Dashboard.tsx` | SidebarProvider, SectionCards, Card | `examples/dashboard/` |
+| 검사 관리 | `TestManagement.tsx` | Card, Input, Button, Badge, custom modal/grid | `examples/tasks/`, `ui/dialog.tsx` |
+| 내담자 관리 | `ClientManagement.tsx` | Card, Input, Button, Badge, custom modal/grid | `examples/tasks/` |
+| 검사 상세 | `TestDetail.tsx` | Card, Input, Button, Badge | `ui/card.tsx`, `ui/form.tsx` |
+| 내담자 상세 | `ClientDetail.tsx` | Card, Input, Button, Badge, assignment list | `ui/card.tsx` |
+| 결과 조회 | `ClientResult.tsx` | Card, native table, Badge | - |
+
+### 프로젝트 구조
+```
+frontend/
+├── src/
+│   ├── components/
+│   │   ├── ui/           ← Shadcn 컴포넌트 (shadcn add로 설치)
+│   │   ├── layout/       ← AppSidebar, SiteHeader, Layout
+│   │   └── shared/       ← 공통 컴포넌트 (DataTable, StatusBadge 등)
+│   ├── pages/            ← 페이지 컴포넌트
+│   ├── api/              ← FastAPI 연동 fetch 함수 또는 향후 공통 API 클라이언트
+│   ├── types/            ← TypeScript 타입 정의
+│   └── main.tsx
+├── index.html
+├── vite.config.ts
+└── package.json
+```
+
+### FastAPI 연동 방식
+- 개발 중: Vite dev server(`localhost:5173`)에서 FastAPI(`localhost:8000`)로 proxy
+- 운영: `frontend/dist/index.html`을 FastAPI page router가 `/admin`, `/admin/*`, `/assessment/custom/{token}`에서 서빙하고, `frontend/dist/assets`를 `/assets`로 mount한다.
+- 기존 `/api/...` 엔드포인트는 변경 없이 그대로 사용
 
 ## Related Documents
 - [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)

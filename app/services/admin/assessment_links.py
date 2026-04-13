@@ -17,13 +17,19 @@ from app.repositories.custom_test_repository import (
 )
 from app.repositories.parent_test_repository import fetch_parent_item_bundle
 from app.services.admin.auth import get_current_admin
-from app.services.admin.clients import find_assigned_client_for_profile
+from app.services.admin.clients import (
+    AUTO_CREATE_CONFIRM_REQUIRED_CODE,
+    find_assigned_client_for_profile,
+    find_assigned_client_for_profile_with_code,
+    register_client_and_assign_for_public_assessment,
+)
 from app.services.admin.common import (
     _derive_required_profile_fields,
     _normalize_item_map,
     _parse_response_options,
     flatten_custom_test_variant_configs,
     load_custom_test_configs,
+    normalize_client_intake_mode,
     normalize_additional_profile_fields,
     summarize_custom_test_ids,
 )
@@ -37,6 +43,13 @@ def _safe_parse_date(value: Any) -> date | None:
         return date.fromisoformat(text)
     except ValueError:
         return None
+
+
+def _raise_assessment_error(status_code: int, message: str, code: str | None = None) -> None:
+    detail: dict[str, Any] = {"message": message}
+    if code:
+        detail["code"] = code
+    raise HTTPException(status_code=status_code, detail=detail)
 
 
 def _age_detail(birth_day: date, as_of: date) -> tuple[int, int, int]:
@@ -156,6 +169,7 @@ def _build_custom_assessment_profile_meta(custom_test_row: AdminCustomTest, test
     return {
         "custom_test_id": custom_test_row.id,
         "custom_test_name": custom_test_row.custom_test_name,
+        "client_intake_mode": normalize_client_intake_mode(getattr(custom_test_row, "client_intake_mode", "")),
         "test_id": test_id_text or custom_test_row.test_id,
         "test_ids": test_ids,
         "display_name": custom_test_row.custom_test_name,
@@ -701,19 +715,66 @@ def validate_custom_test_profile_by_access_link(db: Session, access_token: str, 
     if custom_test is None:
         raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
 
-    _, error_message = find_assigned_client_for_profile( # 입력한 인적사항과 배정된 내담자 확인 + 값 검증
-        db,
-        admin_user_id=link.admin_user_id,
-        custom_test_id=custom_test.id,
-        profile=profile or {},
-    )
-    if error_message:
-        raise HTTPException(status_code=403, detail=error_message)
+    client_intake_mode = normalize_client_intake_mode(getattr(custom_test, "client_intake_mode", ""))
+    if client_intake_mode == "pre_registered_only":
+        _, error_message, error_code = find_assigned_client_for_profile_with_code( # 입력한 인적사항과 배정된 내담자 확인 + 값 검증
+            db,
+            admin_user_id=link.admin_user_id,
+            custom_test_id=custom_test.id,
+            profile=profile or {},
+        )
+        if error_message:
+            _raise_assessment_error(403, error_message, error_code)
+    else:
+        client, _, _ = find_assigned_client_for_profile_with_code(
+            db,
+            admin_user_id=link.admin_user_id,
+            custom_test_id=custom_test.id,
+            profile=profile or {},
+        )
+        if client is None:
+            _raise_assessment_error(
+                403,
+                "기존 내담자 재사용 또는 신규 등록을 위해 확인이 필요합니다. 계속하면 현재 검사에 연결됩니다.",
+                AUTO_CREATE_CONFIRM_REQUIRED_CODE,
+            )
 
     assessment_payload = build_custom_assessment_question_payload(custom_test, profile or {})
     return {
         "message": "배정된 내담자 확인이 완료되었습니다.",
         "assessment_payload": assessment_payload,
+    }
+
+
+def register_client_for_custom_test_by_access_link(
+    db: Session,
+    access_token: str,
+    profile: dict[str, Any],
+) -> dict:
+    link = get_active_access_link_by_token(db, access_token)
+    if link is None:
+        raise HTTPException(status_code=404, detail="유효하지 않은 검사 URL입니다.")
+
+    custom_test = get_custom_test_by_id_and_admin(
+        db,
+        custom_test_id=link.admin_custom_test_id,
+        admin_user_id=link.admin_user_id,
+    )
+    if custom_test is None:
+        raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
+    if normalize_client_intake_mode(getattr(custom_test, "client_intake_mode", "")) != "auto_create":
+        _raise_assessment_error(403, "이 검사는 자동 등록이 허용되지 않습니다.")
+
+    client, created = register_client_and_assign_for_public_assessment(
+        db,
+        admin_user_id=link.admin_user_id,
+        custom_test_id=custom_test.id,
+        profile=profile or {},
+    )
+    return {
+        "message": "내담자 등록과 배정이 완료되었습니다." if created else "기존 내담자를 현재 검사에 배정했습니다.",
+        "client_id": client.id,
+        "created": created,
     }
 
 
@@ -775,7 +836,7 @@ def submit_custom_test_by_access_link(
         profile=clean_profile,
     )
     if error_message or client is None:
-        raise HTTPException(status_code=403, detail=error_message)
+        _raise_assessment_error(403, error_message or "배정된 내담자를 확인할 수 없습니다.")
 
     profile_name = str(clean_profile.get("name", "")).strip()
     final_responder_name = profile_name or responder_name.strip()

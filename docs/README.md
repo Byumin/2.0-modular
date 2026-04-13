@@ -12,13 +12,13 @@
 - [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md): DB 기준, 스키마, 자산 인벤토리
 - [docs/design/design-system.md](/mnt/c/Users/user/workspace/2.0-modular/docs/design/design-system.md): 프런트/디자인 시스템 가이드
 - [docs/debug/explanation-rule.md](/mnt/c/Users/user/workspace/2.0-modular/docs/debug/explanation-rule.md): 코드 흐름 설명/디버깅 작성 규칙
-- [docs/interactive-flow-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/interactive-flow-spec.md): `코드 정리` 요청용 인터랙션 웹 산출물 규칙
-- [docs/code-cleanup/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/README.md): `코드 정리` 문서 허브
+- [docs/code-cleanup/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/README.md): `코드 정리` 문서군 지도
 - [docs/diagrams/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/diagrams/README.md): 런타임 흐름 다이어그램 안내
 
 ## Process Docs
 - [docs/exec-plans/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/README.md): 실행 계획/회고 문서 규칙
 - [docs/exec-plans/_template.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/_template.md): 실행 계획 템플릿
+- [docs/doc-governance.md](/mnt/c/Users/user/workspace/2.0-modular/docs/doc-governance.md): 새 문서/새 규칙 추가 시 문서 역할과 source of truth를 정하는 상위 기준
 
 ## Tooling Docs
 - [claude/README.md](/mnt/c/Users/user/workspace/2.0-modular/claude/README.md): Claude Code CLI 비대화형 실행 도구 안내
@@ -64,6 +64,11 @@
 2. [docs/exec-plans/_template.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/_template.md)
 3. 작업별 실행 계획 문서
 
+### 문서 체계 변경
+1. [docs/doc-governance.md](/mnt/c/Users/user/workspace/2.0-modular/docs/doc-governance.md)
+2. [docs/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
+3. 관련 도메인 허브 또는 source 문서
+
 ### LLM 자동화 도구
 1. [claude/README.md](/mnt/c/Users/user/workspace/2.0-modular/claude/README.md)
 2. [claude/HARNESS.md](/mnt/c/Users/user/workspace/2.0-modular/claude/HARNESS.md)
@@ -81,6 +86,7 @@
 - [docs/code-cleanup/playbook.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/playbook.md)
 - [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)
 - [docs/exec-plans/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/README.md)
+- [docs/doc-governance.md](/mnt/c/Users/user/workspace/2.0-modular/docs/doc-governance.md)
 - [claude/README.md](/mnt/c/Users/user/workspace/2.0-modular/claude/README.md)
 - [claude/HARNESS.md](/mnt/c/Users/user/workspace/2.0-modular/claude/HARNESS.md)
 - [claude/jobs/README.md](/mnt/c/Users/user/workspace/2.0-modular/claude/jobs/README.md)

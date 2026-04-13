@@ -1,11 +1,12 @@
 # Architecture
 
 ## Overview
-이 프로젝트는 FastAPI 백엔드와 정적 HTML/JavaScript 프론트엔드를 결합한 모듈형 검사 운영 웹 애플리케이션이다.
+이 프로젝트는 FastAPI 백엔드와 React SPA 관리자/수검자 화면을 결합한 모듈형 검사 운영 웹 애플리케이션이다.
+과거 정적 HTML/JavaScript 화면은 `static/`에 레거시 잔존 파일로 남아 있지만, 현재 주요 `/admin/*` 및 `/assessment/custom/{token}` browser route는 `frontend/dist/index.html`로 진입한다.
 
 현재 운영 기준의 메인 엔트리포인트는 `app/main.py`이며, 애플리케이션은 다음 흐름으로 구성된다.
 
-`Browser(static HTML/JS) -> FastAPI Router -> Pydantic Schema -> Service -> Repository -> SQLAlchemy Model/DB`
+`Browser(React SPA) -> FastAPI Router -> Pydantic Schema -> Service -> Repository -> SQLAlchemy Model/DB`
 
 주요 목적은 다음과 같다.
 
@@ -106,7 +107,7 @@ SQLAlchemy 모델, 세션, 엔진, 초기화 및 보정 코드를 제공한다.
 HTTP 엔드포인트를 기능별로 분리한다.
 
 - `auth_router.py`: 관리자 인증
-- `page_router.py`: 정적 HTML 진입 페이지
+- `page_router.py`: 루트 정적 페이지와 React SPA 진입 페이지
 - `custom_test_router.py`: 커스텀 검사 관리
 - `assessment_link_router.py`: 수검 링크 기반 API
 - `client_router.py`: 클라이언트 관리
@@ -130,7 +131,12 @@ DB 접근 로직을 기능별로 분리한다.
 SQLAlchemy 모델, 세션, 엔진, 스키마 보정, DB 관련 자산을 관리한다.
 
 ### `static/`
-브라우저에서 직접 내려가는 HTML, CSS, JavaScript 정적 파일이 있다.
+레거시 HTML, CSS, JavaScript 정적 파일이 남아 있다.
+현재 주요 관리자/수검자 browser route는 React SPA로 서빙되며, `static/` 파일은 호환 또는 참고 자산으로 본다.
+
+### `frontend/`
+Vite + React + TypeScript 기반 프론트엔드 코드와 빌드 산출물이 있다.
+`frontend/dist/index.html`은 `/admin`, `/admin/*`, `/assessment/custom/{access_token}` route에서 FastAPI가 서빙한다.
 
 ### `docs/`
 다이어그램, 점검 자료, 분석 문서를 둔다.
@@ -187,7 +193,7 @@ Claude 리뷰 JSON 결과는 `artifacts/`가 아니라 `claude/reviews/runs/`에
 3. 비즈니스 로직은 `app/services/` 하위에 둔다.
 4. DB 접근은 `app/repositories/`에 추가한다.
 5. 모델 변경이 필요하면 `app/db/models.py`와 관련 보정 코드를 함께 검토한다.
-6. 관리자 UI가 필요하면 `static/`에 HTML/JS를 추가하거나 기존 화면을 확장한다.
+6. 관리자 UI나 수검자 UI가 필요하면 `frontend/src/`의 React 화면을 확장한다. `static/` 파일은 레거시 잔존 파일이므로 새 주요 화면의 기본 수정 대상이 아니다.
 7. 구조 설명이나 추적 규칙이 필요하면 `docs/`에 문서를 보강한다.
 
 ## Related Documents

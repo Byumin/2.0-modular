@@ -5,6 +5,9 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.db.schema_migrations import (
+    ensure_admin_client_assignment_unique_index,
+    ensure_admin_client_created_source_column,
+    ensure_child_test_client_intake_mode_column,
     ensure_submission_client_id_column,
     ensure_submission_scoring_result_table,
 )
@@ -21,6 +24,7 @@ from app.services.admin.auth import seed_default_admin
 BASE_DIR = Path(__file__).resolve().parents[1]
 STATIC_DIR = BASE_DIR / "static"
 ARTIFACTS_DIR = BASE_DIR / "artifacts"
+FRONTEND_DIST_DIR = BASE_DIR / "frontend" / "dist"
 ENV_FILE = BASE_DIR / ".env"
 
 
@@ -55,6 +59,9 @@ class ArtifactsStaticFiles(StaticFiles):
 app = FastAPI(title="Screening App", version="2.1.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/artifacts", ArtifactsStaticFiles(directory=ARTIFACTS_DIR), name="artifacts")
+# React SPA 빌드 결과물 (frontend/dist/assets/)
+if FRONTEND_DIST_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST_DIR / "assets"), name="frontend_assets")
 app.include_router(page_router)
 app.include_router(auth_router)
 app.include_router(custom_test_router)
@@ -67,6 +74,9 @@ app.include_router(scoring_router)
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_child_test_client_intake_mode_column()
+    ensure_admin_client_created_source_column()
+    ensure_admin_client_assignment_unique_index()
     ensure_submission_client_id_column()
     ensure_submission_scoring_result_table()
     seed_default_admin()

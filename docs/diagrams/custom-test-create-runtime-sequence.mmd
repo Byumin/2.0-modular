@@ -1,7 +1,7 @@
 sequenceDiagram
     autonumber
     actor Admin as Admin User
-    participant UI as Browser\nstatic/admin.js
+    participant UI as Browser\nfrontend/src/pages/TestManagement.tsx
     participant Router as Router\ncustom_test_router
     participant Service as Service\ncustom_tests
     participant ParentRepo as Repo\nparent_test_repository
@@ -11,7 +11,7 @@ sequenceDiagram
     rect rgb(240,248,255)
     Note over Admin,UI: 1) 생성 화면에서 payload 조립
     Admin->>UI: 신규 검사 생성 폼 입력\n(검사명/검사 선택/척도/추가 인적사항)
-    UI->>UI: sanitizeAndValidateCustomFields()
+    UI->>UI: profileFields 정규화
     UI->>UI: selectedTests + selectedScaleKeys -> test_configs 생성
     UI->>Router: POST /api/admin/custom-tests\n{ custom_test_name, test_configs, additional_profile_fields }
     end
@@ -47,7 +47,7 @@ sequenceDiagram
     rect rgb(255,250,240)
     Note over UI,Admin: 3) 생성 후 후속 동작
     UI->>UI: form reset + modal close
-    UI->>Router: GET /api/admin/custom-tests/management (refreshManagedTests)
+    UI->>Router: GET /api/admin/custom-tests/management (loadTests)
     Router-->>UI: 최신 목록
     UI-->>Admin: 생성된 검사 목록 갱신
     end

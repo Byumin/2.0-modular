@@ -1,0 +1,8 @@
+[2026-04-10 10:00:00] [INFO] [custom_tests.py:312] Processing row: namespace(test_id='MOCK', sub_test_json='{"age_range": {"start_inclusive": [1,0,0], "end_exclusive": [3,0,0]}}', scale_struct='{"A": {}, "B": {}}')
+[2026-04-10 10:00:00] [INFO] [custom_tests.py:312] Processing row: namespace(test_id='MOCK', sub_test_json='{"age_range": {"start_inclusive": [3,0,0], "end_exclusive": [7,0,0]}}', scale_struct='{"C": {}, "D": {}}')
+[2026-04-10 10:00:00] [INFO] [custom_tests.py:312] Processing row: namespace(test_id='MOCK', sub_test_json='{"age_range": {"start_inclusive": [1,0,0], "end_exclusive": [3,0,0]}}', scale_struct='{"A": {}, "B": {}}')
+[2026-04-10 10:00:00] [INFO] [custom_tests.py:312] Processing row: namespace(test_id='MOCK', sub_test_json='{"age_range": {"start_inclusive": [3,0,0], "end_exclusive": [7,0,0]}}', scale_struct='{"C": {}, "D": {}}')
+[2026-04-10 10:00:00] [INFO] [custom_tests.py:312] Processing row: namespace(test_id='MOCK', sub_test_json='{"age_range": {"start_inclusive": [1,0,0], "end_exclusive": [3,0,0]}}', scale_struct='{"A": {}, "B": {}}')
+[2026-04-10 10:00:00] [INFO] [custom_tests.py:312] Processing row: namespace(test_id='MOCK', sub_test_json='{"age_range": {"start_inclusive": [3,0,0], "end_exclusive": [7,0,0]}}', scale_struct='{"C": {}, "D": {}}')
+[2026-04-10 10:00:12] [INFO] [custom_tests.py:312] Processing row: namespace(test_id='MOCK', sub_test_json='{"age_range": {"start_inclusive": [1,0,0], "end_exclusive": [3,0,0]}}', scale_struct='{"A": {}, "B": {}}')
+[2026-04-10 10:00:12] [INFO] [custom_tests.py:312] Processing row: namespace(test_id='MOCK', sub_test_json='{"age_range": {"start_inclusive": [3,0,0], "end_exclusive": [7,0,0]}}', scale_struct='{"A": {}, "C": {}}')

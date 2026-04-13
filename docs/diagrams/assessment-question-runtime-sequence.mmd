@@ -1,7 +1,7 @@
 sequenceDiagram
     autonumber
     actor U as User(실시자)
-    participant B as Browser\nstatic/assessment-custom.js
+    participant B as Browser\nReact AssessmentPage.tsx
     participant R as Router\napp/router/assessment_link_router.py\nvalidate_profile
     participant S as Service\napp/services/admin/assessment_links.py\nvalidate_custom_test_profile_by_access_link
     participant CR as Repo\napp/repositories/custom_test_repository.py
@@ -11,7 +11,7 @@ sequenceDiagram
     participant PR as Repo\napp/repositories/parent_test_repository.py\nfetch_parent_item_bundle
 
     rect rgb(240,248,255)
-    Note over U,B: 1) 인적사항 제출\n입력: POST /api/assessment-links/{access_token}/validate-profile\nbody 예시: { profile: { gender, birth_date, school_age } }
+    Note over U,B: 1) 인적사항 제출\n입력: POST /api/assessment-links/{access_token}/validate-profile\nbody 예시: { profile: { gender, birth_day, school_age } }
     U->>B: 다음 버튼 클릭
     B->>R: POST /api/assessment-links/{token}/validate-profile\n{ profile }
     R->>S: validate_custom_test_profile_by_access_link(db, token, payload.profile)
@@ -78,7 +78,7 @@ sequenceDiagram
     AL-->>S: assessment_payload\n{ items[], selected_scales[], selected_sub_tests[],\nparts[], item_count, response_options, part_count }
     S-->>R: { message, assessment_payload }
     R-->>B: 200 OK
-    B->>B: applyAssessmentPayload(payload)
-    B->>B: renderQuestionCards(...)
+    B->>B: normalizeAssessmentParts(payload)
+    B->>B: QuestionStep 렌더
     B-->>U: 실시 구간에 맞는 문항 화면 표시
     end

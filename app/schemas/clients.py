@@ -8,7 +8,6 @@ class AdminClientIn(BaseModel):
     gender: str = Field(min_length=1, max_length=10)
     birth_day: date | None = None
     memo: str = Field(default="", max_length=500)
-    admin_custom_test_id: int | None = None
 
 
 class AdminAssessmentLogIn(BaseModel):
@@ -16,8 +15,8 @@ class AdminAssessmentLogIn(BaseModel):
     assessed_on: date | None = None
 
 
-class UpdateClientAssignmentIn(BaseModel):
-    admin_custom_test_id: int | None = None
+class CreateClientAssignmentIn(BaseModel):
+    admin_custom_test_id: int
 
 
 class ReportLlmChatIn(BaseModel):

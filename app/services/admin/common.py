@@ -8,14 +8,35 @@ from app.repositories.custom_test_repository import (
     list_custom_tests_by_admin,
 )
 
+CLIENT_INTAKE_MODES = {
+    "pre_registered_only",
+    "auto_create",
+}
+
+CLIENT_CREATED_SOURCES = {
+    "admin_manual",
+    "assessment_link_auto",
+}
+
+
+def normalize_client_intake_mode(value: Any, default: str = "pre_registered_only") -> str:
+    text = str(value or "").strip()
+    if text in CLIENT_INTAKE_MODES:
+        return text
+    return default
+
 
 def serialize_admin_client(row: AdminClient) -> dict:
+    created_source = str(getattr(row, "created_source", "")).strip()
+    if created_source not in CLIENT_CREATED_SOURCES:
+        created_source = "admin_manual"
     return {
         "id": row.id,
         "name": row.name,
         "gender": row.gender,
         "birth_day": row.birth_day.isoformat() if row.birth_day else None,
         "memo": row.memo,
+        "created_source": created_source,
         "created_at": row.created_at.isoformat(),
         "updated_at": row.updated_at.isoformat(),
     }
@@ -450,6 +471,7 @@ def build_custom_test_items(db, admin_id: int) -> list[dict]:
             {
                 "id": row.id,
                 "custom_test_name": row.custom_test_name,
+                "client_intake_mode": normalize_client_intake_mode(getattr(row, "client_intake_mode", "")),
                 "test_id": test_id_text or row.test_id,
                 "test_ids": test_ids,
                 "sub_test_json": row.sub_test_json,

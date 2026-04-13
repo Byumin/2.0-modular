@@ -1,7 +1,7 @@
 sequenceDiagram
     autonumber
     actor U as User(실시자)
-    participant B as Browser\nstatic/assessment-custom.js
+    participant B as Browser\nfrontend/src/pages/assessment/AssessmentPage.tsx
     participant R1 as Router\nassessment_link_router
     participant S1 as Service\nassessment_links
     participant CR as Repo\ncustom_test_repository
@@ -18,7 +18,7 @@ sequenceDiagram
     S1->>CR: get_custom_test_by_id_and_admin(custom_test_id, admin_user_id)
     S1->>S1: build_custom_assessment_profile_payload(custom_test)
     S1-->>B: required_profile_fields + additional_profile_fields + test_configs
-    B-->>U: 인적사항 입력 폼 렌더
+    B-->>U: ProfileStep 인적사항 입력 폼 렌더
     end
 
     rect rgb(245,255,245)
@@ -58,8 +58,8 @@ sequenceDiagram
 
         S1-->>R1: { assessment_payload: { parts, items, selected_sub_tests, response_options... } }
         R1-->>B: 200 OK
-        B->>B: applyAssessmentPayload(payload)
-        B->>B: renderQuestionCards(...)
+        B->>B: normalizeAssessmentParts(payload)
+        B->>B: QuestionStep 렌더
         B-->>U: 해당 실시 구간 문항/템플릿으로 검사 화면 표시
     end
     end

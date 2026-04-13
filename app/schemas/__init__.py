@@ -1,12 +1,12 @@
 from app.schemas.assessment_links import SubmitCustomAssessmentIn, ValidateAssessmentProfileIn
 from app.schemas.auth import AdminLoginIn
-from app.schemas.clients import AdminAssessmentLogIn, AdminClientIn, UpdateClientAssignmentIn
+from app.schemas.clients import AdminAssessmentLogIn, AdminClientIn, CreateClientAssignmentIn
 from app.schemas.custom_tests import (
     AdditionalProfileFieldIn,
     BulkDeleteCustomTestsIn,
     CreateCustomTestBatchIn,
     CreateCustomTestConfigIn,
-    UpdateCustomTestNameIn,
+    UpdateCustomTestSettingsIn,
 )
 from app.schemas.values import Gender, SchoolAge, normalize_gender_value
 
@@ -20,9 +20,9 @@ __all__ = [
     "CreateCustomTestBatchIn",
     "AdminClientIn",
     "AdminAssessmentLogIn",
-    "UpdateCustomTestNameIn",
+    "UpdateCustomTestSettingsIn",
     "BulkDeleteCustomTestsIn",
-    "UpdateClientAssignmentIn",
+    "CreateClientAssignmentIn",
     "SubmitCustomAssessmentIn",
     "ValidateAssessmentProfileIn",
 ]

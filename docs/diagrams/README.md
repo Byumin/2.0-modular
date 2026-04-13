@@ -28,10 +28,10 @@
 - 내부 helper를 옆으로 분리해 표현한 경우, 같은 helper를 메인 세로 흐름에 별도 박스로 다시 세우지 않는다.
 - 어떤 함수의 반환값이 다른 함수 인자로 전달되면, 필요할 때만 `반환 노드 -> 변수 저장 노드 -> 인자 전달 노드`를 수직 연결로 그린다. 단, 단순히 함수 내부 처리 설명만 필요한 helper는 반환 노드를 따로 만들지 않는다.
 - 예시 형식:
-  - 입력: `{ name, birth_date, gender, school_age }`
+  - 입력: `{ name, birth_day, gender, school_age }`
   - 처리: `POST /api/assessment-links/{token}/validate-profile -> validate_custom_test_profile_by_access_link(...)`
   - 출력: `{ title, profile, parts[], scales[] }`
-- 프론트 후속 처리 함수도 소스와 함께 표기한다. 예: `applyAssessmentPayload (static/assessment-custom.js)`
+- 프론트 후속 처리 함수도 소스와 함께 표기한다. 예: `normalizeAssessmentParts (frontend/src/pages/assessment/AssessmentPage.tsx)`
 
 ## Render commands
 ```bash

@@ -33,6 +33,8 @@
 - `정규화`라고만 쓰지 말고 공백 제거, 중복 제거, 허용 타입 보정, 빈 옵션 제거, canonical JSON 변환처럼 실제 변환 내용을 적는다.
 - `검증` 또는 `대조`라고만 쓰지 말고 무엇과 무엇을 비교하는지 적는다.
 
+이 규칙은 텍스트 설명 응답 기준이다. 인터랙션 웹 산출물의 단계 분해 기준은 [docs/interactive-flow-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/interactive-flow-spec.md)의 `Step Granularity Rule`을 따른다. 원칙은 같으나 적용 대상(텍스트 vs 웹 UI)이 다르다.
+
 ## Example Coverage Rule
 step 설명에는 해당 책임에 맞는 예시를 빠뜨리지 않는다.
 
@@ -41,6 +43,8 @@ step 설명에는 해당 책임에 맞는 예시를 빠뜨리지 않는다.
 - 누적/병합 step에는 누적 전 상태와 누적 후 상태를 함께 적는다.
 - 예외 발생 step에는 어떤 입력에서 어떤 조건 때문에 실패하는지 예시를 적는다.
 - step마다 가능하면 `입력 데이터 -> 수행 작업 -> 결과 또는 다음 호출` 형식을 유지한다.
+
+인터랙션 웹 산출물의 예시 데이터 기준은 [docs/interactive-flow-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/interactive-flow-spec.md)의 `Example Coverage Rule`을 따른다.
 
 ## Additional Rules
 - 가능하면 실제 파일 경로와 함수명을 함께 적는다.

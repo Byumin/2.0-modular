@@ -8,7 +8,8 @@
 - `POST /api/admin/clients`
 - `GET /api/admin/clients/{client_id}`
 - `PUT /api/admin/clients/{client_id}`
-- `PUT /api/admin/clients/{client_id}/assignment`
+- `POST /api/admin/clients/{client_id}/assignments`
+- `DELETE /api/admin/clients/{client_id}/assignments/{custom_test_id}`
 - `DELETE /api/admin/clients/{client_id}`
 - `POST /api/admin/assessment-logs`
 - `GET /api/admin/clients/{client_id}/report-llm-context`
@@ -36,8 +37,9 @@
 - 삭제
 
 ### Assignment
-- 특정 내담자에게 커스텀 검사를 배정
-- 배정 해제
+- 특정 내담자에게 커스텀 검사를 추가 배정
+- 특정 검사 배정만 해제
+- 한 내담자에게 여러 커스텀 검사를 동시에 배정
 - 검사 제출 시 프로필과 배정된 내담자 매칭 검증에 활용
 
 ### Assessment History
@@ -64,10 +66,16 @@
 ## Notes
 - 클라이언트 기능은 단순 주소록이 아니라 검사 운영과 연결된 중심 도메인이다.
 - 배정 정보, 제출 이력, 채점 결과, 리포트 컨텍스트가 함께 엮여 있다.
+- 내담자 생성/배정 운영 정책 자체는 [docs/features/client-intake-policy.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-policy.md)를 source of truth로 본다.
+- `created_source`와 자동 생성 재사용 규칙 같은 Phase 1 상세 변경안은 [docs/features/client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase1-spec.md)를 본다.
+- 다중 동시 배정 구조 변경안은 [docs/features/client-assignment-multi-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-assignment-multi-spec.md)를 본다.
 
 ## Related Documents
 - [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
 - [docs/features/assessment-link-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/assessment-link-flow.md)
+- [docs/features/client-intake-policy.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-policy.md)
+- [docs/features/client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase1-spec.md)
+- [docs/features/client-assignment-multi-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-assignment-multi-spec.md)
 - [docs/features/dashboard.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/dashboard.md)
 - [docs/features/scoring-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/scoring-flow.md)
 - [docs/database/schema-overview.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/schema-overview.md)

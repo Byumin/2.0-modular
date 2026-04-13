@@ -22,7 +22,7 @@ from app.repositories.parent_test_repository import (
     fetch_parent_scale_rows_by_test,
     fetch_parent_scale_struct,
 )
-from app.schemas.custom_tests import CreateCustomTestBatchIn, UpdateCustomTestNameIn
+from app.schemas.custom_tests import CreateCustomTestBatchIn, UpdateCustomTestSettingsIn
 from app.services.admin.auth import get_current_admin
 from app.services.admin.common import (
     _normalize_item_map,
@@ -32,6 +32,7 @@ from app.services.admin.common import (
     extract_sub_test_variant_configs,
     flatten_custom_test_variant_configs,
     load_custom_test_configs,
+    normalize_client_intake_mode,
     normalize_additional_profile_fields,
     serialize_additional_profile_payload,
     summarize_custom_test_ids,
@@ -430,6 +431,7 @@ def create_admin_custom_test_batch(
 ) -> dict:
     admin = get_current_admin(db, admin_session) # 현재 로그인한 관리자 정보 인증
     trimmed_name = payload.custom_test_name.strip()
+    client_intake_mode = normalize_client_intake_mode(payload.client_intake_mode)
     if not trimmed_name:
         raise HTTPException(status_code=400, detail="검사명은 공백만 입력할 수 없습니다.")
 
@@ -488,6 +490,7 @@ def create_admin_custom_test_batch(
         test_id=json.dumps(sorted(sys_test_ids), ensure_ascii=False), # 실시 가능한 모든 test_id를 JSON 배열 형태로 저장
         sub_test_json=_build_merged_sub_test_json(flattened_variants), # 실시 가능한 모든 sub_test_json 키/값 병합 결과 저장
         custom_test_name=trimmed_name,
+        client_intake_mode=client_intake_mode,
         selected_scales_json=json.dumps(selected_scales_struct_json, ensure_ascii=False),
         additional_profile_fields_json=serialize_additional_profile_payload(
             normalized_fields,
@@ -532,6 +535,7 @@ def get_admin_custom_test(db: Session, admin_session: str | None, custom_test_id
     return {
         "id": row.id,
         "custom_test_name": row.custom_test_name,
+        "client_intake_mode": normalize_client_intake_mode(getattr(row, "client_intake_mode", "")),
         "test_id": test_id_text or row.test_id,
         "test_ids": test_ids,
         "sub_test_json": row.sub_test_json,
@@ -549,7 +553,7 @@ def update_admin_custom_test(
     db: Session,
     admin_session: str | None,
     custom_test_id: int,
-    payload: UpdateCustomTestNameIn,
+    payload: UpdateCustomTestSettingsIn,
 ) -> dict:
     admin = get_current_admin(db, admin_session)
     row = get_custom_test_by_id_and_admin(
@@ -561,12 +565,14 @@ def update_admin_custom_test(
         raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
 
     trimmed_name = payload.custom_test_name.strip()
+    client_intake_mode = normalize_client_intake_mode(payload.client_intake_mode)
     if not trimmed_name:
         raise HTTPException(status_code=400, detail="검사명은 공백만 입력할 수 없습니다.")
 
     row.custom_test_name = trimmed_name
+    row.client_intake_mode = client_intake_mode
     commit(db)
-    return {"message": "검사명이 수정되었습니다."}
+    return {"message": "검사 설정이 수정되었습니다."}
 
 
 def delete_admin_custom_test(db: Session, admin_session: str | None, custom_test_id: int) -> dict:

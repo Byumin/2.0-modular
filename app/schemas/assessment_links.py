@@ -11,3 +11,7 @@ class SubmitCustomAssessmentIn(BaseModel):
 
 class ValidateAssessmentProfileIn(BaseModel):
     profile: dict[str, Any] = Field(default_factory=dict)
+
+
+class RegisterAssessmentClientIn(BaseModel):
+    profile: dict[str, Any] = Field(default_factory=dict)

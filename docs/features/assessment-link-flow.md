@@ -17,8 +17,16 @@
 - `app/schemas/assessment_links.py`
 - `app/services/admin/assessment_links.py`
 - `app/services/admin/clients.py`
+- `frontend/src/pages/assessment/AssessmentPage.tsx`
+- `frontend/src/pages/assessment/steps/ProfileStep.tsx`
+- `frontend/src/pages/assessment/steps/QuestionStep.tsx`
+- `frontend/src/pages/assessment/steps/CompleteStep.tsx`
+
+참고:
 - `static/assessment-custom.html`
 - `static/assessment-custom.js`
+
+현재 `/assessment/custom/{access_token}` browser route는 React SPA를 서빙한다. 위 `static/` 파일은 레거시 잔존 파일로 본다.
 
 ## Behavior Summary
 - 관리자가 커스텀 검사에 대해 접근 링크를 생성한다.
@@ -48,6 +56,8 @@
 ## Assignment Check
 - 검사에 특정 내담자가 배정된 경우, 제출 전 `find_assigned_client_for_profile`로 이름/성별/생년월일 일치 여부를 검증한다.
 - 배정 정보와 맞지 않으면 제출이 막힌다.
+- 앞으로 내담자 생성/배정 정책 자체는 [docs/features/client-intake-policy.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-policy.md)를 source of truth로 본다.
+- `pre_registered_only`와 `auto_create` 기준 상세 변경안은 [docs/features/client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase1-spec.md)를 본다.
 
 ## Notes
 - 이 기능은 단순 링크 조회가 아니라 프로필 기반 variant 선택이 핵심이다.
@@ -56,6 +66,8 @@
 ## Related Documents
 - [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
 - [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
+- [docs/features/client-intake-policy.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-policy.md)
+- [docs/features/client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase1-spec.md)
 - [docs/features/custom-test-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/custom-test-management.md)
 - [docs/features/scoring-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/scoring-flow.md)
 - [docs/diagrams/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/diagrams/README.md)

@@ -23,6 +23,7 @@ class AdminCustomTest(Base):
     test_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     sub_test_json: Mapped[str] = mapped_column(Text, nullable=False)
     custom_test_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    client_intake_mode: Mapped[str] = mapped_column(String(40), nullable=False, default="pre_registered_only")
     selected_scales_json: Mapped[str] = mapped_column(Text, nullable=False)
     additional_profile_fields_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -37,6 +38,7 @@ class AdminClient(Base):
     gender: Mapped[str] = mapped_column(String(10), nullable=False)
     birth_day: Mapped[date | None] = mapped_column(Date, nullable=True)
     memo: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_source: Mapped[str] = mapped_column(String(40), nullable=False, default="admin_manual")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -58,6 +60,14 @@ class AdminAssessmentLog(Base):
 
 class AdminClientAssignment(Base):
     __tablename__ = "admin_client_assignment"
+    __table_args__ = (
+        UniqueConstraint(
+            "admin_user_id",
+            "admin_client_id",
+            "admin_custom_test_id",
+            name="uq_admin_client_assignment_triplet",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     admin_user_id: Mapped[int] = mapped_column(ForeignKey("admin_user.id"), nullable=False, index=True)

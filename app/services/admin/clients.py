@@ -16,12 +16,13 @@ from app.repositories.client_repository import (
     create_assignment,
     delete_assignments_by_client,
     delete_logs_by_client,
+    find_admin_client_by_identity,
     get_admin_client_by_id_and_admin,
-    get_client_assignment_with_test_name,
     get_assigned_clients_for_profile,
-    get_assignment_by_admin_and_client,
+    get_assignment_by_admin_client_and_test,
     get_last_assessed_rows,
     list_admin_clients_by_admin,
+    list_assignments_by_client_with_test_name,
     list_client_assignments_with_test_name,
 )
 from app.repositories.custom_test_repository import get_custom_test_by_id_and_admin
@@ -35,10 +36,29 @@ from app.schemas.values import normalize_gender_value
 from app.services.admin.auth import get_current_admin
 from app.services.admin.common import serialize_admin_client, summarize_custom_test_ids
 
+UNASSIGNED_CLIENT_REQUIRED_CODE = "UNASSIGNED_CLIENT_REQUIRED"
+AUTO_CREATE_CONFIRM_REQUIRED_CODE = "AUTO_CREATE_CONFIRM_REQUIRED"
+
 
 def _normalize_parent_test_text(raw_value: str | None) -> str | None:
     _, text = summarize_custom_test_ids([], fallback=raw_value)
     return text or None
+
+
+def _serialize_assignment_summary(assignment_row) -> dict[str, Any]:
+    return {
+        "id": assignment_row.AdminClientAssignment.admin_custom_test_id,
+        "custom_test_name": assignment_row.custom_test_name,
+        "parent_test_name": _normalize_parent_test_text(getattr(assignment_row, "parent_test_id", None)),
+    }
+
+
+def _build_assignment_map(assignment_rows) -> dict[int, list[dict[str, Any]]]:
+    assignment_map: dict[int, list[dict[str, Any]]] = {}
+    for row in assignment_rows:
+        client_id = row.AdminClientAssignment.admin_client_id
+        assignment_map.setdefault(client_id, []).append(_serialize_assignment_summary(row))
+    return assignment_map
 
 
 def _serialize_client_scoring_rows(scoring_rows) -> list[dict[str, Any]]:
@@ -236,24 +256,30 @@ def proxy_report_llm_chat(
         raise HTTPException(status_code=502, detail="LLM 응답 처리에 실패했습니다.") from exc
 
 
-def upsert_client_assignment(
+def assign_client_to_test(
     db: Session,
     admin_id: int,
     client_id: int,
-    custom_test_id: int | None,
-) -> None:
-    current = get_assignment_by_admin_and_client(db, admin_id, client_id)
+    custom_test_id: int,
+) -> bool:
+    current = get_assignment_by_admin_client_and_test(db, admin_id, client_id, custom_test_id)
+    if current is not None:
+        return False
+    create_assignment(db, admin_id, client_id, custom_test_id)
+    return True
 
-    if custom_test_id is None:
-        if current is not None:
-            delete_row(db, current)
-        return
 
+def unassign_client_from_test(
+    db: Session,
+    admin_id: int,
+    client_id: int,
+    custom_test_id: int,
+) -> bool:
+    current = get_assignment_by_admin_client_and_test(db, admin_id, client_id, custom_test_id)
     if current is None:
-        create_assignment(db, admin_id, client_id, custom_test_id)
-        return
-
-    current.admin_custom_test_id = custom_test_id
+        return False
+    delete_row(db, current)
+    return True
 
 
 def find_assigned_client_for_profile(
@@ -263,41 +289,120 @@ def find_assigned_client_for_profile(
     custom_test_id: int,
     profile: dict[str, Any],
 ) -> tuple[AdminClient | None, str]:
+    client, message, _ = find_assigned_client_for_profile_with_code(
+        db,
+        admin_user_id=admin_user_id,
+        custom_test_id=custom_test_id,
+        profile=profile,
+    )
+    return client, message
+
+
+def find_assigned_client_for_profile_with_code(
+    db: Session,
+    *,
+    admin_user_id: int,
+    custom_test_id: int,
+    profile: dict[str, Any],
+) -> tuple[AdminClient | None, str, str | None]:
     assigned_clients = get_assigned_clients_for_profile( # 입력한 인적사항과 배정된 내담자 조회
         db,
         admin_user_id=admin_user_id,
         custom_test_id=custom_test_id,
     )
     if not assigned_clients:
-        return None, "이 검사에 배정된 내담자가 없습니다. 관리자에게 문의해주세요."
+        return None, "이 검사에 배정된 내담자가 없습니다. 계속하면 내담자로 등록되고 이 검사에 배정됩니다.", UNASSIGNED_CLIENT_REQUIRED_CODE
 
     name = str(profile.get("name", "")).strip()
     if not name:
-        return None, "이름을 입력해주세요."
+        return None, "이름을 입력해주세요.", None
 
     candidates = [row for row in assigned_clients if row.name.strip() == name]
     if not candidates:
-        return None, "배정된 내담자 정보와 일치하지 않습니다. 이름을 확인해주세요."
+        return None, "배정된 내담자 정보와 일치하지 않습니다. 이름을 확인해주세요.", None
 
     gender = str(profile.get("gender", "")).strip()
     if gender:
         candidates = [row for row in candidates if (row.gender or "").strip() == gender]
         if not candidates:
-            return None, "배정된 내담자 정보와 일치하지 않습니다. 성별을 확인해주세요."
+            return None, "배정된 내담자 정보와 일치하지 않습니다. 성별을 확인해주세요.", None
 
     birth_day_text = str(profile.get("birth_day", "")).strip()
     if birth_day_text:
         try:
             birth_day_value = date.fromisoformat(birth_day_text)
         except ValueError:
-            return None, "생년월일 형식이 올바르지 않습니다."
+            return None, "생년월일 형식이 올바르지 않습니다.", None
         candidates = [row for row in candidates if row.birth_day == birth_day_value]
         if not candidates:
-            return None, "배정된 내담자 정보와 일치하지 않습니다. 생년월일을 확인해주세요."
+            return None, "배정된 내담자 정보와 일치하지 않습니다. 생년월일을 확인해주세요.", None
 
     if len(candidates) > 1:
-        return None, "동일한 이름의 내담자가 여러 명입니다. 성별/생년월일을 함께 입력해주세요."
-    return candidates[0], ""
+        return None, "동일한 이름의 내담자가 여러 명입니다. 성별/생년월일을 함께 입력해주세요.", None
+    return candidates[0], "", None
+
+
+def register_client_and_assign_for_public_assessment(
+    db: Session,
+    *,
+    admin_user_id: int,
+    custom_test_id: int,
+    profile: dict[str, Any],
+) -> tuple[AdminClient, bool]:
+    name = str(profile.get("name", "")).strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="이름을 입력해주세요.")
+
+    raw_gender = str(profile.get("gender", "")).strip()
+    try:
+        normalized_gender = normalize_gender_value(raw_gender)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="성별을 확인해주세요.") from exc
+
+    birth_day_text = str(profile.get("birth_day", "")).strip()
+    birth_day_value = None
+    if birth_day_text:
+        try:
+            birth_day_value = date.fromisoformat(birth_day_text)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="생년월일 형식이 올바르지 않습니다.") from exc
+
+    existing = find_admin_client_by_identity(
+        db,
+        admin_user_id=admin_user_id,
+        name=name,
+        gender=normalized_gender,
+        birth_day=birth_day_value,
+    )
+    if existing is not None:
+        assign_client_to_test(
+            db=db,
+            admin_id=admin_user_id,
+            client_id=existing.id,
+            custom_test_id=custom_test_id,
+        )
+        commit(db)
+        refresh(db, existing)
+        return existing, False
+
+    new_item = create_client_row(
+        db,
+        admin_user_id=admin_user_id,
+        name=name,
+        gender=normalized_gender,
+        birth_day=birth_day_value,
+        memo="검사 링크에서 자동 등록",
+        created_source="assessment_link_auto",
+    )
+    assign_client_to_test(
+        db=db,
+        admin_id=admin_user_id,
+        client_id=new_item.id,
+        custom_test_id=custom_test_id,
+    )
+    commit(db)
+    refresh(db, new_item)
+    return new_item, True
 
 
 def list_admin_clients(db: Session, admin_session: str | None) -> dict:
@@ -305,14 +410,7 @@ def list_admin_clients(db: Session, admin_session: str | None) -> dict:
     rows = list_admin_clients_by_admin(db, admin_user_id=admin.id)
     assignment_rows = list_client_assignments_with_test_name(db, admin_user_id=admin.id)
 
-    assignment_map = {
-        row.AdminClientAssignment.admin_client_id: {
-            "custom_test_id": row.AdminClientAssignment.admin_custom_test_id,
-            "custom_test_name": row.custom_test_name,
-            "parent_test_name": _normalize_parent_test_text(getattr(row, "parent_test_id", None)),
-        }
-        for row in assignment_rows
-    }
+    assignment_map = _build_assignment_map(assignment_rows)
 
     log_rows = get_last_assessed_rows(db, admin_user_id=admin.id)
     log_map = {row.client_id: row.last_assessed_on for row in log_rows}
@@ -320,17 +418,16 @@ def list_admin_clients(db: Session, admin_session: str | None) -> dict:
     items = []
     for row in rows:
         base = serialize_admin_client(row)
-        assigned = assignment_map.get(row.id)
+        assigned_tests = assignment_map.get(row.id, [])
         last_assessed_on = log_map.get(row.id)
         if last_assessed_on is not None:
             status_text = "실시완료"
-        elif assigned is not None:
+        elif assigned_tests:
             status_text = "미실시"
         else:
             status_text = "배정대기"
-        base["assigned_custom_test_id"] = assigned["custom_test_id"] if assigned else None
-        base["assigned_custom_test_name"] = assigned["custom_test_name"] if assigned else None
-        base["assigned_parent_test_name"] = assigned["parent_test_name"] if assigned else None
+        base["assigned_custom_tests"] = assigned_tests
+        base["assigned_custom_test_count"] = len(assigned_tests)
         base["last_assessed_on"] = last_assessed_on.isoformat() if last_assessed_on else None
         base["status"] = status_text
         items.append(base)
@@ -344,7 +441,7 @@ def get_admin_client_detail(db: Session, admin_session: str | None, client_id: i
     if row is None:
         raise HTTPException(status_code=404, detail="내담자를 찾을 수 없습니다.")
 
-    assignment_row = get_client_assignment_with_test_name(
+    assignment_rows = list_assignments_by_client_with_test_name(
         db,
         admin_user_id=admin.id,
         client_id=row.id,
@@ -368,7 +465,8 @@ def get_admin_client_detail(db: Session, admin_session: str | None, client_id: i
         client_id=row.id,
         limit=30,
     )
-    has_assignment = assignment_row is not None
+    assigned_tests = [_serialize_assignment_summary(item) for item in assignment_rows]
+    has_assignment = bool(assigned_tests)
     has_submission = last_assessed_on is not None
     if has_submission:
         status_text = "실시완료"
@@ -384,9 +482,8 @@ def get_admin_client_detail(db: Session, admin_session: str | None, client_id: i
     )
 
     base = serialize_admin_client(row)
-    base["assigned_custom_test_id"] = assignment_row.AdminClientAssignment.admin_custom_test_id if assignment_row else None
-    base["assigned_custom_test_name"] = assignment_row.custom_test_name if assignment_row else None
-    base["assigned_parent_test_name"] = _normalize_parent_test_text(getattr(assignment_row, "parent_test_id", None)) if assignment_row else None
+    base["assigned_custom_tests"] = assigned_tests
+    base["assigned_custom_test_count"] = len(assigned_tests)
     base["last_assessed_on"] = last_assessed_on.date().isoformat() if last_assessed_on else None
     base["status"] = status_text
     base["assessment_log_count"] = monthly_submission_count
@@ -411,15 +508,6 @@ def create_admin_client(db: Session, admin_session: str | None, payload) -> dict
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if payload.admin_custom_test_id is not None:
-        exists = get_custom_test_by_id_and_admin(
-            db,
-            custom_test_id=payload.admin_custom_test_id,
-            admin_user_id=admin.id,
-        )
-        if exists is None:
-            raise HTTPException(status_code=400, detail="배정할 검사를 찾을 수 없습니다.")
-
     new_item = create_client_row(
         db,
         admin_user_id=admin.id,
@@ -427,13 +515,7 @@ def create_admin_client(db: Session, admin_session: str | None, payload) -> dict
         gender=normalized_gender,
         birth_day=payload.birth_day,
         memo=payload.memo.strip(),
-    )
-
-    upsert_client_assignment(
-        db=db,
-        admin_id=admin.id,
-        client_id=new_item.id,
-        custom_test_id=payload.admin_custom_test_id,
+        created_source="admin_manual",
     )
     commit(db)
 
@@ -446,15 +528,6 @@ def update_admin_client(db: Session, admin_session: str | None, client_id: int, 
     if row is None:
         raise HTTPException(status_code=404, detail="내담자를 찾을 수 없습니다.")
 
-    if payload.admin_custom_test_id is not None:
-        exists = get_custom_test_by_id_and_admin(
-            db,
-            custom_test_id=payload.admin_custom_test_id,
-            admin_user_id=admin.id,
-        )
-        if exists is None:
-            raise HTTPException(status_code=400, detail="배정할 검사를 찾을 수 없습니다.")
-
     try:
         normalized_gender = normalize_gender_value(payload.gender)
     except ValueError as exc:
@@ -464,40 +537,57 @@ def update_admin_client(db: Session, admin_session: str | None, client_id: int, 
     row.gender = normalized_gender
     row.birth_day = payload.birth_day
     row.memo = payload.memo.strip()
-
-    upsert_client_assignment(
-        db=db,
-        admin_id=admin.id,
-        client_id=row.id,
-        custom_test_id=payload.admin_custom_test_id,
-    )
     commit(db)
     refresh(db, row)
 
     return {"message": "내담자 정보가 수정되었습니다.", "item": serialize_admin_client(row)}
 
 
-def update_admin_client_assignment(db: Session, admin_session: str | None, client_id: int, custom_test_id: int | None) -> dict:
+def add_admin_client_assignment(db: Session, admin_session: str | None, client_id: int, custom_test_id: int) -> dict:
     admin = get_current_admin(db, admin_session)
     row = get_admin_client_by_id_and_admin(db, client_id=client_id, admin_user_id=admin.id)
     if row is None:
         raise HTTPException(status_code=404, detail="내담자를 찾을 수 없습니다.")
 
-    if custom_test_id is not None:
-        exists = get_custom_test_by_id_and_admin(
-            db,
-            custom_test_id=custom_test_id,
-            admin_user_id=admin.id,
-        )
-        if exists is None:
-            raise HTTPException(status_code=400, detail="배정할 검사를 찾을 수 없습니다.")
+    exists = get_custom_test_by_id_and_admin(
+        db,
+        custom_test_id=custom_test_id,
+        admin_user_id=admin.id,
+    )
+    if exists is None:
+        raise HTTPException(status_code=400, detail="배정할 검사를 찾을 수 없습니다.")
 
-    upsert_client_assignment(db=db, admin_id=admin.id, client_id=row.id, custom_test_id=custom_test_id)
+    created = assign_client_to_test(db=db, admin_id=admin.id, client_id=row.id, custom_test_id=custom_test_id)
     commit(db)
     return {
-        "message": "배정 정보가 저장되었습니다.",
+        "message": "검사가 배정되었습니다." if created else "이미 배정된 검사입니다.",
+        "created": created,
         "client_id": row.id,
-        "assigned_custom_test_id": custom_test_id,
+        "admin_custom_test_id": custom_test_id,
+    }
+
+
+def remove_admin_client_assignment(db: Session, admin_session: str | None, client_id: int, custom_test_id: int) -> dict:
+    admin = get_current_admin(db, admin_session)
+    row = get_admin_client_by_id_and_admin(db, client_id=client_id, admin_user_id=admin.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="내담자를 찾을 수 없습니다.")
+
+    exists = get_custom_test_by_id_and_admin(
+        db,
+        custom_test_id=custom_test_id,
+        admin_user_id=admin.id,
+    )
+    if exists is None:
+        raise HTTPException(status_code=400, detail="배정할 검사를 찾을 수 없습니다.")
+
+    removed = unassign_client_from_test(db=db, admin_id=admin.id, client_id=row.id, custom_test_id=custom_test_id)
+    commit(db)
+    return {
+        "message": "검사 배정이 해제되었습니다." if removed else "이미 해제된 상태입니다.",
+        "deleted": removed,
+        "client_id": row.id,
+        "admin_custom_test_id": custom_test_id,
     }
 
 

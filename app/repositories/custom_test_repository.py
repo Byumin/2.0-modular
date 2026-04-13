@@ -59,6 +59,7 @@ def create_custom_test(
     test_id: str,
     sub_test_json: str,
     custom_test_name: str,
+    client_intake_mode: str,
     selected_scales_json: str,
     additional_profile_fields_json: str,
 ) -> AdminCustomTest:
@@ -67,6 +68,7 @@ def create_custom_test(
         test_id=test_id,
         sub_test_json=sub_test_json,
         custom_test_name=custom_test_name,
+        client_intake_mode=client_intake_mode,
         selected_scales_json=selected_scales_json,
         additional_profile_fields_json=additional_profile_fields_json,
     )
