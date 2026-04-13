@@ -24,7 +24,15 @@ async function api(url, options = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(data.detail || '요청 처리 중 오류가 발생했습니다.');
+    const detail = data.detail;
+    const message = typeof detail === 'string'
+      ? detail
+      : String(detail?.message || data.message || '요청 처리 중 오류가 발생했습니다.');
+    const error = new Error(message);
+    error.status = response.status;
+    error.code = typeof detail === 'object' && detail ? String(detail.code || '') : '';
+    error.detail = detail;
+    throw error;
   }
   return data;
 }
@@ -77,6 +85,7 @@ function isOptionFieldType(type) {
 }
 
 const QUESTION_PAGE_SIZE = 5;
+const AUTO_CREATE_CONFIRM_REQUIRED_CODE = 'AUTO_CREATE_CONFIRM_REQUIRED';
 
 function normalizeAdditionalProfileFields(raw) {
   if (!Array.isArray(raw)) {
@@ -527,6 +536,10 @@ function completionStorageKey(token) {
   const viewModeStepBtn = document.getElementById('viewModeStepBtn');
   const completeConfirmBtn = document.getElementById('completeConfirmBtn');
   const completeCloseBtn = document.getElementById('completeCloseBtn');
+  const unassignedClientModal = document.getElementById('unassignedClientModal');
+  const unassignedClientModalProfile = document.getElementById('unassignedClientModalProfile');
+  const unassignedClientCancelBtn = document.getElementById('unassignedClientCancelBtn');
+  const unassignedClientConfirmBtn = document.getElementById('unassignedClientConfirmBtn');
   const defaultSubText = String(subEl?.textContent || '').trim();
 
   if (!token) {
@@ -559,6 +572,8 @@ function completionStorageKey(token) {
   let isSubmitting = false;
   let isCompleted = false;
   let pendingAutoAdvanceTimer = null;
+  let pendingRegistrationProfile = null;
+  let isRegisteringClient = false;
 
   const requiredFieldKeys = Array.isArray(payload.required_profile_fields) && payload.required_profile_fields.length
     ? payload.required_profile_fields.map((x) => String(x))
@@ -1514,10 +1529,7 @@ function completionStorageKey(token) {
     assessmentShellEl?.classList.remove('is-question-step');
   }
 
-  function showQuestionStep(profile) {
-    if (isCompleted) {
-      return;
-    }
+  function buildProfileSummaryLabels(profile) {
     const labels = [];
     if (String(profile.name || '').trim()) {
       labels.push(`이름: ${String(profile.name).trim()}`);
@@ -1551,7 +1563,49 @@ function completionStorageKey(token) {
       }
       labels.push(`${field.label}: ${value}`);
     });
-    profileSummaryText.textContent = labels.join(' / ') || '입력 정보 없음';
+    return labels;
+  }
+
+  function closeUnassignedClientModal() {
+    pendingRegistrationProfile = null;
+    isRegisteringClient = false;
+    if (unassignedClientConfirmBtn) {
+      unassignedClientConfirmBtn.disabled = false;
+      unassignedClientConfirmBtn.textContent = '예';
+    }
+    if (unassignedClientCancelBtn) {
+      unassignedClientCancelBtn.disabled = false;
+    }
+    if (unassignedClientModal) {
+      unassignedClientModal.classList.add('hidden');
+      unassignedClientModal.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function openUnassignedClientModal(profile) {
+    pendingRegistrationProfile = { ...profile };
+    if (unassignedClientModalProfile) {
+      unassignedClientModalProfile.textContent = buildProfileSummaryLabels(profile).join(' / ') || '입력 정보 없음';
+    }
+    if (unassignedClientModal) {
+      unassignedClientModal.classList.remove('hidden');
+      unassignedClientModal.setAttribute('aria-hidden', 'false');
+    }
+    if (unassignedClientConfirmBtn) {
+      unassignedClientConfirmBtn.disabled = false;
+      unassignedClientConfirmBtn.textContent = '예';
+      window.setTimeout(() => unassignedClientConfirmBtn.focus(), 0);
+    }
+    if (unassignedClientCancelBtn) {
+      unassignedClientCancelBtn.disabled = false;
+    }
+  }
+
+  function showQuestionStep(profile) {
+    if (isCompleted) {
+      return;
+    }
+    profileSummaryText.textContent = buildProfileSummaryLabels(profile).join(' / ') || '입력 정보 없음';
     profileStep.classList.add('hidden');
     questionStep.classList.remove('hidden');
     completeStep.classList.add('hidden');
@@ -1578,19 +1632,8 @@ function completionStorageKey(token) {
     history.replaceState({ assessmentDone: true }, '', window.location.pathname);
   }
 
-  goQuestionsBtn.addEventListener('click', async () => {
-    clearAutoAdvanceTimer();
-    if (isCompleted) {
-      return;
-    }
+  async function proceedToQuestionStep(profile) {
     messageEl.textContent = '';
-    const profile = collectProfileFromForm();
-    const missing = validateProfile(profile);
-    if (missing) {
-      messageEl.textContent = `${missing} 항목을 입력해주세요.`;
-      messageEl.className = 'message error';
-      return;
-    }
     goQuestionsBtn.disabled = true;
     try {
       const result = await api(`/api/assessment-links/${token}/validate-profile`, {
@@ -1602,7 +1645,13 @@ function completionStorageKey(token) {
         applyAssessmentPayload(payload);
       }
     } catch (error) {
-      alert(error.message || '배정된 내담자 확인에 실패했습니다.');
+      if (error.code === AUTO_CREATE_CONFIRM_REQUIRED_CODE) {
+        openUnassignedClientModal(profile);
+        messageEl.textContent = error.message || '내담자 등록 또는 연결 확인이 필요합니다.';
+        messageEl.className = 'message';
+        goQuestionsBtn.disabled = false;
+        return;
+      }
       messageEl.textContent = error.message || '배정된 내담자 확인에 실패했습니다.';
       messageEl.className = 'message error';
       goQuestionsBtn.disabled = false;
@@ -1616,6 +1665,69 @@ function completionStorageKey(token) {
     }
     goQuestionsBtn.disabled = false;
     showQuestionStep(profile);
+  }
+
+  goQuestionsBtn.addEventListener('click', async () => {
+    clearAutoAdvanceTimer();
+    if (isCompleted) {
+      return;
+    }
+    messageEl.textContent = '';
+    const profile = collectProfileFromForm();
+    const missing = validateProfile(profile);
+    if (missing) {
+      messageEl.textContent = `${missing} 항목을 입력해주세요.`;
+      messageEl.className = 'message error';
+      return;
+    }
+    await proceedToQuestionStep(profile);
+  });
+
+  unassignedClientCancelBtn?.addEventListener('click', () => {
+    closeUnassignedClientModal();
+    messageEl.textContent = '검사 진행이 취소되었습니다.';
+    messageEl.className = 'message';
+  });
+
+  unassignedClientConfirmBtn?.addEventListener('click', async () => {
+    if (!pendingRegistrationProfile || isRegisteringClient) {
+      return;
+    }
+    isRegisteringClient = true;
+    unassignedClientConfirmBtn.disabled = true;
+    unassignedClientCancelBtn.disabled = true;
+    unassignedClientConfirmBtn.textContent = '등록 중...';
+    messageEl.textContent = '내담자 등록과 검사 배정을 진행하는 중입니다.';
+    messageEl.className = 'message';
+
+    const profile = { ...pendingRegistrationProfile };
+    try {
+      await api(`/api/assessment-links/${token}/register-client`, {
+        method: 'POST',
+        body: JSON.stringify({ profile })
+      });
+      closeUnassignedClientModal();
+      await proceedToQuestionStep(profile);
+    } catch (error) {
+      isRegisteringClient = false;
+      unassignedClientConfirmBtn.disabled = false;
+      unassignedClientCancelBtn.disabled = false;
+      unassignedClientConfirmBtn.textContent = '예';
+      messageEl.textContent = error.message || '내담자 등록과 배정에 실패했습니다.';
+      messageEl.className = 'message error';
+    }
+  });
+
+  unassignedClientModal?.addEventListener('click', (event) => {
+    if (event.target === unassignedClientModal && !isRegisteringClient) {
+      closeUnassignedClientModal();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !unassignedClientModal?.classList.contains('hidden') && !isRegisteringClient) {
+      closeUnassignedClientModal();
+    }
   });
 
   form.addEventListener('submit', async (event) => {

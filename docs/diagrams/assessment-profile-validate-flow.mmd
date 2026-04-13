@@ -1,6 +1,6 @@
 %%{init: {'flowchart': {'nodeSpacing': 18, 'rankSpacing': 28}}}%%
 flowchart TD
-    A["입력 profile 예시\n(static/assessment-custom.js)\n{ name, birth_date, gender, school_age }"] --> B["POST /api/assessment-links/{token}/validate-profile\n(app/router/assessment_link_router.py)"]
+    A["입력 profile 예시\n(frontend/src/pages/assessment/steps/ProfileStep.tsx)\n{ name, birth_day, gender, school_age }"] --> B["POST /api/assessment-links/{token}/validate-profile\n(app/router/assessment_link_router.py)"]
     B --> C["validate_custom_test_profile_by_access_link\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: 링크/검사/배정 검증 후 문항 payload 반환</span>"]
     C -.-> C_SIDE["함수 내부 순서\n1) link 조회\n2) custom_test 조회\n3) 배정 내담자 검증\n4) build_custom_assessment_question_payload 호출"]
 
@@ -50,6 +50,6 @@ flowchart TD
     V -- 아니오 --> V1[400 표시할 문항 없음]
     V -- 예 --> W["출력 assessment_payload 예시\n{ title, profile, parts[], scales[] }"]
 
-    W --> X["프론트 applyAssessmentPayload\n(static/assessment-custom.js)<br/><span style='color:#6c757d'>목적: 서버 payload를 프론트 상태에 반영</span>"]
-    X --> Y["프론트 renderQuestionCards\n(static/assessment-custom.js)<br/><span style='color:#6c757d'>목적: 현재 parts/items 문항 카드 렌더</span>"]
+    W --> X["프론트 normalizeAssessmentParts\n(frontend/src/pages/assessment/AssessmentPage.tsx)<br/><span style='color:#6c757d'>목적: 서버 payload를 React 문항 parts 상태로 정규화</span>"]
+    X --> Y["프론트 QuestionStep 렌더\n(frontend/src/pages/assessment/steps/QuestionStep.tsx)<br/><span style='color:#6c757d'>목적: 현재 parts/items 문항 카드 렌더</span>"]
     Y --> Z[실시 구간에 맞는 문항/템플릿 화면 표시]

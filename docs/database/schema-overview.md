@@ -22,6 +22,7 @@
   - `test_id`
   - `sub_test_json`
   - `custom_test_name`
+  - `client_intake_mode`
   - `selected_scales_json`
   - `additional_profile_fields_json`
   - `created_at`
@@ -35,6 +36,7 @@
   - `gender`
   - `birth_day`
   - `memo`
+  - `created_source`
   - `created_at`
   - `updated_at`
 
@@ -55,6 +57,8 @@
   - `admin_client_id`
   - `admin_custom_test_id`
   - `created_at`
+- 주요 제약:
+  - `(admin_user_id, admin_client_id, admin_custom_test_id)` unique
 
 ### `admin_custom_test_access_link`
 - 커스텀 검사 접근 토큰

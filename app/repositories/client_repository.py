@@ -4,16 +4,18 @@ from sqlalchemy.orm import Session
 from app.db.models import AdminAssessmentLog, AdminClient, AdminClientAssignment, AdminCustomTest
 
 
-def get_assignment_by_admin_and_client(
+def get_assignment_by_admin_client_and_test(
     db: Session,
     admin_id: int,
     client_id: int,
+    custom_test_id: int,
 ) -> AdminClientAssignment | None:
     return (
         db.query(AdminClientAssignment)
         .filter(
             AdminClientAssignment.admin_user_id == admin_id,
             AdminClientAssignment.admin_client_id == client_id,
+            AdminClientAssignment.admin_custom_test_id == custom_test_id,
         )
         .first()
     )
@@ -59,6 +61,25 @@ def list_admin_clients_by_admin(db: Session, *, admin_user_id: int) -> list[Admi
     )
 
 
+def find_admin_client_by_identity(
+    db: Session,
+    *,
+    admin_user_id: int,
+    name: str,
+    gender: str,
+    birth_day,
+) -> AdminClient | None:
+    if birth_day is None:
+        return None
+    query = db.query(AdminClient).filter(
+        AdminClient.admin_user_id == admin_user_id,
+        AdminClient.name == name,
+        AdminClient.gender == gender,
+    )
+    query = query.filter(AdminClient.birth_day == birth_day)
+    return query.order_by(AdminClient.id.asc()).first()
+
+
 def list_client_assignments_with_test_name(db: Session, *, admin_user_id: int):
     return (
         db.query(
@@ -78,6 +99,19 @@ def get_client_assignment_with_test_name(
     admin_user_id: int,
     client_id: int,
 ):
+    return list_assignments_by_client_with_test_name(
+        db,
+        admin_user_id=admin_user_id,
+        client_id=client_id,
+    )
+
+
+def list_assignments_by_client_with_test_name(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+):
     return (
         db.query(
             AdminClientAssignment,
@@ -89,7 +123,8 @@ def get_client_assignment_with_test_name(
             AdminClientAssignment.admin_user_id == admin_user_id,
             AdminClientAssignment.admin_client_id == client_id,
         )
-        .first()
+        .order_by(AdminClientAssignment.id.desc())
+        .all()
     )
 
 
@@ -148,6 +183,7 @@ def create_admin_client(
     gender: str,
     birth_day,
     memo: str,
+    created_source: str = "admin_manual",
 ) -> AdminClient:
     row = AdminClient(
         admin_user_id=admin_user_id,
@@ -155,6 +191,7 @@ def create_admin_client(
         gender=gender,
         birth_day=birth_day,
         memo=memo,
+        created_source=created_source,
     )
     db.add(row)
     db.commit()
@@ -181,4 +218,18 @@ def delete_assignments_by_client(db: Session, *, admin_user_id: int, client_id: 
     db.query(AdminClientAssignment).filter(
         AdminClientAssignment.admin_user_id == admin_user_id,
         AdminClientAssignment.admin_client_id == client_id,
+    ).delete()
+
+
+def delete_assignment_by_admin_client_and_test(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+    custom_test_id: int,
+) -> None:
+    db.query(AdminClientAssignment).filter(
+        AdminClientAssignment.admin_user_id == admin_user_id,
+        AdminClientAssignment.admin_client_id == client_id,
+        AdminClientAssignment.admin_custom_test_id == custom_test_id,
     ).delete()

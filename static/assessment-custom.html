@@ -104,6 +104,25 @@
       </section>
     </main>
 
+    <div id="unassignedClientModal" class="modal-backdrop hidden" aria-hidden="true">
+      <section class="modal-card assessment-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="unassignedClientModalTitle">
+        <div class="assessment-confirm-head">
+          <p class="assessment-confirm-eyebrow">등록 확인</p>
+          <h2 id="unassignedClientModalTitle">내담자 등록 또는 연결이 필요합니다</h2>
+        </div>
+        <div class="assessment-confirm-body">
+          <p class="assessment-confirm-text">
+            계속하면 입력한 인적사항으로 기존 내담자와 연결되거나 새 내담자로 등록되어 현재 검사에 배정됩니다.
+          </p>
+          <p id="unassignedClientModalProfile" class="assessment-confirm-profile">-</p>
+        </div>
+        <div class="assessment-confirm-actions">
+          <button id="unassignedClientCancelBtn" type="button" class="outline-btn uniform-btn">아니요</button>
+          <button id="unassignedClientConfirmBtn" type="button" class="uniform-btn">예</button>
+        </div>
+      </section>
+    </div>
+
     <script src="/static/assessment-custom.js"></script>
   </body>
 </html>

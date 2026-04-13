@@ -7,7 +7,7 @@ from app.db.session import get_db
 from app.schemas.custom_tests import (
     BulkDeleteCustomTestsIn,
     CreateCustomTestBatchIn,
-    UpdateCustomTestNameIn,
+    UpdateCustomTestSettingsIn,
 )
 from app.services.admin.assessment_links import generate_custom_test_access_link
 from app.services.admin.custom_tests import (
@@ -89,7 +89,7 @@ def create_access_link(
 @router.put("/api/admin/custom-tests/{custom_test_id}")
 def update_custom_test(
     custom_test_id: int,
-    payload: UpdateCustomTestNameIn,
+    payload: UpdateCustomTestSettingsIn,
     db: Session = Depends(get_db),
     admin_session: str | None = Cookie(default=None),
 ) -> dict:

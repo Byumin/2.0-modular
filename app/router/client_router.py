@@ -5,10 +5,11 @@ from app.db.session import get_db
 from app.schemas.clients import (
     AdminAssessmentLogIn,
     AdminClientIn,
+    CreateClientAssignmentIn,
     ReportLlmChatIn,
-    UpdateClientAssignmentIn,
 )
 from app.services.admin.clients import (
+    add_admin_client_assignment,
     create_admin_assessment_log,
     create_admin_client,
     delete_admin_client,
@@ -16,8 +17,8 @@ from app.services.admin.clients import (
     get_admin_client_report_llm_context,
     list_admin_clients,
     proxy_report_llm_chat,
+    remove_admin_client_assignment,
     update_admin_client,
-    update_admin_client_assignment,
 )
 
 router = APIRouter()
@@ -84,14 +85,24 @@ def update_client(
     return update_admin_client(db, admin_session, client_id, payload)
 
 
-@router.put("/api/admin/clients/{client_id}/assignment")
-def update_client_assignment(
+@router.post("/api/admin/clients/{client_id}/assignments")
+def create_client_assignment(
     client_id: int,
-    payload: UpdateClientAssignmentIn,
+    payload: CreateClientAssignmentIn,
     db: Session = Depends(get_db),
     admin_session: str | None = Cookie(default=None),
 ) -> dict:
-    return update_admin_client_assignment(db, admin_session, client_id, payload.admin_custom_test_id)
+    return add_admin_client_assignment(db, admin_session, client_id, payload.admin_custom_test_id)
+
+
+@router.delete("/api/admin/clients/{client_id}/assignments/{custom_test_id}")
+def delete_client_assignment(
+    client_id: int,
+    custom_test_id: int,
+    db: Session = Depends(get_db),
+    admin_session: str | None = Cookie(default=None),
+) -> dict:
+    return remove_admin_client_assignment(db, admin_session, client_id, custom_test_id)
 
 
 @router.delete("/api/admin/clients/{client_id}")

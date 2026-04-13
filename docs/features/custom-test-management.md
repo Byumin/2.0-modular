@@ -20,6 +20,15 @@
 - `app/services/admin/common.py`
 - `app/repositories/custom_test_repository.py`
 - `app/repositories/parent_test_repository.py`
+- `frontend/src/pages/TestManagement.tsx`
+- `frontend/src/pages/TestDetail.tsx`
+
+참고:
+- `static/admin-create.html`
+- `static/admin-test-detail.html`
+- `static/admin.js`
+
+현재 `/admin/create`와 `/admin/create/{id}` browser route는 React SPA를 서빙한다. 위 `static/` 파일은 레거시 잔존 파일로 본다.
 
 ## Behavior Summary
 - 원본(parent) 검사 데이터를 카탈로그로 보여준다.
@@ -53,10 +62,13 @@
 ## Notes
 - 검사 생성 로직은 단순 CRUD보다 구성 정규화가 중요하다.
 - 문항 구간, 척도 코드, 추가 인적사항 필드를 함께 보지 않으면 동작을 잘못 이해하기 쉽다.
+- 향후 검사 생성 시 내담자 수집 정책 필드가 추가되면 상세 변경안은 [docs/features/client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase1-spec.md)를 기준으로 본다.
+- 현재 검사 생성/수정에는 `client_intake_mode` 필드가 포함되어 있으며, 상세 구현 상태는 [docs/features/client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase1-spec.md)를 기준으로 본다.
 
 ## Related Documents
 - [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
 - [docs/features/assessment-link-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/assessment-link-flow.md)
+- [docs/features/client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase1-spec.md)
 - [docs/features/dashboard.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/dashboard.md)
 - [docs/database/schema-overview.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/schema-overview.md)
 - [docs/diagrams/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/diagrams/README.md)

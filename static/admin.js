@@ -40,6 +40,68 @@ const SCHOOL_AGE_LABELS = [
   '대학원 졸업생'
 ];
 
+const CLIENT_INTAKE_MODE_LABELS = {
+  pre_registered_only: '사전 등록 필수',
+  auto_create: '검사 진행 시 자동 생성 허용'
+};
+
+function normalizeClientIntakeMode(value) {
+  return value === 'auto_create' ? 'auto_create' : 'pre_registered_only';
+}
+
+function clientIntakeModeLabel(value) {
+  const normalized = normalizeClientIntakeMode(value);
+  return CLIENT_INTAKE_MODE_LABELS[normalized] || CLIENT_INTAKE_MODE_LABELS.pre_registered_only;
+}
+
+function normalizeAssignedCustomTests(item) {
+  if (!item || !Array.isArray(item.assigned_custom_tests)) {
+    return [];
+  }
+  return item.assigned_custom_tests
+    .map((row) => {
+      const id = Number(row?.id);
+      const customTestName = String(row?.custom_test_name || '').trim();
+      const parentTestName = String(row?.parent_test_name || '').trim();
+      if (!Number.isFinite(id) || id <= 0 || !customTestName) {
+        return null;
+      }
+      return {
+        id,
+        custom_test_name: customTestName,
+        parent_test_name: parentTestName
+      };
+    })
+    .filter(Boolean);
+}
+
+function assignedCustomTestsSummary(item, emptyText = '미배정') {
+  const assignedTests = normalizeAssignedCustomTests(item);
+  if (!assignedTests.length) {
+    return emptyText;
+  }
+  const first = assignedTests[0];
+  const firstLabel = first.parent_test_name
+    ? `${first.custom_test_name} (기반: ${first.parent_test_name})`
+    : first.custom_test_name;
+  if (assignedTests.length === 1) {
+    return firstLabel;
+  }
+  return `${firstLabel} 외 ${assignedTests.length - 1}건`;
+}
+
+function assignedCustomTestsSearchText(item) {
+  return normalizeAssignedCustomTests(item)
+    .map((row) => `${row.custom_test_name} ${row.parent_test_name}`.trim())
+    .join(' ')
+    .toLowerCase();
+}
+
+function firstAssignedCustomTestId(item) {
+  const assignedTests = normalizeAssignedCustomTests(item);
+  return assignedTests.length ? assignedTests[0].id : null;
+}
+
 function schoolAgeLabelFromIndex(index) {
   if (!Number.isFinite(index)) {
     return '';
@@ -319,9 +381,7 @@ function renderClientsOverview(listEl, emptyEl, clients) {
   listEl.innerHTML = '';
 
   clients.forEach((item) => {
-    const assignedText = item.assigned_custom_test_name
-      ? escapeHtml(item.assigned_custom_test_name)
-      : '검사 미배정';
+    const assignedText = escapeHtml(assignedCustomTestsSummary(item, '검사 미배정'));
     const assessedText = item.last_assessed_on ? item.last_assessed_on : '아직 실시하지 않음';
     const li = document.createElement('li');
     li.className = 'row-item';
@@ -356,14 +416,17 @@ function renderAssignmentList(listEl, emptyEl, clients, tests, onSaved) {
   const sortedTests = [...tests].sort((a, b) => Number(b.id) - Number(a.id));
 
   sortedTests.forEach((test) => {
-    const assignedClients = clients.filter((client) => Number(client.assigned_custom_test_id) === Number(test.id));
+    const assignedClients = clients.filter((client) =>
+      normalizeAssignedCustomTests(client).some((assigned) => Number(assigned.id) === Number(test.id))
+    );
     const li = document.createElement('li');
     li.className = 'row-item assignment-item assignment-test-item';
 
     const assignedNames = assignedClients.map((item) => escapeHtml(item.name)).join(', ');
     const allClientOptions = clients
       .map((client) => {
-        const assignedText = client.assigned_custom_test_name ? ` | 현재: ${escapeHtml(client.assigned_custom_test_name)}` : '';
+        const assignedSummary = assignedCustomTestsSummary(client, '');
+        const assignedText = assignedSummary ? ` | 현재: ${escapeHtml(assignedSummary)}` : '';
         return `<option value="${client.id}">${escapeHtml(client.name)}${assignedText}</option>`;
       })
       .join('');
@@ -404,14 +467,26 @@ function renderAssignmentList(listEl, emptyEl, clients, tests, onSaved) {
       unassignBtn.disabled = busy || assignedClients.length === 0;
     };
 
-    async function updateAssignment(clientId, nextTestId) {
+    async function createAssignment(clientId, nextTestId) {
       setBusy(true);
       try {
-        await api(`/api/admin/clients/${clientId}/assignment`, {
-          method: 'PUT',
+        await api(`/api/admin/clients/${clientId}/assignments`, {
+          method: 'POST',
           body: JSON.stringify({
             admin_custom_test_id: nextTestId
           })
+        });
+        await onSaved();
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function removeAssignment(clientId, currentTestId) {
+      setBusy(true);
+      try {
+        await api(`/api/admin/clients/${clientId}/assignments/${currentTestId}`, {
+          method: 'DELETE'
         });
         await onSaved();
       } finally {
@@ -426,7 +501,7 @@ function renderAssignmentList(listEl, emptyEl, clients, tests, onSaved) {
         return;
       }
       try {
-        await updateAssignment(clientId, Number(test.id));
+        await createAssignment(clientId, Number(test.id));
       } catch (error) {
         window.alert(error.message || '배정 저장 중 오류가 발생했습니다.');
       }
@@ -439,7 +514,7 @@ function renderAssignmentList(listEl, emptyEl, clients, tests, onSaved) {
         return;
       }
       try {
-        await updateAssignment(clientId, null);
+        await removeAssignment(clientId, Number(test.id));
       } catch (error) {
         window.alert(error.message || '배정 해제 중 오류가 발생했습니다.');
       }
@@ -625,7 +700,7 @@ async function initClientsPage() {
         }
       }
       if (testQ) {
-        const assignedName = `${item.assigned_custom_test_name || ''} ${item.assigned_parent_test_name || ''}`.toLowerCase();
+        const assignedName = assignedCustomTestsSearchText(item);
         if (!assignedName.includes(testQ)) {
           return false;
         }
@@ -673,11 +748,7 @@ async function initClientsPage() {
       li.className = 'row-item';
       const detailHref = `/admin/client-detail?id=${item.id}`;
       const isSelected = selectedClientIds.has(item.id);
-      const assignedName = item.assigned_custom_test_name || '';
-      const parentTestName = item.assigned_parent_test_name || '';
-      const assignedDisplay = assignedName
-        ? (parentTestName ? `${assignedName} (기반: ${parentTestName})` : assignedName)
-        : '미배정';
+      const assignedDisplay = assignedCustomTestsSummary(item);
       li.innerHTML = `
         <div class="row-grid client-row-grid">
           <div class="row-col select-col">
@@ -822,8 +893,7 @@ async function initClientsPage() {
       name: clientNameInput.value.trim(),
       gender: clientGenderInput.value,
       birth_day: clientBirthInput.value || null,
-      memo: clientMemoInput.value.trim(),
-      admin_custom_test_id: null
+      memo: clientMemoInput.value.trim()
     };
 
     if (!payload.name || !payload.gender) {
@@ -1877,6 +1947,7 @@ async function initCreatePage() {
     const scalePool = collectScalesForTests(selectedTests);
     const scaleMap = new Map(scalePool.map((s) => [s.key, s]));
     const baseName = form.custom_test_name.value.trim();
+    const clientIntakeMode = normalizeClientIntakeMode(form.client_intake_mode?.value);
     if (!baseName) {
       throw new Error('검사 이름을 입력해주세요.');
     }
@@ -1930,6 +2001,7 @@ async function initCreatePage() {
     return {
       requestBody: {
         custom_test_name: baseName,
+        client_intake_mode: clientIntakeMode,
         test_configs,
         additional_profile_fields: normalizedCustomFields,
       },
@@ -2434,7 +2506,6 @@ async function initClientDetailPage() {
 
   msg.textContent = '';
   msg.className = 'message';
-  let assignedCustomTestId = null;
   let parentReportItems = [];
 
   const syncClientDetailPaneHeights = () => {
@@ -2548,12 +2619,13 @@ async function initClientDetailPage() {
     if (!logs.length) {
       return [];
     }
+    const assignedTests = normalizeAssignedCustomTests(item);
     return [{
       id: 'parent-fallback',
-      parent_test_name: toText(item.assigned_parent_test_name, '기반 검사 정보 없음'),
+      parent_test_name: toText(assignedTests[0]?.parent_test_name, '기반 검사 정보 없음'),
       performed_count: logs.length,
       last_assessed_on: toText(item.last_assessed_on, logs[0]?.assessed_on || '-'),
-      custom_tests: toText(item.assigned_custom_test_name) ? [toText(item.assigned_custom_test_name)] : [],
+      custom_tests: assignedTests.map((row) => toText(row.custom_test_name)).filter(Boolean),
       scales: [buildPendingScale()],
     }];
   };
@@ -2634,13 +2706,7 @@ async function initClientDetailPage() {
     nameInput.value = item.name || '';
     genderInput.value = item.gender === 'male' || item.gender === 'female' ? item.gender : '';
     birthDayInput.value = item.birth_day || '';
-    if (item.assigned_custom_test_name) {
-      assignedTestInput.value = item.assigned_parent_test_name
-        ? `${item.assigned_custom_test_name} (기반: ${item.assigned_parent_test_name})`
-        : item.assigned_custom_test_name;
-    } else {
-      assignedTestInput.value = '미배정';
-    }
+    assignedTestInput.value = assignedCustomTestsSummary(item);
     memoInput.value = item.memo || '';
 
     detailMeta.textContent = `등록일: ${toKstString(item.created_at || '')} | 최근 수정: ${toKstString(item.updated_at || '')}`;
@@ -2680,7 +2746,6 @@ async function initClientDetailPage() {
   const loadClientDetail = async () => {
     const detail = await api(`/api/admin/clients/${id}`);
     const item = detail.item || {};
-    assignedCustomTestId = item.assigned_custom_test_id ?? null;
     renderDetail(item);
   };
 
@@ -2701,8 +2766,7 @@ async function initClientDetailPage() {
       name: nameInput.value.trim(),
       gender: genderInput.value,
       birth_day: birthDayInput.value || null,
-      memo: memoInput.value.trim(),
-      admin_custom_test_id: assignedCustomTestId
+      memo: memoInput.value.trim()
     };
 
     if (!payload.name || !payload.gender) {
@@ -3125,12 +3189,13 @@ async function initClientResultPage() {
 
   const buildTestResultItems = (item, catalog, customTestDetail) => {
     const fallbackScales = buildSelectedScalesFromCustomTest(catalog, customTestDetail);
+    const assignedTests = normalizeAssignedCustomTests(item);
     const fallbackTestName = toText(
-      item.assigned_custom_test_name ?? customTestDetail?.custom_test_name,
+      assignedTests[0]?.custom_test_name ?? customTestDetail?.custom_test_name,
       '배정 검사'
     );
     const fallbackParentTestName = toText(
-      item.assigned_parent_test_name ?? customTestDetail?.test_id,
+      assignedTests[0]?.parent_test_name ?? customTestDetail?.test_id,
       '-'
     );
     const candidateArrays = [
@@ -3963,7 +4028,7 @@ async function initClientResultPage() {
     const detail = await api(`/api/admin/clients/${id}`);
     clientItem = detail.item || {};
 
-    const assignedCustomTestId = Number(clientItem.assigned_custom_test_id);
+    const assignedCustomTestId = Number(firstAssignedCustomTestId(clientItem));
     let catalog = { tests: [] };
     try {
       const loadedCatalog = await api('/api/admin/tests/catalog');
@@ -4022,6 +4087,7 @@ async function initTestDetailPage() {
 
   const form = document.getElementById('testDetailForm');
   const nameInput = document.getElementById('detail_custom_test_name');
+  const intakeModeInput = document.getElementById('detail_client_intake_mode');
   const saveBtn = document.getElementById('testDetailSaveBtn');
   const scaleList = document.getElementById('detailScaleList');
   const detailMeta = document.getElementById('detailMeta');
@@ -4049,19 +4115,24 @@ async function initTestDetailPage() {
   }
 
   let currentName = toText(detail.custom_test_name).trim();
+  let currentClientIntakeMode = normalizeClientIntakeMode(detail.client_intake_mode);
   nameInput.value = currentName;
-  detailMeta.textContent = `기반 검사: ${detail.test_id} | 현재 척도 수: ${detail.scale_count}개 | 구성 변경은 새 검사 생성으로 처리`;
+  if (intakeModeInput) {
+    intakeModeInput.value = currentClientIntakeMode;
+  }
+  detailMeta.textContent = `기반 검사: ${detail.test_id} | 현재 척도 수: ${detail.scale_count}개 | 등록 방식: ${clientIntakeModeLabel(currentClientIntakeMode)} | 구성 변경은 새 검사 생성으로 처리`;
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const nextName = nameInput.value.trim();
+    const nextClientIntakeMode = normalizeClientIntakeMode(intakeModeInput?.value);
     if (!nextName) {
       msg.textContent = '검사명은 공백만 입력할 수 없습니다.';
       msg.className = 'message error';
       nameInput.focus();
       return;
     }
-    if (nextName === currentName) {
-      msg.textContent = '변경된 검사명이 없습니다.';
+    if (nextName === currentName && nextClientIntakeMode === currentClientIntakeMode) {
+      msg.textContent = '변경된 검사 설정이 없습니다.';
       msg.className = 'message';
       return;
     }
@@ -4072,13 +4143,21 @@ async function initTestDetailPage() {
     try {
       const result = await api(`/api/admin/custom-tests/${id}`, {
         method: 'PUT',
-        body: JSON.stringify({ custom_test_name: nextName })
+        body: JSON.stringify({
+          custom_test_name: nextName,
+          client_intake_mode: nextClientIntakeMode
+        })
       });
       currentName = nextName;
+      currentClientIntakeMode = nextClientIntakeMode;
       nameInput.value = nextName;
-      msg.textContent = result.message || '검사명이 수정되었습니다.';
+      if (intakeModeInput) {
+        intakeModeInput.value = currentClientIntakeMode;
+      }
+      detailMeta.textContent = `기반 검사: ${detail.test_id} | 현재 척도 수: ${detail.scale_count}개 | 등록 방식: ${clientIntakeModeLabel(currentClientIntakeMode)} | 구성 변경은 새 검사 생성으로 처리`;
+      msg.textContent = result.message || '검사 설정이 수정되었습니다.';
       msg.className = 'message success';
-      showAdminToast(result.message || '검사명이 수정되었습니다.', 'success');
+      showAdminToast(result.message || '검사 설정이 수정되었습니다.', 'success');
     } catch (error) {
       msg.textContent = error.message;
       msg.className = 'message error';

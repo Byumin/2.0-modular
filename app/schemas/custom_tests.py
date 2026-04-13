@@ -37,12 +37,14 @@ class CreateCustomTestConfigIn(BaseModel):
 
 class CreateCustomTestBatchIn(BaseModel):
     custom_test_name: str = Field(min_length=1, max_length=120)
+    client_intake_mode: Literal["pre_registered_only", "auto_create"] = "pre_registered_only"
     test_configs: list[CreateCustomTestConfigIn] = Field(min_length=1)
     additional_profile_fields: list[AdditionalProfileFieldIn] = Field(default_factory=list)
 
 
-class UpdateCustomTestNameIn(BaseModel):
+class UpdateCustomTestSettingsIn(BaseModel):
     custom_test_name: str = Field(min_length=1, max_length=120)
+    client_intake_mode: Literal["pre_registered_only", "auto_create"] = "pre_registered_only"
 
 
 class BulkDeleteCustomTestsIn(BaseModel):

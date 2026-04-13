@@ -99,6 +99,12 @@
                 <div class="modal-section-body">
                   <label for="custom_test_name">검사 이름</label>
                   <input id="custom_test_name" name="custom_test_name" type="text" maxlength="120" placeholder="예: STS 파일럿-초등용" required />
+                  <label for="client_intake_mode">내담자 등록 방식</label>
+                  <select id="client_intake_mode" name="client_intake_mode">
+                    <option value="pre_registered_only">사전 등록 필수</option>
+                    <option value="auto_create">검사 진행 시 자동 생성 허용</option>
+                  </select>
+                  <p class="subtle-note">사전 등록 필수는 기존 배정 내담자만 진행할 수 있고, 자동 생성 허용은 검사 링크에서 내담자 등록/배정을 진행합니다.</p>
                 </div>
               </section>
 

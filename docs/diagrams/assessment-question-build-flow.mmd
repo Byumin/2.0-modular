@@ -1,6 +1,6 @@
 %%{init: {'flowchart': {'nodeSpacing': 18, 'rankSpacing': 28}}}%%
 flowchart TD
-    A["입력 profile 예시\n(static/assessment-custom.js)\n{ gender, birth_date, school_age }"] --> A1["POST /api/assessment-links/{token}/validate-profile\n(app/router/assessment_link_router.py)<br/><span style='color:#6c757d'>목적: profile payload를 서비스로 전달</span>"]
+    A["입력 profile 예시\n(frontend/src/pages/assessment/AssessmentPage.tsx)\n{ gender, birth_day, school_age }"] --> A1["POST /api/assessment-links/{token}/validate-profile\n(app/router/assessment_link_router.py)<br/><span style='color:#6c757d'>목적: profile payload를 서비스로 전달</span>"]
     A1 --> A2["validate_custom_test_profile_by_access_link\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: 링크/검사/배정 검증 후 문항 payload 반환</span>"]
     A2 -.-> A2_SIDE["함수 내부 순서\n1) access link 조회\n2) custom_test 조회\n3) 배정 profile 검증\n4) build_custom_assessment_question_payload 호출\n5) { message, assessment_payload } 반환"]
     A2 --> B["build_custom_assessment_question_payload\n(app/services/admin/assessment_links.py)<br/><span style='color:#6c757d'>목적: profile에 맞는 실시 구간 문항 payload 조립</span>"]
@@ -38,6 +38,6 @@ flowchart TD
 
     U --> V["출력 assessment_payload 예시\n{ sub_test_json, selected_scale_codes,\nselected_scales[], items[], parts[], item_count, part_count }"]
     V --> V2["validate_custom_test_profile_by_access_link 반환\n(app/services/admin/assessment_links.py)\n{ message, assessment_payload }"]
-    V2 --> W["프론트 applyAssessmentPayload\n(static/assessment-custom.js)<br/><span style='color:#6c757d'>목적: 서버 payload를 프론트 상태로 반영</span>"]
-    W --> X["프론트 renderQuestionCards\n(static/assessment-custom.js)<br/><span style='color:#6c757d'>목적: parts/items 기준 문항 카드 렌더</span>"]
+    V2 --> W["프론트 normalizeAssessmentParts\n(frontend/src/pages/assessment/AssessmentPage.tsx)<br/><span style='color:#6c757d'>목적: 서버 payload를 React state로 반영</span>"]
+    W --> X["프론트 QuestionStep 렌더\n(frontend/src/pages/assessment/steps/QuestionStep.tsx)<br/><span style='color:#6c757d'>목적: parts/items 기준 문항 카드 렌더</span>"]
     X --> Y[실제 검사 문항 화면 표시]
