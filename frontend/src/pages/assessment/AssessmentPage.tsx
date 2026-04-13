@@ -4,7 +4,9 @@ import { ProfileStep } from "./steps/ProfileStep"
 import { QuestionStep } from "./steps/QuestionStep"
 import { CompleteStep } from "./steps/CompleteStep"
 import {
+  AMBIGUOUS_CLIENT_CODE,
   AUTO_CREATE_CONFIRM_REQUIRED_CODE,
+  type AmbiguousCandidate,
   type AnswerState,
   type AssessmentPart,
   type AssessmentPayload,
@@ -113,6 +115,19 @@ export function AssessmentPage() {
   const [modalProfile, setModalProfile] = React.useState<Profile | null>(null)
   const [registering, setRegistering] = React.useState(false)
 
+  // Ambiguous match state
+  const [ambiguousProfile, setAmbiguousProfile] = React.useState<Profile | null>(null)
+  const [ambiguousCandidates, setAmbiguousCandidates] = React.useState<AmbiguousCandidate[]>([])
+  const [ambiguousResolving, setAmbiguousResolving] = React.useState(false)
+
+  // Stored context from validate-profile for submit
+  const [confirmedClientId, setConfirmedClientId] = React.useState<number | null>(null)
+  const [ambiguousMatchContext, setAmbiguousMatchContext] = React.useState<{
+    is_ambiguous_match: boolean
+    responder_choice: "existing" | "new" | null
+    candidate_client_ids: number[]
+  } | null>(null)
+
   React.useEffect(() => {
     let mounted = true
     async function load() {
@@ -147,16 +162,34 @@ export function AssessmentPage() {
     }
   }, [token])
 
-  async function proceedToQuestionStep(profile: Profile, options: { reopenAutoCreateModal?: boolean } = {}) {
-    const { reopenAutoCreateModal = true } = options
+  async function proceedToQuestionStep(
+    profile: Profile,
+    options: {
+      reopenAutoCreateModal?: boolean
+      client_id?: number | null
+      responder_choice?: "existing" | "new" | null
+      candidate_client_ids?: number[]
+    } = {}
+  ) {
+    const { reopenAutoCreateModal = true, client_id, responder_choice, candidate_client_ids } = options
     setError("")
     setProfileLoading(true)
     try {
-      const result = await api<{ assessment_payload?: AssessmentPayload }>(
+      const result = await api<{
+        assessment_payload?: AssessmentPayload
+        client_id?: number
+        is_ambiguous_match?: boolean
+        responder_choice?: "existing" | "new" | null
+        candidate_client_ids?: number[]
+      }>(
         `/api/assessment-links/${token}/validate-profile`,
         {
           method: "POST",
-          body: JSON.stringify({ profile }),
+          body: JSON.stringify({
+            profile,
+            client_id: client_id ?? null,
+            responder_choice: responder_choice ?? null,
+          }),
         }
       )
       const nextParts = result.assessment_payload
@@ -168,6 +201,17 @@ export function AssessmentPage() {
       }
       setParts(nextParts)
       setActiveProfile(profile)
+      // Store confirmed client + ambiguous context for submit
+      setConfirmedClientId(result.client_id ?? null)
+      if (result.is_ambiguous_match) {
+        setAmbiguousMatchContext({
+          is_ambiguous_match: true,
+          responder_choice: result.responder_choice ?? null,
+          candidate_client_ids: result.candidate_client_ids ?? candidate_client_ids ?? [],
+        })
+      } else {
+        setAmbiguousMatchContext(null)
+      }
       setStep("question")
     } catch (err) {
       const apiError = err as ApiError
@@ -178,6 +222,16 @@ export function AssessmentPage() {
         } else {
           setError("내담자 등록은 완료됐지만 검사 배정 확인이 다시 필요합니다. 잠시 후 다시 시도해주세요.")
         }
+        return
+      }
+      if (apiError.code === AMBIGUOUS_CLIENT_CODE) {
+        const detail = apiError.detail as Record<string, unknown> | null
+        const candidates = Array.isArray(detail?.candidates)
+          ? (detail.candidates as AmbiguousCandidate[])
+          : []
+        setAmbiguousCandidates(candidates)
+        setAmbiguousProfile(profile)
+        setError("")
         return
       }
       setError(apiError.message || "배정된 내담자 확인에 실패했습니다.")
@@ -205,6 +259,32 @@ export function AssessmentPage() {
     }
   }
 
+  async function handleAmbiguousSelect(choice: { type: "existing"; clientId: number } | { type: "new" }) {
+    if (!ambiguousProfile || ambiguousResolving) return
+    setAmbiguousResolving(true)
+    setError("")
+    const profile = ambiguousProfile
+    const candidateIds = ambiguousCandidates.map((c) => c.id)
+    setAmbiguousProfile(null)
+    setAmbiguousCandidates([])
+    try {
+      if (choice.type === "existing") {
+        await proceedToQuestionStep(profile, {
+          client_id: choice.clientId,
+          responder_choice: "existing",
+          candidate_client_ids: candidateIds,
+        })
+      } else {
+        await proceedToQuestionStep(profile, {
+          responder_choice: "new",
+          candidate_client_ids: candidateIds,
+        })
+      }
+    } finally {
+      setAmbiguousResolving(false)
+    }
+  }
+
   async function handleSubmit(answers: AnswerState) {
     if (!activeProfile || submitting) return
     setSubmitting(true)
@@ -216,6 +296,10 @@ export function AssessmentPage() {
           responder_name: "",
           profile: activeProfile,
           answers,
+          client_id: confirmedClientId ?? null,
+          is_ambiguous_match: ambiguousMatchContext?.is_ambiguous_match ?? false,
+          responder_choice: ambiguousMatchContext?.responder_choice ?? null,
+          candidate_client_ids: ambiguousMatchContext?.candidate_client_ids ?? [],
         }),
       })
       try {
@@ -279,6 +363,10 @@ export function AssessmentPage() {
     )
   }
 
+  if (step === "complete") {
+    return <CompleteStep onRestart={handleRestart} />
+  }
+
   return (
     <main className="min-h-screen bg-[#f5f7fa] px-4 py-6 sm:py-8">
       <div className={`mx-auto flex w-full ${shellWidthClass} flex-col gap-4`}>
@@ -294,9 +382,7 @@ export function AssessmentPage() {
             <nav className="flex shrink-0 items-center gap-1.5 pt-0.5" aria-label="검사 단계">
               {(["profile", "question", "complete"] as AssessmentStep[]).map((itemStep, index) => {
                 const isCurrent = itemStep === step
-                const isPast =
-                  (step === "question" && itemStep === "profile") ||
-                  (step === "complete" && itemStep !== "complete")
+                const isPast = step === "question" && itemStep === "profile"
                 const isLast = index === 2
                 return (
                   <React.Fragment key={itemStep}>
@@ -350,7 +436,6 @@ export function AssessmentPage() {
           />
         )}
 
-        {step === "complete" && <CompleteStep onRestart={handleRestart} />}
       </div>
 
       {modalProfile && (
@@ -380,6 +465,56 @@ export function AssessmentPage() {
                   className="h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
                 >
                   {registering ? "등록 중..." : "예"}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {ambiguousProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <section className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl">
+            <div className="h-1 bg-[#1F4E79]" />
+            <div className="p-6">
+              <h2 className="text-lg font-semibold">내담자 확인</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                입력하신 인적정보와 일치하는 내담자가 여러 명 있습니다. 본인에 해당하는 내담자를 선택하거나 신규 등록을 진행해주세요.
+              </p>
+              <div className="mt-4 flex flex-col gap-2">
+                {ambiguousCandidates.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    disabled={ambiguousResolving}
+                    onClick={() => handleAmbiguousSelect({ type: "existing", clientId: c.id })}
+                    className="flex w-full items-center justify-between rounded-lg border border-input bg-background px-4 py-3 text-sm transition-colors hover:bg-accent disabled:opacity-50"
+                  >
+                    <span className="font-medium">{c.name}</span>
+                    <span className="text-muted-foreground">
+                      {c.gender === "male" ? "남" : c.gender === "female" ? "여" : c.gender}
+                      {c.birth_day ? ` · ${c.birth_day}` : ""}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+              <div className="mt-5 flex justify-between gap-2">
+                <button
+                  type="button"
+                  disabled={ambiguousResolving}
+                  onClick={() => { setAmbiguousProfile(null); setAmbiguousCandidates([]) }}
+                  className="h-10 rounded-lg border border-input bg-background px-4 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-50"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  disabled={ambiguousResolving}
+                  onClick={() => handleAmbiguousSelect({ type: "new" })}
+                  className="h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {ambiguousResolving ? "처리 중..." : "신규 내담자로 등록"}
                 </button>
               </div>
             </div>

@@ -1,7 +1,7 @@
-# Client Intake Phase 2 Ambiguous Match Spec
+# Client Intake Phase 2: Ambiguous Match Spec
 
 ## Role
-이 문서는 `생년월일 없는 유사 매칭`처럼 동일인 여부를 자동 확정하기 어려운 케이스를 관리자 승인 흐름으로 처리하는 Phase 2 상세 설계 문서다.
+이 문서는 검사 인적사항 입력 시 이름+성별이 일치하는 기존 내담자가 있으나 생년월일로 동일인 여부를 자동 확정할 수 없는 케이스(애매 매칭)를 처리하는 Phase 2 설계 문서다.
 
 이 문서는 `Client Intake Policy`와 `Client Intake Phase 1 Spec`의 후속 문서다.
 
@@ -12,217 +12,212 @@ Phase 1의 exact match 기준은 아래와 같다.
 - 성별
 - 생년월일
 
-이 기준은 안전하지만, 다음 같은 케이스를 자동으로 처리하지 못한다.
+이 기준은 안전하지만, 다음 케이스를 자동으로 처리하지 못한다.
 
-- 기존 내담자와 이름/성별은 같지만 생년월일이 없음
-- 현재 검사 자체가 생년월일을 요구하지 않음
-- 자동 생성 모드에서 기존 내담자를 재사용할지 신규 생성할지 확정이 어려움
+- 검사 자체가 생년월일을 요구하지 않아 이름+성별만 입력한 경우
+- 기존 내담자와 이름/성별은 같지만 생년월일 없이 동일인 여부를 확정하기 어려운 경우
 
-이 경우를 무조건 신규 생성하면 중복 데이터가 쌓일 수 있고, 무조건 기존 내담자로 연결하면 오매칭 위험이 있다.
+이 경우를 무조건 신규 생성하면 중복 데이터가 쌓이고, 무조건 기존 내담자로 연결하면 오매칭 위험이 있다.
 
-## Goal
-애매 매칭은 자동 확정하지 않고, 관리자 승인 전까지 검사 진행을 보류한다.
+## Design Decision
+수검자를 대기시키지 않는다. 수검자는 모달에서 선택 후 즉시 검사를 진행한다.
+관리자는 사후에 알람을 통해 검토하고 병합 또는 신규 확정을 결정한다.
 
-관리자는 아래 둘 중 하나를 선택한다.
-
-1. 기존 내담자로 연결
-2. 새 내담자로 생성
-
-승인 이후에만 검사 진행을 허용한다.
-
-## In Scope
-1. 애매 매칭 판정 기준
-2. 승인 대기 엔티티 설계
-3. 수검자 안내 상태
-4. 관리자 승인 처리 흐름
-5. 승인 후 링크 재개 흐름
-
-## Out Of Scope
-- fuzzy string match
-- 이메일/전화번호 기반 고급 중복 탐지
-- 다수 후보 자동 랭킹
-- 병합 UI 전체 설계
+이 방식의 근거:
+- 수검자 대기는 검사 완료율을 낮춘다.
+- 동일인 여부 판단은 관리자가 더 정확하게 할 수 있다.
+- 사후 처리도 데이터 품질을 충분히 확보한다.
 
 ## Ambiguous Match Definition
-Phase 2의 최소 기준은 아래와 같다.
-
 애매 매칭으로 보는 경우:
 
-- 같은 관리자 아래
-- 이름 동일
+- 같은 관리자 아래 배정된 내담자 중
+- 이름 동일 (trim 기준)
 - 성별 동일
-- 기존 내담자 또는 신규 입력 중 한쪽 이상에서 생년월일이 비어 있음
+- 생년월일이 입력되지 않았거나, 입력됐지만 일치하는 내담자가 없는 경우
+- 결과적으로 후보가 2명 이상 남는 경우
 
 자동 exact match로 보는 경우:
 
-- 이름 동일
-- 성별 동일
-- 생년월일 동일
+- 이름 동일 + 성별 동일 + 생년월일 동일 → 단일 후보 매칭
 
-자동 신규 생성으로 보는 경우:
+자동 신규 생성으로 보는 경우 (auto_create 모드):
 
-- 이름 불일치
-- 성별 불일치
-- exact match 후보 없음
-- 유사 매칭 후보도 없음
+- 이름이 일치하는 배정 내담자가 없음
+- 애매 후보도 없음
 
-## Proposed User Flow
+## User Flow
 
 ### 수검자 측
-1. 링크 접근
-2. 인적사항 입력
-3. 서버가 exact match 확인
-4. exact match가 아니고 애매 매칭 후보가 있으면 진행 중단
-5. 화면에 `유사한 기존 내담자가 있어 관리자 확인이 필요합니다` 안내 표시
-6. 관리자 승인 전까지 검사 시작 불가
+1. 검사 링크 접근
+2. 인적사항 입력 (생년월일 없이 이름+성별만 입력 가능한 경우)
+3. `POST /api/assessment-links/{token}/validate-profile` 호출
+4. 서버가 `AMBIGUOUS_CLIENT` 응답 반환 (후보 내담자 목록 포함)
+5. 수검자 화면에 모달 표시:
+   - 후보 내담자 정보(이름/성별/생년월일) 목록 표시
+   - "기존 내담자가 맞습니다" 선택 → `client_id` 포함 재요청
+   - "새로운 내담자로 등록합니다" 선택 → `responder_choice: "new"` 포함 재요청
+6. 서버가 선택을 수용하고 즉시 검사 payload 반환 (차단 없음)
+7. 수검자가 검사 진행 및 제출
+8. 제출 완료 → 서버가 `admin_client_identity_review` 레코드 생성
 
 ### 관리자 측
-1. 승인 대기 목록 확인
-2. 입력 프로필과 기존 후보 내담자 비교
-3. 아래 중 하나 선택
-   - 기존 내담자로 연결
-   - 새 내담자로 생성
-   - 거절
-4. 승인 결과 저장
-5. 수검자가 다시 링크에 접근하거나 재시도하면 결과에 따라 진행
+1. 관리자 화면에 pending review 알람 배지 표시
+2. 관리자가 알람 클릭 → 검토 목록 화면으로 이동
+3. 검토 항목별 정보 확인:
+   - 수검자 입력 인적사항
+   - 수검자 선택 ("기존" 또는 "신규")
+   - 후보 기존 내담자 정보
+   - 실시한 검사명 및 제출 일시
+4. 관리자 결정:
+   - **기존 내담자로 병합**: 임시 내담자 제출 기록을 기존 내담자에 재링크, 임시 내담자 삭제
+   - **신규 내담자로 확정**: 임시 내담자를 정식 내담자로 확정 (created_source 정규화)
+   - **거절**: 제출 기록 유지, 내담자 처리 없음
 
-## Proposed Status Model
+## Data Model
 
-승인 대기 엔티티 상태 예시:
+### `admin_client_identity_review` 테이블
 
-- `pending`
-- `approved_link_existing`
-- `approved_create_new`
-- `rejected`
-- `expired`
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | INTEGER PK | |
+| admin_user_id | INTEGER NOT NULL | 검사 소유 관리자 |
+| admin_custom_test_id | INTEGER NOT NULL | 검사 ID |
+| submission_id | INTEGER NULL | 제출 완료 후 연결 |
+| access_token | VARCHAR(40) | 사용된 검사 링크 토큰 |
+| input_profile_json | TEXT | 수검자 입력 인적사항 (JSON) |
+| candidate_client_ids_json | TEXT | 후보 내담자 id 목록 (JSON array) |
+| responder_choice | VARCHAR(20) | `existing` 또는 `new` |
+| chosen_client_id | INTEGER NULL | 기존 선택 시 해당 client id |
+| provisional_client_id | INTEGER NULL | 신규 선택 시 임시 내담자 id |
+| review_status | VARCHAR(30) | `pending` / `merged` / `confirmed_new` / `rejected` |
+| reviewed_by | INTEGER NULL | 처리한 관리자 user id |
+| reviewed_at | DATETIME NULL | 처리 일시 |
+| created_at | DATETIME NOT NULL | 생성 일시 |
 
-의미:
+### review_status 값 의미
 
-- `pending`: 관리자 확인 전
-- `approved_link_existing`: 기존 내담자로 연결 승인됨
-- `approved_create_new`: 신규 내담자 생성 승인됨
-- `rejected`: 진행 거절
-- `expired`: 일정 시간 내 미처리
+| 값 | 의미 |
+|------|------|
+| `pending` | 관리자 검토 전 |
+| `merged` | 기존 내담자로 병합 완료 |
+| `confirmed_new` | 신규 내담자로 확정 완료 |
+| `rejected` | 관리자가 거절 처리 |
 
-## Proposed Data Model
-아래는 설계안이며 실제 DB 변경은 사용자 승인 후 진행한다.
+## Provisional Client Strategy
 
-테이블 예시:
+수검자가 "신규 등록" 선택 시:
+- `created_source = assessment_link_provisional`로 임시 내담자 생성
+- 검사 즉시 진행
+- 관리자 병합 결정 시 → 제출 기록을 기존 내담자에 재링크 + 임시 내담자 삭제
+- 관리자 신규 확정 시 → `created_source = assessment_link_auto`로 변경
 
-- `admin_client_identity_review`
+수검자가 "기존 내담자" 선택 시:
+- 선택한 `client_id`로 검사 진행 (신규 생성 없음)
+- 관리자 확인 후 문제 없으면 별도 처리 불필요
+- 관리자가 오매칭 판단 시 → 제출 기록 별도 처리
 
-권장 필드:
-
-- `id`
-- `admin_user_id`
-- `admin_custom_test_id`
-- `access_token`
-- `input_profile_json`
-- `matched_client_id`
-- `review_status`
-- `review_note`
-- `reviewed_by_admin_user_id`
-- `reviewed_at`
-- `created_at`
-
-설명:
-
-- `input_profile_json`: 수검자가 입력한 원본 인적사항
-- `matched_client_id`: 유사 후보 기존 내담자
-- `review_status`: 현재 상태
-- `review_note`: 관리자 판단 메모
-
-## Approval Actions
-
-### A. 기존 내담자로 연결
-동작:
-
-1. `matched_client_id`를 현재 검사에 배정
-2. review 상태를 `approved_link_existing`로 변경
-3. 이후 동일 access token 재시도 시 해당 내담자로 진행 허용
-
-### B. 새 내담자로 생성
-동작:
-
-1. 입력 프로필로 신규 내담자 생성
-2. `created_source`는 별도 값 또는 기존 `assessment_link_auto` 재사용 검토
-3. 현재 검사에 배정
-4. review 상태를 `approved_create_new`로 변경
-
-### C. 거절
-동작:
-
-1. review 상태를 `rejected`로 변경
-2. 수검자는 검사 진행 불가
-3. 필요 시 관리자에게 재요청 안내만 표시
-
-## API Proposal
-실제 엔드포인트 이름은 구현 단계에서 확정하되, 필요한 역할은 아래와 같다.
+## API Design
 
 ### 수검자 측
-- `POST /api/assessment-links/{access_token}/validate-profile`
-  - exact match면 통과
-  - ambiguous match면 `pending approval` 코드 반환
 
-- `GET /api/assessment-links/{access_token}/review-status`
-  - 현재 승인 상태 조회
+#### `POST /api/assessment-links/{token}/validate-profile`
+요청:
+```json
+{
+  "profile": {"name": "홍길동", "gender": "남"},
+  "client_id": null,
+  "responder_choice": null
+}
+```
+
+AMBIGUOUS 응답 (첫 요청):
+```json
+{
+  "code": "AMBIGUOUS_CLIENT",
+  "message": "동일한 인적사항의 내담자가 여러 명입니다. 본인을 선택해주세요.",
+  "candidates": [
+    {"id": 1, "name": "홍길동", "gender": "남", "birth_day": "1990-05-15"},
+    {"id": 2, "name": "홍길동", "gender": "남", "birth_day": "1985-03-22"}
+  ]
+}
+```
+
+기존 선택 재요청:
+```json
+{
+  "profile": {"name": "홍길동", "gender": "남"},
+  "client_id": 1,
+  "responder_choice": "existing"
+}
+```
+
+신규 선택 재요청:
+```json
+{
+  "profile": {"name": "홍길동", "gender": "남"},
+  "client_id": null,
+  "responder_choice": "new"
+}
+```
+
+성공 응답 (선택 후):
+```json
+{
+  "message": "확인이 완료되었습니다.",
+  "client_id": 1,
+  "is_ambiguous_match": true,
+  "assessment_payload": {...}
+}
+```
 
 ### 관리자 측
-- `GET /api/admin/client-identity-reviews`
-  - 대기 목록 조회
 
-- `POST /api/admin/client-identity-reviews/{review_id}/approve-existing`
-  - 기존 내담자 연결 승인
+#### `GET /api/admin/identity-reviews`
+응답: pending 목록 + 카운트
 
-- `POST /api/admin/client-identity-reviews/{review_id}/approve-new`
-  - 신규 내담자 생성 승인
+#### `POST /api/admin/identity-reviews/{review_id}/merge`
+기존 내담자로 병합 처리
 
-- `POST /api/admin/client-identity-reviews/{review_id}/reject`
-  - 거절
+#### `POST /api/admin/identity-reviews/{review_id}/confirm-new`
+신규 내담자로 확정 처리
 
-## UX Proposal
+#### `POST /api/admin/identity-reviews/{review_id}/reject`
+거절 처리
 
-### 수검자 화면
-- 모달 또는 안내 카드로 대기 상태 표시
-- 문구 예:
-  - `유사한 기존 내담자가 있어 관리자 확인이 필요합니다. 승인 후 검사를 진행할 수 있습니다.`
-- 진행 버튼 비활성화
-- 상태 새로고침 버튼 또는 자동 polling 선택 가능
+## created_source 확장
 
-### 관리자 화면
-- 기존 클라이언트 관리와 분리된 `승인 대기` 섹션 또는 탭
-- 비교 정보:
-  - 입력 이름
-  - 입력 성별
-  - 입력 생년월일
-  - 후보 기존 내담자 정보
-  - 현재 검사명
-  - 요청 시각
+기존 값:
+- `admin_manual`
+- `assessment_link_auto`
 
-## Open Questions
-1. 승인 대기 상태에서 access token별 1건만 유지할지, 재시도마다 새 row를 쌓을지
-2. `approve-new` 시 `created_source`를 새 값으로 분리할지
-3. 승인 대기 만료 시간을 둘지
-4. 수검자 화면에서 polling을 할지, 수동 새로고침으로 갈지
+추가 값:
+- `assessment_link_provisional`: 애매 매칭에서 임시 생성된 내담자 (관리자 확정 전)
 
-## Recommended Direction
-현재 프로젝트 기준 권장안은 아래와 같다.
+## Notification Strategy (Phase 2 범위)
 
-1. access token + profile hash 기준으로 pending review 1건 유지
-2. `approve-new`도 `assessment_link_auto`를 우선 재사용
-3. 만료는 초기에 넣지 않고 운영하면서 추가
-4. 수검자 화면은 수동 새로고침부터 시작
+- 관리자 화면 헤더/사이드바에 pending review 카운트 배지 표시
+- `GET /api/admin/identity-reviews` 응답에 `pending_count` 포함
+- polling 방식 (초기 구현), 이후 필요 시 WebSocket 전환 검토
 
-## Approval Gate
-아래 작업은 사용자 승인 후 진행한다.
+## Scope
 
-- 신규 review 테이블 또는 동등한 저장 구조 추가
-- 관리자 승인 API 추가
-- 수검자 review status API 추가
-- 승인 대기 관리자 UI 추가
+### In Scope
+- 애매 매칭 판정 (이름+성별 일치, 단일 확정 불가)
+- 수검자 즉시 진행 (non-blocking)
+- 관리자 사후 검토 + 병합/신규확정/거절
+- pending review 알람 배지
+- provisional 내담자 생성 및 확정 흐름
+
+### Out of Scope
+- fuzzy string match
+- 이메일/전화번호 기반 중복 탐지
+- 자동 병합 추천
+- WebSocket 실시간 알람
 
 ## Related Documents
 - [docs/features/client-intake-policy.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-policy.md)
 - [docs/features/client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase1-spec.md)
-- [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
 - [docs/features/assessment-link-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/assessment-link-flow.md)
+- [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
+- [docs/exec-plans/2026-04-13-client-intake-ambiguous-review-impl.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-13-client-intake-ambiguous-review-impl.md)

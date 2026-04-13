@@ -33,6 +33,9 @@ export function LikertCard({ item, options, answerState, onAnswer, globalIndex }
               key={i}
               data-item-id={item.id}
               data-option-index={i}
+              tabIndex={0}
+              role="radio"
+              aria-checked={checked}
               className={`assessment-option-card min-h-[4.75rem] cursor-pointer rounded-lg border px-3 py-2.5 text-center transition-colors
                 ${checked
                   ? "border-primary bg-primary/10 text-primary"

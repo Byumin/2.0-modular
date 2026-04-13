@@ -38,6 +38,7 @@ from app.services.admin.common import serialize_admin_client, summarize_custom_t
 
 UNASSIGNED_CLIENT_REQUIRED_CODE = "UNASSIGNED_CLIENT_REQUIRED"
 AUTO_CREATE_CONFIRM_REQUIRED_CODE = "AUTO_CREATE_CONFIRM_REQUIRED"
+AMBIGUOUS_CLIENT_CODE = "AMBIGUOUS_CLIENT"
 
 
 def _normalize_parent_test_text(raw_value: str | None) -> str | None:
@@ -289,7 +290,7 @@ def find_assigned_client_for_profile(
     custom_test_id: int,
     profile: dict[str, Any],
 ) -> tuple[AdminClient | None, str]:
-    client, message, _ = find_assigned_client_for_profile_with_code(
+    client, message, _, _ = find_assigned_client_for_profile_with_code(
         db,
         admin_user_id=admin_user_id,
         custom_test_id=custom_test_id,
@@ -304,42 +305,51 @@ def find_assigned_client_for_profile_with_code(
     admin_user_id: int,
     custom_test_id: int,
     profile: dict[str, Any],
-) -> tuple[AdminClient | None, str, str | None]:
-    assigned_clients = get_assigned_clients_for_profile( # 입력한 인적사항과 배정된 내담자 조회
+) -> tuple[AdminClient | None, str, str | None, list[AdminClient]]:
+    """(client, message, code, candidates) 반환.
+    - 단일 매칭: (client, "", None, [])
+    - 동명이인 등 모호: (None, message, AMBIGUOUS_CLIENT_CODE, [후보목록])
+    - 배정 없음: (None, message, UNASSIGNED_CLIENT_REQUIRED_CODE, [])
+    - 기타 오류: (None, message, None, [])
+    """
+    assigned_clients = get_assigned_clients_for_profile(
         db,
         admin_user_id=admin_user_id,
         custom_test_id=custom_test_id,
     )
     if not assigned_clients:
-        return None, "이 검사에 배정된 내담자가 없습니다. 계속하면 내담자로 등록되고 이 검사에 배정됩니다.", UNASSIGNED_CLIENT_REQUIRED_CODE
+        return None, "이 검사에 배정된 내담자가 없습니다. 계속하면 내담자로 등록되고 이 검사에 배정됩니다.", UNASSIGNED_CLIENT_REQUIRED_CODE, []
 
     name = str(profile.get("name", "")).strip()
     if not name:
-        return None, "이름을 입력해주세요.", None
+        return None, "이름을 입력해주세요.", None, []
 
     candidates = [row for row in assigned_clients if row.name.strip() == name]
     if not candidates:
-        return None, "배정된 내담자 정보와 일치하지 않습니다. 이름을 확인해주세요.", None
+        return None, "배정된 내담자 정보와 일치하지 않습니다. 이름을 확인해주세요.", None, []
 
     gender = str(profile.get("gender", "")).strip()
     if gender:
-        candidates = [row for row in candidates if (row.gender or "").strip() == gender]
-        if not candidates:
-            return None, "배정된 내담자 정보와 일치하지 않습니다. 성별을 확인해주세요.", None
+        gender_filtered = [row for row in candidates if (row.gender or "").strip() == gender]
+        if not gender_filtered:
+            return None, "배정된 내담자 정보와 일치하지 않습니다. 성별을 확인해주세요.", None, []
+        candidates = gender_filtered
 
     birth_day_text = str(profile.get("birth_day", "")).strip()
     if birth_day_text:
         try:
             birth_day_value = date.fromisoformat(birth_day_text)
         except ValueError:
-            return None, "생년월일 형식이 올바르지 않습니다.", None
-        candidates = [row for row in candidates if row.birth_day == birth_day_value]
-        if not candidates:
-            return None, "배정된 내담자 정보와 일치하지 않습니다. 생년월일을 확인해주세요.", None
+            return None, "생년월일 형식이 올바르지 않습니다.", None, []
+        birth_filtered = [row for row in candidates if row.birth_day == birth_day_value]
+        if not birth_filtered:
+            return None, "배정된 내담자 정보와 일치하지 않습니다. 생년월일을 확인해주세요.", None, []
+        candidates = birth_filtered
 
-    if len(candidates) > 1:
-        return None, "동일한 이름의 내담자가 여러 명입니다. 성별/생년월일을 함께 입력해주세요.", None
-    return candidates[0], "", None
+    if len(candidates) == 1:
+        return candidates[0], "", None, []
+
+    return None, "동일한 인적사항의 내담자가 여러 명입니다. 본인을 선택해주세요.", AMBIGUOUS_CLIENT_CODE, candidates
 
 
 def register_client_and_assign_for_public_assessment(
@@ -348,6 +358,7 @@ def register_client_and_assign_for_public_assessment(
     admin_user_id: int,
     custom_test_id: int,
     profile: dict[str, Any],
+    created_source: str = "assessment_link_auto",
 ) -> tuple[AdminClient, bool]:
     name = str(profile.get("name", "")).strip()
     if not name:
@@ -392,8 +403,9 @@ def register_client_and_assign_for_public_assessment(
         gender=normalized_gender,
         birth_day=birth_day_value,
         memo="검사 링크에서 자동 등록",
-        created_source="assessment_link_auto",
+        created_source=created_source,
     )
+    db.flush()
     assign_client_to_test(
         db=db,
         admin_id=admin_user_id,
@@ -403,6 +415,52 @@ def register_client_and_assign_for_public_assessment(
     commit(db)
     refresh(db, new_item)
     return new_item, True
+
+
+def create_provisional_client_and_assign_for_public_assessment(
+    db: Session,
+    *,
+    admin_user_id: int,
+    custom_test_id: int,
+    profile: dict[str, Any],
+) -> AdminClient:
+    name = str(profile.get("name", "")).strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="이름을 입력해주세요.")
+
+    raw_gender = str(profile.get("gender", "")).strip()
+    try:
+        normalized_gender = normalize_gender_value(raw_gender)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="성별을 확인해주세요.") from exc
+
+    birth_day_text = str(profile.get("birth_day", "")).strip()
+    birth_day_value = None
+    if birth_day_text:
+        try:
+            birth_day_value = date.fromisoformat(birth_day_text)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="생년월일 형식이 올바르지 않습니다.") from exc
+
+    new_item = create_client_row(
+        db,
+        admin_user_id=admin_user_id,
+        name=name,
+        gender=normalized_gender,
+        birth_day=birth_day_value,
+        memo="검사 링크에서 신규 내담자로 선택",
+        created_source="assessment_link_provisional",
+    )
+    db.flush()
+    assign_client_to_test(
+        db=db,
+        admin_id=admin_user_id,
+        client_id=new_item.id,
+        custom_test_id=custom_test_id,
+    )
+    commit(db)
+    refresh(db, new_item)
+    return new_item
 
 
 def list_admin_clients(db: Session, admin_session: str | None) -> dict:

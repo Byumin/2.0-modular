@@ -103,6 +103,26 @@ class AdminCustomTestSubmission(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class AdminClientIdentityReview(Base):
+    """애매 매칭 케이스에서 수검자 선택을 기록하고 관리자 사후 검토를 처리하는 테이블."""
+    __tablename__ = "admin_client_identity_review"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_user_id: Mapped[int] = mapped_column(ForeignKey("admin_user.id"), nullable=False, index=True)
+    admin_custom_test_id: Mapped[int] = mapped_column(ForeignKey("child_test.id"), nullable=False, index=True)
+    submission_id: Mapped[int | None] = mapped_column(ForeignKey("admin_custom_test_submission.id"), nullable=True, index=True)
+    access_token: Mapped[str] = mapped_column(String(120), nullable=False)
+    input_profile_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    candidate_client_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    responder_choice: Mapped[str] = mapped_column(String(20), nullable=False)  # 'existing' | 'new'
+    chosen_client_id: Mapped[int | None] = mapped_column(ForeignKey("admin_client.id"), nullable=True)
+    provisional_client_id: Mapped[int | None] = mapped_column(ForeignKey("admin_client.id"), nullable=True)
+    review_status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending")  # pending | merged | confirmed_new | rejected
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("admin_user.id"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class SubmissionScoringResult(Base):
     __tablename__ = "submission_scoring_result"
 

@@ -23,12 +23,7 @@
 - `frontend/src/pages/TestManagement.tsx`
 - `frontend/src/pages/TestDetail.tsx`
 
-참고:
-- `static/admin-create.html`
-- `static/admin-test-detail.html`
-- `static/admin.js`
-
-현재 `/admin/create`와 `/admin/create/{id}` browser route는 React SPA를 서빙한다. 위 `static/` 파일은 레거시 잔존 파일로 본다.
+현재 `/admin/create`와 `/admin/create/{id}` browser route는 React SPA를 서빙한다.
 
 ## Behavior Summary
 - 원본(parent) 검사 데이터를 카탈로그로 보여준다.

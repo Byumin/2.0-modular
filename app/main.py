@@ -6,7 +6,9 @@ from fastapi.staticfiles import StaticFiles
 
 from app.db.schema_migrations import (
     ensure_admin_client_assignment_unique_index,
+    ensure_admin_client_birth_day_not_null,
     ensure_admin_client_created_source_column,
+    ensure_admin_client_identity_review_table,
     ensure_child_test_client_intake_mode_column,
     ensure_submission_client_id_column,
     ensure_submission_scoring_result_table,
@@ -17,6 +19,7 @@ from app.router.auth_router import router as auth_router
 from app.router.client_router import router as client_router
 from app.router.custom_test_router import router as custom_test_router
 from app.router.dashboard_router import router as dashboard_router
+from app.router.identity_review_router import router as identity_review_router
 from app.router.page_router import router as page_router
 from app.router.scoring_router import router as scoring_router
 from app.services.admin.auth import seed_default_admin
@@ -68,6 +71,7 @@ app.include_router(custom_test_router)
 app.include_router(client_router)
 app.include_router(assessment_link_router)
 app.include_router(dashboard_router)
+app.include_router(identity_review_router)
 app.include_router(scoring_router)
 
 
@@ -79,4 +83,6 @@ def on_startup() -> None:
     ensure_admin_client_assignment_unique_index()
     ensure_submission_client_id_column()
     ensure_submission_scoring_result_table()
+    ensure_admin_client_birth_day_not_null()
+    ensure_admin_client_identity_review_table()
     seed_default_admin()

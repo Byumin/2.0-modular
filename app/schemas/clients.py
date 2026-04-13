@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class AdminClientIn(BaseModel):
     name: str = Field(min_length=1, max_length=50)
     gender: str = Field(min_length=1, max_length=10)
-    birth_day: date | None = None
+    birth_day: date
     memo: str = Field(default="", max_length=500)
 
 

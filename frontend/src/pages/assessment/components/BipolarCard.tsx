@@ -49,6 +49,11 @@ export function BipolarCard({ item, options, answerState, onAnswer, globalIndex,
             return (
               <label
                 key={i}
+                data-item-id={item.id}
+                data-option-index={i}
+                tabIndex={0}
+                role="radio"
+                aria-checked={checked}
                 className={`assessment-option-card cursor-pointer rounded-lg border px-2 py-2 text-center transition-colors
                   ${checked
                     ? "border-primary bg-primary/10"

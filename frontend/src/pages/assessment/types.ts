@@ -62,3 +62,11 @@ export type AssessmentStep = 'profile' | 'question' | 'complete'
 
 export const QUESTION_PAGE_SIZE = 5
 export const AUTO_CREATE_CONFIRM_REQUIRED_CODE = 'AUTO_CREATE_CONFIRM_REQUIRED'
+export const AMBIGUOUS_CLIENT_CODE = 'AMBIGUOUS_CLIENT'
+
+export interface AmbiguousCandidate {
+  id: number
+  name: string
+  gender: string
+  birth_day: string | null
+}

@@ -10,10 +10,22 @@ import { Badge } from "@/components/ui/badge"
 interface TestDetail {
   id: number
   custom_test_name: string
+  client_intake_mode?: string
   test_ids?: string[]
   created_at: string
   selected_scale_codes?: string[]
   scale_count?: number
+}
+
+type ClientIntakeMode = "pre_registered_only" | "auto_create"
+
+const intakeModeLabels: Record<ClientIntakeMode, string> = {
+  pre_registered_only: "사전 등록 필수",
+  auto_create: "검사 진행 시 자동 생성 허용",
+}
+
+function normalizeClientIntakeMode(value?: string): ClientIntakeMode {
+  return value === "auto_create" ? "auto_create" : "pre_registered_only"
 }
 
 export function TestDetail() {
@@ -25,15 +37,65 @@ export function TestDetail() {
   const [accessLink, setAccessLink] = React.useState("")
   const [generatingLink, setGeneratingLink] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
+  const [nameValue, setNameValue] = React.useState("")
+  const [intakeMode, setIntakeMode] = React.useState<ClientIntakeMode>("pre_registered_only")
+  const [savingSettings, setSavingSettings] = React.useState(false)
+  const [saveMessage, setSaveMessage] = React.useState<{ text: string; error: boolean } | null>(null)
 
   React.useEffect(() => {
     if (!id) return
     fetch(`/api/admin/custom-tests/${id}`)
       .then((r) => r.json())
-      .then((data) => setTest(data.item ?? data))
+      .then((data) => {
+        const item = data.item ?? data
+        setTest(item)
+        setNameValue(item.custom_test_name ?? "")
+        setIntakeMode(normalizeClientIntakeMode(item.client_intake_mode))
+      })
       .catch(() => setError("검사 정보를 불러올 수 없습니다."))
       .finally(() => setLoading(false))
   }, [id])
+
+  const handleSaveSettings = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!test || savingSettings) return
+
+    const trimmedName = nameValue.trim()
+    if (!trimmedName) {
+      setSaveMessage({ text: "검사 이름을 입력해주세요.", error: true })
+      return
+    }
+
+    setSavingSettings(true)
+    setSaveMessage(null)
+    setError("")
+
+    try {
+      const res = await fetch(`/api/admin/custom-tests/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          custom_test_name: trimmedName,
+          client_intake_mode: intakeMode,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(typeof data.detail === "string" ? data.detail : "검사 설정 저장에 실패했습니다.")
+      }
+
+      setTest((prev) => prev ? { ...prev, custom_test_name: trimmedName, client_intake_mode: intakeMode } : prev)
+      setSaveMessage({ text: "검사 설정이 저장되었습니다.", error: false })
+    } catch (err) {
+      setSaveMessage({
+        text: err instanceof Error ? err.message : "검사 설정 저장에 실패했습니다.",
+        error: true,
+      })
+    } finally {
+      setSavingSettings(false)
+    }
+  }
 
   const handleGenerateLink = async () => {
     setGeneratingLink(true)
@@ -93,11 +155,61 @@ export function TestDetail() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">검사 설정</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSaveSettings} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="detail_custom_test_name">검사 이름</Label>
+                <Input
+                  id="detail_custom_test_name"
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  placeholder="검사 이름"
+                  maxLength={120}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="detail_client_intake_mode">내담자 등록 방식</Label>
+                <select
+                  id="detail_client_intake_mode"
+                  value={intakeMode}
+                  onChange={(e) => setIntakeMode(normalizeClientIntakeMode(e.target.value))}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="pre_registered_only">{intakeModeLabels.pre_registered_only}</option>
+                  <option value="auto_create">{intakeModeLabels.auto_create}</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  자동 생성 허용은 사전 배정이 없어도 수검자가 확인 후 내담자 등록과 검사 배정을 진행합니다.
+                </p>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <Badge variant={intakeMode === "auto_create" ? "success" : "secondary"} className="text-xs">
+                  {intakeModeLabels[intakeMode]}
+                </Badge>
+                <Button type="submit" size="sm" disabled={savingSettings}>
+                  {savingSettings ? "저장 중..." : "설정 저장"}
+                </Button>
+              </div>
+              {saveMessage && (
+                <p className={saveMessage.error ? "text-sm text-destructive" : "text-sm text-green-600"}>
+                  {saveMessage.text}
+                </p>
+              )}
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">검사 링크 생성</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
-              내담자에게 제공할 검사 접속 링크를 생성합니다.
+              {intakeMode === "auto_create"
+                ? "사전 배정이 없어도 확인 후 내담자 등록과 검사 배정을 진행할 수 있습니다."
+                : "사전에 배정된 내담자에게 제공할 검사 접속 링크를 생성합니다."}
             </p>
             <Button
               variant="outline"

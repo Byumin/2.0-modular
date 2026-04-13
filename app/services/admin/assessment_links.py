@@ -16,10 +16,12 @@ from app.repositories.custom_test_repository import (
     get_custom_test_by_id_and_admin,
 )
 from app.repositories.parent_test_repository import fetch_parent_item_bundle
+from app.schemas.values import normalize_gender_value
 from app.services.admin.auth import get_current_admin
 from app.services.admin.clients import (
+    AMBIGUOUS_CLIENT_CODE,
     AUTO_CREATE_CONFIRM_REQUIRED_CODE,
-    find_assigned_client_for_profile,
+    create_provisional_client_and_assign_for_public_assessment,
     find_assigned_client_for_profile_with_code,
     register_client_and_assign_for_public_assessment,
 )
@@ -45,11 +47,42 @@ def _safe_parse_date(value: Any) -> date | None:
         return None
 
 
-def _raise_assessment_error(status_code: int, message: str, code: str | None = None) -> None:
+def _raise_assessment_error(
+    status_code: int,
+    message: str,
+    code: str | None = None,
+    data: dict[str, Any] | None = None,
+) -> None:
     detail: dict[str, Any] = {"message": message}
     if code:
         detail["code"] = code
+    if data:
+        detail.update(data)
     raise HTTPException(status_code=status_code, detail=detail)
+
+
+def _validate_selected_client_matches_profile(client_row, profile: dict[str, Any]) -> None:
+    profile_name = str(profile.get("name", "")).strip()
+    if profile_name and client_row.name.strip() != profile_name:
+        _raise_assessment_error(403, "선택한 내담자 정보가 일치하지 않습니다.")
+
+    profile_gender = str(profile.get("gender", "")).strip()
+    if profile_gender:
+        try:
+            normalized_gender = normalize_gender_value(profile_gender)
+        except ValueError:
+            _raise_assessment_error(403, "선택한 내담자 정보가 일치하지 않습니다.")
+        if (client_row.gender or "").strip() != normalized_gender:
+            _raise_assessment_error(403, "선택한 내담자 정보가 일치하지 않습니다.")
+
+    birth_day_text = str(profile.get("birth_day", "")).strip()
+    if birth_day_text:
+        try:
+            birth_day_value = date.fromisoformat(birth_day_text)
+        except ValueError:
+            _raise_assessment_error(403, "선택한 내담자 정보가 일치하지 않습니다.")
+        if client_row.birth_day != birth_day_value:
+            _raise_assessment_error(403, "선택한 내담자 정보가 일치하지 않습니다.")
 
 
 def _age_detail(birth_day: date, as_of: date) -> tuple[int, int, int]:
@@ -701,13 +734,19 @@ def get_custom_test_by_access_link(db: Session, access_token: str) -> dict:
     payload["access_token"] = access_token # 응답에 access_token 포함
     return payload
 
-# access token으로 링크 조회, 해당 링크의 custom_test row 조회, 인적사항과 일치하는 검사 구간 확인, 검사 문항 화면 payload 반환
-def validate_custom_test_profile_by_access_link(db: Session, access_token: str, profile: dict[str, Any]) -> dict:
-    link = get_active_access_link_by_token(db, access_token) # access token으로 링크 조회
+# access token으로 링크 조회, 내담자 매칭(단일/모호/없음) 처리 후 검사 문항 payload 반환
+def validate_custom_test_profile_by_access_link(
+    db: Session,
+    access_token: str,
+    profile: dict[str, Any],
+    selected_client_id: int | None = None,
+    responder_choice: str | None = None,
+) -> dict:
+    link = get_active_access_link_by_token(db, access_token)
     if link is None:
         raise HTTPException(status_code=404, detail="유효하지 않은 검사 URL입니다.")
 
-    custom_test = get_custom_test_by_id_and_admin( # 해당 링크의 custom_test row 조회
+    custom_test = get_custom_test_by_id_and_admin(
         db,
         custom_test_id=link.admin_custom_test_id,
         admin_user_id=link.admin_user_id,
@@ -716,32 +755,71 @@ def validate_custom_test_profile_by_access_link(db: Session, access_token: str, 
         raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
 
     client_intake_mode = normalize_client_intake_mode(getattr(custom_test, "client_intake_mode", ""))
-    if client_intake_mode == "pre_registered_only":
-        _, error_message, error_code = find_assigned_client_for_profile_with_code( # 입력한 인적사항과 배정된 내담자 확인 + 값 검증
-            db,
-            admin_user_id=link.admin_user_id,
-            custom_test_id=custom_test.id,
-            profile=profile or {},
-        )
-        if error_message:
-            _raise_assessment_error(403, error_message, error_code)
-    else:
-        client, _, _ = find_assigned_client_for_profile_with_code(
-            db,
-            admin_user_id=link.admin_user_id,
-            custom_test_id=custom_test.id,
-            profile=profile or {},
-        )
-        if client is None:
+    client, error_message, error_code, candidates = find_assigned_client_for_profile_with_code(
+        db,
+        admin_user_id=link.admin_user_id,
+        custom_test_id=custom_test.id,
+        profile=profile or {},
+    )
+
+    is_ambiguous_match = False
+
+    if client is None:
+        if error_code == AMBIGUOUS_CLIENT_CODE:
+            # Case 2: 애매 매칭 - 수검자 선택 처리
+            if responder_choice == "new":
+                # 신규 등록 선택 → 임시 내담자 생성
+                client = create_provisional_client_and_assign_for_public_assessment(
+                    db,
+                    admin_user_id=link.admin_user_id,
+                    custom_test_id=custom_test.id,
+                    profile=profile or {},
+                )
+                is_ambiguous_match = True
+            elif selected_client_id is not None:
+                # 기존 내담자 선택 → 후보 중 검증
+                selected = next((c for c in candidates if c.id == selected_client_id), None)
+                if selected is None:
+                    _raise_assessment_error(403, "선택한 내담자 정보가 일치하지 않습니다.")
+                client = selected
+                is_ambiguous_match = True
+            else:
+                # 아직 선택 안 함 → 후보 목록 반환
+                _raise_assessment_error(
+                    403,
+                    error_message,
+                    AMBIGUOUS_CLIENT_CODE,
+                    data={
+                        "candidates": [
+                            {
+                                "id": c.id,
+                                "name": c.name,
+                                "gender": c.gender,
+                                "birth_day": c.birth_day.isoformat() if c.birth_day else None,
+                            }
+                            for c in candidates
+                        ]
+                    },
+                )
+        elif client_intake_mode == "auto_create":
+            # Case 3: 배정된 내담자 없거나 불일치 → auto_create 확인 요청
             _raise_assessment_error(
                 403,
                 "기존 내담자 재사용 또는 신규 등록을 위해 확인이 필요합니다. 계속하면 현재 검사에 연결됩니다.",
                 AUTO_CREATE_CONFIRM_REQUIRED_CODE,
             )
+        else:
+            # Case 1 실패: pre_registered_only에서 불일치
+            _raise_assessment_error(403, error_message, error_code)
 
+    # client 확정 → 문항 payload 빌드
     assessment_payload = build_custom_assessment_question_payload(custom_test, profile or {})
     return {
         "message": "배정된 내담자 확인이 완료되었습니다.",
+        "client_id": client.id,
+        "is_ambiguous_match": is_ambiguous_match,
+        "responder_choice": responder_choice if is_ambiguous_match else None,
+        "candidate_client_ids": [c.id for c in candidates] if is_ambiguous_match else [],
         "assessment_payload": assessment_payload,
     }
 
@@ -784,6 +862,10 @@ def submit_custom_test_by_access_link(
     responder_name: str,
     profile: dict[str, Any],
     answers: dict[str, str],
+    client_id: int | None = None,
+    is_ambiguous_match: bool = False,
+    responder_choice: str | None = None,
+    candidate_client_ids: list[int] | None = None,
 ) -> dict:
     from app.services.scoring.submissions import score_submission_by_id
 
@@ -829,14 +911,30 @@ def submit_custom_test_by_access_link(
     if len(cleaned_answers) != len(valid_item_ids):
         raise HTTPException(status_code=400, detail="모든 문항에 응답해주세요.")
 
-    client, error_message = find_assigned_client_for_profile(
-        db,
-        admin_user_id=link.admin_user_id,
-        custom_test_id=custom_test.id,
-        profile=clean_profile,
-    )
-    if error_message or client is None:
-        _raise_assessment_error(403, error_message or "배정된 내담자를 확인할 수 없습니다.")
+    if client_id is not None:
+        # validate-profile에서 동명이인 모달로 선택한 client_id 검증
+        from app.repositories.client_repository import get_admin_client_by_id_and_admin, get_assignment_by_admin_client_and_test
+        client_row = get_admin_client_by_id_and_admin(db, client_id=client_id, admin_user_id=link.admin_user_id)
+        if client_row is None:
+            _raise_assessment_error(403, "선택한 내담자를 찾을 수 없습니다.")
+        assignment = get_assignment_by_admin_client_and_test(db, link.admin_user_id, client_id, custom_test.id)
+        if assignment is None:
+            _raise_assessment_error(403, "이 검사에 배정된 내담자가 아닙니다.")
+        if is_ambiguous_match and responder_choice == "existing" and client_id not in set(candidate_client_ids or []):
+            _raise_assessment_error(403, "선택한 내담자 정보가 일치하지 않습니다.")
+        _validate_selected_client_matches_profile(client_row, clean_profile)
+        client = client_row
+    else:
+        client, error_message, error_code, candidates = find_assigned_client_for_profile_with_code(
+            db,
+            admin_user_id=link.admin_user_id,
+            custom_test_id=custom_test.id,
+            profile=clean_profile,
+        )
+        if client is None:
+            if error_code == AMBIGUOUS_CLIENT_CODE:
+                _raise_assessment_error(403, "내담자를 특정할 수 없습니다. 인적사항 확인을 다시 진행해주세요.", AMBIGUOUS_CLIENT_CODE)
+            _raise_assessment_error(403, error_message or "배정된 내담자를 확인할 수 없습니다.")
 
     profile_name = str(clean_profile.get("name", "")).strip()
     final_responder_name = profile_name or responder_name.strip()
@@ -866,13 +964,35 @@ def submit_custom_test_by_access_link(
         submission_id=submission.id,
     )
 
-    if client.id is not None:
-        create_assessment_log(
+    create_assessment_log(
+        db,
+        admin_user_id=link.admin_user_id,
+        client_id=client.id,
+        assessed_on=date.today(),
+    )
+
+    if is_ambiguous_match and responder_choice in ("existing", "new"):
+        from app.repositories.identity_review_repository import (
+            create_identity_review,
+            link_review_submission,
+        )
+        from app.repositories.base_repository import commit as _commit
+
+        chosen_client_id = client.id if responder_choice == "existing" else None
+        provisional_client_id = client.id if responder_choice == "new" else None
+        review = create_identity_review(
             db,
             admin_user_id=link.admin_user_id,
-            client_id=client.id,
-            assessed_on=date.today(),
+            admin_custom_test_id=custom_test.id,
+            access_token=access_token,
+            input_profile_json=json.dumps(clean_profile, ensure_ascii=False),
+            candidate_client_ids_json=json.dumps(candidate_client_ids or [], ensure_ascii=False),
+            responder_choice=responder_choice,
+            chosen_client_id=chosen_client_id,
+            provisional_client_id=provisional_client_id,
         )
+        link_review_submission(db, review, submission.id)
+        _commit(db)
 
     return {
         "message": "검사가 제출되었습니다.",

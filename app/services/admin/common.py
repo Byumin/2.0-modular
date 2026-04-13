@@ -16,6 +16,7 @@ CLIENT_INTAKE_MODES = {
 CLIENT_CREATED_SOURCES = {
     "admin_manual",
     "assessment_link_auto",
+    "assessment_link_provisional",
 }
 
 

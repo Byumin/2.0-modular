@@ -69,15 +69,17 @@ def find_admin_client_by_identity(
     gender: str,
     birth_day,
 ) -> AdminClient | None:
-    if birth_day is None:
-        return None
-    query = db.query(AdminClient).filter(
-        AdminClient.admin_user_id == admin_user_id,
-        AdminClient.name == name,
-        AdminClient.gender == gender,
+    return (
+        db.query(AdminClient)
+        .filter(
+            AdminClient.admin_user_id == admin_user_id,
+            AdminClient.name == name,
+            AdminClient.gender == gender,
+            AdminClient.birth_day == birth_day,
+        )
+        .order_by(AdminClient.id.asc())
+        .first()
     )
-    query = query.filter(AdminClient.birth_day == birth_day)
-    return query.order_by(AdminClient.id.asc()).first()
 
 
 def list_client_assignments_with_test_name(db: Session, *, admin_user_id: int):
@@ -194,8 +196,6 @@ def create_admin_client(
         created_source=created_source,
     )
     db.add(row)
-    db.commit()
-    db.refresh(row)
     return row
 
 

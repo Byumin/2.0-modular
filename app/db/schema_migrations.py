@@ -117,3 +117,52 @@ def ensure_admin_client_assignment_unique_index() -> None:
             ON admin_client_assignment (admin_user_id, admin_client_id, admin_custom_test_id)
             """
         )
+
+
+def ensure_admin_client_birth_day_not_null() -> None:
+    """기존 NULL birth_day를 채우고 신규 DB에서는 NOT NULL로 생성되도록 보장한다."""
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            """
+            UPDATE admin_client SET birth_day = '1900-01-01' WHERE birth_day IS NULL
+            """
+        )
+
+
+def ensure_admin_client_identity_review_table() -> None:
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        if "admin_client_identity_review" not in tables:
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE admin_client_identity_review (
+                    id INTEGER PRIMARY KEY,
+                    admin_user_id INTEGER NOT NULL,
+                    admin_custom_test_id INTEGER NOT NULL,
+                    submission_id INTEGER,
+                    access_token VARCHAR(120) NOT NULL DEFAULT '',
+                    input_profile_json TEXT NOT NULL DEFAULT '{}',
+                    candidate_client_ids_json TEXT NOT NULL DEFAULT '[]',
+                    responder_choice VARCHAR(20) NOT NULL,
+                    chosen_client_id INTEGER,
+                    provisional_client_id INTEGER,
+                    review_status VARCHAR(30) NOT NULL DEFAULT 'pending',
+                    reviewed_by INTEGER,
+                    reviewed_at DATETIME,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        conn.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_admin_client_identity_review_admin_user_id
+            ON admin_client_identity_review (admin_user_id)
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_admin_client_identity_review_review_status
+            ON admin_client_identity_review (review_status)
+            """
+        )

@@ -22,11 +22,7 @@
 - `frontend/src/pages/assessment/steps/QuestionStep.tsx`
 - `frontend/src/pages/assessment/steps/CompleteStep.tsx`
 
-참고:
-- `static/assessment-custom.html`
-- `static/assessment-custom.js`
-
-현재 `/assessment/custom/{access_token}` browser route는 React SPA를 서빙한다. 위 `static/` 파일은 레거시 잔존 파일로 본다.
+현재 `/assessment/custom/{access_token}` browser route는 React SPA를 서빙한다.
 
 ## Behavior Summary
 - 관리자가 커스텀 검사에 대해 접근 링크를 생성한다.
