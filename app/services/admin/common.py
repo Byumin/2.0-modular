@@ -31,11 +31,21 @@ def serialize_admin_client(row: AdminClient) -> dict:
     created_source = str(getattr(row, "created_source", "")).strip()
     if created_source not in CLIENT_CREATED_SOURCES:
         created_source = "admin_manual"
+    try:
+        tags = json.loads(getattr(row, "tags_json", None) or "[]")
+        if not isinstance(tags, list):
+            tags = []
+    except Exception:
+        tags = []
     return {
         "id": row.id,
         "name": row.name,
         "gender": row.gender,
         "birth_day": row.birth_day.isoformat() if row.birth_day else None,
+        "phone": getattr(row, "phone", None) or "",
+        "address": getattr(row, "address", None) or "",
+        "is_closed": bool(getattr(row, "is_closed", False)),
+        "tags": tags,
         "memo": row.memo,
         "created_source": created_source,
         "created_at": row.created_at.isoformat(),

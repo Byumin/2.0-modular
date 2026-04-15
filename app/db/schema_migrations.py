@@ -129,6 +129,100 @@ def ensure_admin_client_birth_day_not_null() -> None:
         )
 
 
+def ensure_admin_client_extended_fields() -> None:
+    """admin_client 테이블에 phone, address, is_closed, tags_json 컬럼 추가."""
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("admin_client")}
+    with engine.begin() as conn:
+        if "phone" not in columns:
+            conn.exec_driver_sql("ALTER TABLE admin_client ADD COLUMN phone VARCHAR(30)")
+        if "address" not in columns:
+            conn.exec_driver_sql("ALTER TABLE admin_client ADD COLUMN address VARCHAR(200)")
+        if "is_closed" not in columns:
+            conn.exec_driver_sql(
+                "ALTER TABLE admin_client ADD COLUMN is_closed INTEGER NOT NULL DEFAULT 0"
+            )
+        if "tags_json" not in columns:
+            conn.exec_driver_sql(
+                "ALTER TABLE admin_client ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'"
+            )
+
+
+def ensure_admin_client_group_tables() -> None:
+    """admin_client_group, admin_client_group_member 테이블 생성."""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        if "admin_client_group" not in tables:
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE admin_client_group (
+                    id INTEGER PRIMARY KEY,
+                    admin_user_id INTEGER NOT NULL,
+                    name VARCHAR(100) NOT NULL,
+                    color VARCHAR(20) NOT NULL DEFAULT '#3b82f6',
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        conn.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_admin_client_group_admin_user_id
+            ON admin_client_group (admin_user_id)
+            """
+        )
+        if "admin_client_group_member" not in tables:
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE admin_client_group_member (
+                    id INTEGER PRIMARY KEY,
+                    group_id INTEGER NOT NULL,
+                    client_id INTEGER NOT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (group_id, client_id)
+                )
+                """
+            )
+        conn.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_admin_client_group_member_client_id
+            ON admin_client_group_member (client_id)
+            """
+        )
+
+
+def ensure_admin_client_report_table() -> None:
+    """admin_client_report 테이블 생성."""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        if "admin_client_report" not in tables:
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE admin_client_report (
+                    id INTEGER PRIMARY KEY,
+                    admin_user_id INTEGER NOT NULL,
+                    client_id INTEGER NOT NULL,
+                    sections_json TEXT NOT NULL DEFAULT '[]',
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        conn.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_admin_client_report_client_id
+            ON admin_client_report (client_id)
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_admin_client_report_client
+            ON admin_client_report (admin_user_id, client_id)
+            """
+        )
+
+
 def ensure_admin_client_identity_review_table() -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())

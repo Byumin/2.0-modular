@@ -11,6 +11,17 @@ from sqlalchemy.orm import Session
 from app.db.models import AdminClient
 from app.repositories.assessment_repository import create_assessment_log
 from app.repositories.base_repository import commit, delete_row, refresh
+from app.repositories.client_group_repository import (
+    add_client_to_group,
+    create_group,
+    delete_group,
+    get_client_ids_in_group,
+    get_group_by_id,
+    get_groups_for_client,
+    list_groups_by_admin,
+    remove_client_from_group,
+)
+from app.repositories.client_report_repository import get_report_by_client, upsert_report
 from app.repositories.client_repository import (
     create_admin_client as create_client_row,
     create_assignment,
@@ -60,6 +71,51 @@ def _build_assignment_map(assignment_rows) -> dict[int, list[dict[str, Any]]]:
         client_id = row.AdminClientAssignment.admin_client_id
         assignment_map.setdefault(client_id, []).append(_serialize_assignment_summary(row))
     return assignment_map
+
+
+def _append_search_part(parts: list[str], value: Any) -> None:
+    if value is None:
+        return
+    text = str(value).strip()
+    if text:
+        parts.append(text)
+
+
+def _client_search_text(item: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for key in (
+        "name",
+        "gender",
+        "birth_day",
+        "phone",
+        "address",
+        "memo",
+        "created_source",
+        "created_at",
+        "last_assessed_on",
+        "status",
+    ):
+        _append_search_part(parts, item.get(key))
+
+    gender_value = str(item.get("gender") or "").strip()
+    if gender_value == "male":
+        parts.extend(["남성", "남"])
+    elif gender_value == "female":
+        parts.extend(["여성", "여"])
+
+    for tag in item.get("tags") or []:
+        _append_search_part(parts, tag)
+
+    for group in item.get("groups") or []:
+        if isinstance(group, dict):
+            _append_search_part(parts, group.get("name"))
+
+    for test in item.get("assigned_custom_tests") or []:
+        if isinstance(test, dict):
+            _append_search_part(parts, test.get("custom_test_name"))
+            _append_search_part(parts, test.get("parent_test_name"))
+
+    return " ".join(parts).casefold()
 
 
 def _serialize_client_scoring_rows(scoring_rows) -> list[dict[str, Any]]:
@@ -463,15 +519,46 @@ def create_provisional_client_and_assign_for_public_assessment(
     return new_item
 
 
-def list_admin_clients(db: Session, admin_session: str | None) -> dict:
+def list_admin_clients(
+    db: Session,
+    admin_session: str | None,
+    group_id: int | None = None,
+    q: str | None = None,
+    gender: str | None = None,
+    status: str | None = None,
+) -> dict:
     admin = get_current_admin(db, admin_session)
     rows = list_admin_clients_by_admin(db, admin_user_id=admin.id)
-    assignment_rows = list_client_assignments_with_test_name(db, admin_user_id=admin.id)
+    search_query = str(q or "").strip().casefold()
+    gender_filter = str(gender or "").strip()
+    status_filter = str(status or "").strip()
 
+    # 그룹 필터
+    if group_id is not None:
+        allowed_ids = set(get_client_ids_in_group(db, group_id=group_id))
+        rows = [r for r in rows if r.id in allowed_ids]
+
+    assignment_rows = list_client_assignments_with_test_name(db, admin_user_id=admin.id)
     assignment_map = _build_assignment_map(assignment_rows)
 
     log_rows = get_last_assessed_rows(db, admin_user_id=admin.id)
     log_map = {row.client_id: row.last_assessed_on for row in log_rows}
+
+    # 내담자별 그룹 매핑 (한 번에 로드)
+    all_groups = list_groups_by_admin(db, admin_user_id=admin.id)
+    group_serialized = {g.id: {"id": g.id, "name": g.name, "color": g.color} for g in all_groups}
+
+    from app.db.models import AdminClientGroupMember
+    member_rows = db.query(AdminClientGroupMember).join(
+        __import__("app.db.models", fromlist=["AdminClientGroup"]).AdminClientGroup,
+        AdminClientGroupMember.group_id == __import__("app.db.models", fromlist=["AdminClientGroup"]).AdminClientGroup.id,
+    ).filter(
+        __import__("app.db.models", fromlist=["AdminClientGroup"]).AdminClientGroup.admin_user_id == admin.id,
+    ).all()
+    client_groups_map: dict[int, list[dict]] = {}
+    for m in member_rows:
+        if m.group_id in group_serialized:
+            client_groups_map.setdefault(m.client_id, []).append(group_serialized[m.group_id])
 
     items = []
     for row in rows:
@@ -488,8 +575,86 @@ def list_admin_clients(db: Session, admin_session: str | None) -> dict:
         base["assigned_custom_test_count"] = len(assigned_tests)
         base["last_assessed_on"] = last_assessed_on.isoformat() if last_assessed_on else None
         base["status"] = status_text
+        base["groups"] = client_groups_map.get(row.id, [])
+        if gender_filter and base.get("gender") != gender_filter:
+            continue
+        if status_filter and status_text != status_filter:
+            continue
+        if search_query and search_query not in _client_search_text(base):
+            continue
         items.append(base)
 
+    return {"items": items}
+
+
+def list_admin_client_test_overview(
+    db: Session,
+    admin_session: str | None,
+    q: str | None = None,
+    status: str | None = None,
+) -> dict:
+    admin = get_current_admin(db, admin_session)
+    search_query = str(q or "").strip().casefold()
+    status_filter = str(status or "").strip()
+
+    assignment_rows = list_client_assignments_with_test_name(db, admin_user_id=admin.id)
+    log_rows = get_last_assessed_rows(db, admin_user_id=admin.id)
+    log_map = {row.client_id: row.last_assessed_on for row in log_rows}
+
+    overview_map: dict[int, dict[str, Any]] = {}
+    for row in assignment_rows:
+        assignment = row.AdminClientAssignment
+        custom_test_id = assignment.admin_custom_test_id
+        parent_test_name = _normalize_parent_test_text(getattr(row, "parent_test_id", None))
+        item = overview_map.setdefault(
+            custom_test_id,
+            {
+                "custom_test_id": custom_test_id,
+                "custom_test_name": row.custom_test_name,
+                "parent_test_name": parent_test_name,
+                "assigned_count": 0,
+                "pending_count": 0,
+                "not_started_count": 0,
+                "completed_count": 0,
+                "last_assessed_on": None,
+            },
+        )
+        assessed_on = log_map.get(assignment.admin_client_id)
+        item["assigned_count"] += 1
+        if assessed_on is None:
+            item["not_started_count"] += 1
+        else:
+            item["completed_count"] += 1
+            current_last = item["last_assessed_on"]
+            assessed_on_text = assessed_on.isoformat()
+            if current_last is None or assessed_on_text > current_last:
+                item["last_assessed_on"] = assessed_on_text
+
+    items = []
+    for item in overview_map.values():
+        if search_query:
+            search_text = " ".join(
+                str(value or "")
+                for value in (item["custom_test_name"], item["parent_test_name"])
+            ).casefold()
+            if search_query not in search_text:
+                continue
+        if status_filter == "미실시" and item["not_started_count"] <= 0:
+            continue
+        if status_filter == "실시완료" and item["completed_count"] <= 0:
+            continue
+        if status_filter == "배정대기":
+            continue
+        items.append(item)
+
+    items.sort(
+        key=lambda item: (
+            item["last_assessed_on"] or "",
+            item["assigned_count"],
+            item["custom_test_id"],
+        ),
+        reverse=True,
+    )
     return {"items": items}
 
 
@@ -539,7 +704,24 @@ def get_admin_client_detail(db: Session, admin_session: str | None, client_id: i
         limit=30,
     )
 
+    # 그룹 정보
+    client_groups = get_groups_for_client(db, client_id=row.id)
+    groups_data = [{"id": g.id, "name": g.name, "color": g.color} for g in client_groups]
+
+    # 종합평가 보고서
+    report_row = get_report_by_client(db, admin_user_id=admin.id, client_id=row.id)
+    if report_row:
+        try:
+            report_sections = json.loads(report_row.sections_json or "[]")
+        except Exception:
+            report_sections = []
+        report_updated_at = report_row.updated_at.isoformat()
+    else:
+        report_sections = []
+        report_updated_at = None
+
     base = serialize_admin_client(row)
+    base["groups"] = groups_data
     base["assigned_custom_tests"] = assigned_tests
     base["assigned_custom_test_count"] = len(assigned_tests)
     base["last_assessed_on"] = last_assessed_on.date().isoformat() if last_assessed_on else None
@@ -556,6 +738,7 @@ def get_admin_client_detail(db: Session, admin_session: str | None, client_id: i
         for log in logs
     ]
     base["custom_test_results"] = _serialize_client_scoring_rows(scoring_rows)
+    base["report"] = {"sections": report_sections, "updated_at": report_updated_at}
     return {"item": base}
 
 
@@ -594,6 +777,10 @@ def update_admin_client(db: Session, admin_session: str | None, client_id: int, 
     row.name = payload.name.strip()
     row.gender = normalized_gender
     row.birth_day = payload.birth_day
+    row.phone = (payload.phone or "").strip() or None
+    row.address = (payload.address or "").strip() or None
+    row.is_closed = bool(payload.is_closed)
+    row.tags_json = json.dumps([str(t).strip() for t in (payload.tags or []) if str(t).strip()], ensure_ascii=False)
     row.memo = payload.memo.strip()
     commit(db)
     refresh(db, row)
@@ -660,6 +847,85 @@ def delete_admin_client(db: Session, admin_session: str | None, client_id: int) 
     delete_row(db, row)
     commit(db)
     return {"message": "내담자가 삭제되었습니다."}
+
+
+# ── 그룹 서비스 ──────────────────────────────────────────────────────────────
+
+def list_client_groups(db: Session, admin_session: str | None) -> dict:
+    admin = get_current_admin(db, admin_session)
+    groups = list_groups_by_admin(db, admin_user_id=admin.id)
+    return {"items": [{"id": g.id, "name": g.name, "color": g.color, "created_at": g.created_at.isoformat()} for g in groups]}
+
+
+def create_client_group(db: Session, admin_session: str | None, name: str, color: str) -> dict:
+    admin = get_current_admin(db, admin_session)
+    group = create_group(db, admin_user_id=admin.id, name=name.strip(), color=color.strip() or "#3b82f6")
+    commit(db)
+    return {"message": "그룹이 생성되었습니다.", "item": {"id": group.id, "name": group.name, "color": group.color}}
+
+
+def delete_client_group(db: Session, admin_session: str | None, group_id: int) -> dict:
+    admin = get_current_admin(db, admin_session)
+    group = get_group_by_id(db, group_id=group_id, admin_user_id=admin.id)
+    if group is None:
+        raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다.")
+    delete_group(db, group)
+    commit(db)
+    return {"message": "그룹이 삭제되었습니다."}
+
+
+def add_client_group_member(db: Session, admin_session: str | None, client_id: int, group_id: int) -> dict:
+    admin = get_current_admin(db, admin_session)
+    row = get_admin_client_by_id_and_admin(db, client_id=client_id, admin_user_id=admin.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="내담자를 찾을 수 없습니다.")
+    group = get_group_by_id(db, group_id=group_id, admin_user_id=admin.id)
+    if group is None:
+        raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다.")
+    add_client_to_group(db, group_id=group_id, client_id=client_id)
+    commit(db)
+    return {"message": "그룹에 추가되었습니다."}
+
+
+def remove_client_group_member(db: Session, admin_session: str | None, client_id: int, group_id: int) -> dict:
+    admin = get_current_admin(db, admin_session)
+    row = get_admin_client_by_id_and_admin(db, client_id=client_id, admin_user_id=admin.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="내담자를 찾을 수 없습니다.")
+    remove_client_from_group(db, group_id=group_id, client_id=client_id)
+    commit(db)
+    return {"message": "그룹에서 제거되었습니다."}
+
+
+# ── 보고서 서비스 ─────────────────────────────────────────────────────────────
+
+def get_client_report(db: Session, admin_session: str | None, client_id: int) -> dict:
+    admin = get_current_admin(db, admin_session)
+    row = get_admin_client_by_id_and_admin(db, client_id=client_id, admin_user_id=admin.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="내담자를 찾을 수 없습니다.")
+    report_row = get_report_by_client(db, admin_user_id=admin.id, client_id=client_id)
+    if report_row is None:
+        return {"sections": [], "updated_at": None}
+    try:
+        sections = json.loads(report_row.sections_json or "[]")
+    except Exception:
+        sections = []
+    return {"sections": sections, "updated_at": report_row.updated_at.isoformat()}
+
+
+def save_client_report(db: Session, admin_session: str | None, client_id: int, sections: list) -> dict:
+    admin = get_current_admin(db, admin_session)
+    row = get_admin_client_by_id_and_admin(db, client_id=client_id, admin_user_id=admin.id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="내담자를 찾을 수 없습니다.")
+    sections_json = json.dumps(
+        [{"title": str(s.get("title", "")), "content": str(s.get("content", ""))} for s in sections],
+        ensure_ascii=False,
+    )
+    upsert_report(db, admin_user_id=admin.id, client_id=client_id, sections_json=sections_json)
+    commit(db)
+    return {"message": "보고서가 저장되었습니다."}
 
 
 def create_admin_assessment_log(db: Session, admin_session: str | None, client_id: int, assessed_on: date | None) -> dict:

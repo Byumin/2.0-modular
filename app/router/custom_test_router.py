@@ -15,6 +15,7 @@ from app.services.admin.custom_tests import (
     create_admin_custom_test_batch,
     get_admin_custom_test,
     get_admin_test_catalog,
+    list_admin_custom_test_results,
     list_admin_custom_tests,
     list_admin_custom_tests_for_management,
     update_admin_custom_test,
@@ -57,6 +58,16 @@ def list_custom_tests_for_management(
         created_from,
         created_to,
     )
+
+
+@router.get("/api/admin/custom-tests/results")
+def list_custom_test_results(
+    q: str | None = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    admin_session: str | None = Cookie(default=None),
+) -> dict:
+    return list_admin_custom_test_results(db, admin_session, q=q, limit=limit)
 
 # 커스텀 검사 생성 라우터
 @router.post("/api/admin/custom-tests")

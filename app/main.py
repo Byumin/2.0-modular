@@ -8,7 +8,10 @@ from app.db.schema_migrations import (
     ensure_admin_client_assignment_unique_index,
     ensure_admin_client_birth_day_not_null,
     ensure_admin_client_created_source_column,
+    ensure_admin_client_extended_fields,
+    ensure_admin_client_group_tables,
     ensure_admin_client_identity_review_table,
+    ensure_admin_client_report_table,
     ensure_child_test_client_intake_mode_column,
     ensure_submission_client_id_column,
     ensure_submission_scoring_result_table,
@@ -84,5 +87,8 @@ def on_startup() -> None:
     ensure_submission_client_id_column()
     ensure_submission_scoring_result_table()
     ensure_admin_client_birth_day_not_null()
+    ensure_admin_client_extended_fields()
+    ensure_admin_client_group_tables()
+    ensure_admin_client_report_table()
     ensure_admin_client_identity_review_table()
     seed_default_admin()
