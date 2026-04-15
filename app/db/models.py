@@ -37,6 +37,10 @@ class AdminClient(Base):
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     gender: Mapped[str] = mapped_column(String(10), nullable=False)
     birth_day: Mapped[date | None] = mapped_column(Date, nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    is_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    tags_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     memo: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_source: Mapped[str] = mapped_column(String(40), nullable=False, default="admin_manual")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -46,6 +50,39 @@ class AdminClient(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
+
+
+class AdminClientGroup(Base):
+    __tablename__ = "admin_client_group"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_user_id: Mapped[int] = mapped_column(ForeignKey("admin_user.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    color: Mapped[str] = mapped_column(String(20), nullable=False, default="#3b82f6")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AdminClientGroupMember(Base):
+    __tablename__ = "admin_client_group_member"
+    __table_args__ = (
+        UniqueConstraint("group_id", "client_id", name="uq_group_member"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("admin_client_group.id"), nullable=False, index=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("admin_client.id"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AdminClientReport(Base):
+    __tablename__ = "admin_client_report"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_user_id: Mapped[int] = mapped_column(ForeignKey("admin_user.id"), nullable=False, index=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("admin_client.id"), nullable=False, index=True)
+    sections_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class AdminAssessmentLog(Base):

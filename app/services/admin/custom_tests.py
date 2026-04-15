@@ -8,7 +8,7 @@ logger = logger_config.get_logger()
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.db.models import AdminCustomTest
+from app.db.models import AdminClient, AdminCustomTest, AdminCustomTestSubmission, SubmissionScoringResult
 from app.repositories.base_repository import commit, delete_row
 from app.repositories.custom_test_repository import (
     bulk_delete_assignments_by_test_ids,
@@ -235,6 +235,72 @@ def list_admin_custom_tests_for_management(
         filtered = [item for item in filtered if item["created_at"][:10] <= created_to.isoformat()]
 
     return {"items": filtered}
+
+
+def list_admin_custom_test_results(
+    db: Session,
+    admin_session: str | None,
+    q: str | None = None,
+    limit: int = 100,
+) -> dict:
+    admin = get_current_admin(db, admin_session)
+    search_query = str(q or "").strip().casefold()
+    row_limit = max(1, min(int(limit or 100), 300))
+
+    rows = (
+        db.query(
+            AdminCustomTestSubmission,
+            AdminCustomTest.custom_test_name,
+            AdminCustomTest.test_id.label("parent_test_id"),
+            AdminClient.name.label("client_name"),
+            SubmissionScoringResult.id.label("scoring_result_id"),
+            SubmissionScoringResult.scoring_status,
+            SubmissionScoringResult.created_at.label("scored_at"),
+        )
+        .outerjoin(AdminCustomTest, AdminCustomTest.id == AdminCustomTestSubmission.admin_custom_test_id)
+        .outerjoin(AdminClient, AdminClient.id == AdminCustomTestSubmission.client_id)
+        .outerjoin(SubmissionScoringResult, SubmissionScoringResult.submission_id == AdminCustomTestSubmission.id)
+        .filter(AdminCustomTestSubmission.admin_user_id == admin.id)
+        .order_by(AdminCustomTestSubmission.created_at.desc(), AdminCustomTestSubmission.id.desc())
+        .limit(row_limit)
+        .all()
+    )
+
+    items = []
+    for row in rows:
+        submission = row.AdminCustomTestSubmission
+        custom_test_name = row.custom_test_name or "커스텀 검사"
+        parent_test_name = summarize_custom_test_ids([], fallback=str(row.parent_test_id or ""))[1] if row.parent_test_id else None
+        client_name = row.client_name or ""
+        item = {
+            "submission_id": submission.id,
+            "scoring_result_id": row.scoring_result_id,
+            "custom_test_id": submission.admin_custom_test_id,
+            "custom_test_name": custom_test_name,
+            "parent_test_name": parent_test_name,
+            "client_id": submission.client_id,
+            "client_name": client_name or None,
+            "responder_name": submission.responder_name,
+            "submitted_at": submission.created_at.isoformat(),
+            "scored_at": row.scored_at.isoformat() if row.scored_at else None,
+            "scoring_status": row.scoring_status or "not_scored",
+        }
+        if search_query:
+            search_text = " ".join(
+                str(value or "")
+                for value in (
+                    item["custom_test_name"],
+                    item["parent_test_name"],
+                    item["client_name"],
+                    item["responder_name"],
+                    item["scoring_status"],
+                )
+            ).casefold()
+            if search_query not in search_text:
+                continue
+        items.append(item)
+
+    return {"items": items}
 
 
 def _age_start_from_sub_test_json(sub_test_json: str) -> int:
