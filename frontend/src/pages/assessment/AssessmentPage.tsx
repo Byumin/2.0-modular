@@ -109,6 +109,9 @@ export function AssessmentPage() {
   const [activeProfile, setActiveProfile] = React.useState<Profile | null>(null)
   const [step, setStep] = React.useState<AssessmentStep>("profile")
   const [loading, setLoading] = React.useState(true)
+  const [consentInfo, setConsentInfo] = React.useState<{ requires_consent: boolean; consent_text: string } | null>(null)
+  const [consentDeclined, setConsentDeclined] = React.useState(false)
+  const [consentGiven, setConsentGiven] = React.useState(false)
   const [profileLoading, setProfileLoading] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState("")
@@ -146,9 +149,16 @@ export function AssessmentPage() {
       }
 
       try {
-        const payload = await api<InitialPayload>(`/api/assessment-links/${token}`)
+        const [payload, consent] = await Promise.all([
+          api<InitialPayload>(`/api/assessment-links/${token}`),
+          api<{ requires_consent: boolean; consent_text: string }>(`/api/assessment-links/${token}/consent`),
+        ])
         if (!mounted) return
         setInitialPayload(payload)
+        setConsentInfo(consent)
+        if (consent.requires_consent) {
+          setStep("consent")
+        }
       } catch (err) {
         if (!mounted) return
         setError(err instanceof Error ? err.message : "검사 정보를 불러오지 못했습니다.")
@@ -202,7 +212,16 @@ export function AssessmentPage() {
       setParts(nextParts)
       setActiveProfile(profile)
       // Store confirmed client + ambiguous context for submit
-      setConfirmedClientId(result.client_id ?? null)
+      const resolvedClientId = result.client_id ?? null
+      setConfirmedClientId(resolvedClientId)
+      // Record consent if consent was given and client is now known
+      if (consentGiven && resolvedClientId !== null) {
+        fetch(`/api/assessment-links/${token}/consent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ client_id: resolvedClientId, consented: true }),
+        }).catch(() => {})
+      }
       if (result.is_ambiguous_match) {
         setAmbiguousMatchContext({
           is_ambiguous_match: true,
@@ -327,6 +346,10 @@ export function AssessmentPage() {
 
   const title = initialPayload?.custom_test_name || "검사 실시"
   const stepMeta: Record<AssessmentStep, { label: string; helper: string }> = {
+    consent: {
+      label: "개인정보동의",
+      helper: "개인정보 수집·이용 동의 여부를 선택해주세요.",
+    },
     profile: {
       label: "인적사항",
       helper: "검사 시작 전 필요한 정보를 확인합니다.",
@@ -340,13 +363,12 @@ export function AssessmentPage() {
       helper: "응답 저장이 완료되었습니다.",
     },
   }
-  const activeStepMeta = stepMeta[step]
-  const shellWidthClass = step === "question" ? "max-w-7xl" : "max-w-[700px]"
+  const shellWidthClass = step === "question" ? "max-w-7xl" : "max-w-[500px]"
 
   if (loading) {
     return (
       <main className="min-h-screen bg-[#f5f7fa] px-4 py-10">
-        <div className="mx-auto max-w-[700px] rounded-xl bg-white p-6 text-center text-sm text-muted-foreground shadow-sm">
+        <div className="mx-auto max-w-[500px] rounded-xl bg-white p-6 text-center text-sm text-muted-foreground shadow-sm">
           검사 정보를 불러오는 중입니다.
         </div>
       </main>
@@ -356,7 +378,7 @@ export function AssessmentPage() {
   if (!initialPayload && step !== "complete") {
     return (
       <main className="min-h-screen bg-[#f5f7fa] px-4 py-10">
-        <div className="mx-auto max-w-[700px] rounded-xl bg-white p-6 text-center text-sm text-destructive shadow-sm">
+        <div className="mx-auto max-w-[500px] rounded-xl bg-white p-6 text-center text-sm text-destructive shadow-sm">
           {error || "검사 정보를 불러오지 못했습니다."}
         </div>
       </main>
@@ -367,17 +389,68 @@ export function AssessmentPage() {
     return <CompleteStep onRestart={handleRestart} />
   }
 
+  if (step === "consent") {
+    if (consentDeclined) {
+      return (
+        <main className="min-h-screen bg-[#f5f7fa] flex items-center justify-center px-4 py-10">
+          <div className="mx-auto w-full max-w-[500px] rounded-xl bg-white p-8 shadow-sm text-center flex flex-col gap-4">
+            <p className="text-base font-semibold text-foreground">개인정보 수집·이용에 동의하지 않으셨습니다.</p>
+            <p className="text-sm text-muted-foreground">개인정보 수집에 동의하지 않으면 검사를 진행할 수 없습니다.</p>
+            <button
+              className="mt-2 text-sm text-primary underline underline-offset-4"
+              onClick={() => setConsentDeclined(false)}
+            >
+              다시 동의 화면으로 돌아가기
+            </button>
+          </div>
+        </main>
+      )
+    }
+    return (
+      <main className="min-h-screen bg-[#f5f7fa] flex items-center justify-center px-4 py-10">
+        <div className="mx-auto w-full max-w-[500px] rounded-xl bg-white shadow-sm overflow-hidden">
+          <div className="h-[3px] bg-[#1F4E79]" />
+          <div className="px-6 py-5 border-b">
+            <h1 className="text-lg font-bold text-foreground">{initialPayload?.custom_test_name ?? "검사"}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">검사를 시작하기 전에 아래 내용을 확인하고 동의 여부를 선택해주세요.</p>
+          </div>
+          <div className="px-6 py-5 flex flex-col gap-4">
+            <div className="rounded-lg border bg-muted/30 px-4 py-4 max-h-[55vh] overflow-y-auto">
+              <pre className="whitespace-pre-wrap text-sm text-foreground leading-relaxed font-sans">
+                {consentInfo?.consent_text || "동의서 내용이 없습니다."}
+              </pre>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
+                onClick={() => setConsentDeclined(true)}
+              >
+                동의하지 않습니다
+              </button>
+              <button
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                onClick={() => { setConsentGiven(true); setStep("profile") }}
+              >
+                동의합니다
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
   return (
-    <main className="min-h-screen bg-[#f5f7fa] px-4 py-6 sm:py-8">
+    <main className={`min-h-screen bg-[#f5f7fa] px-4 py-6 sm:py-8${step === "profile" ? " flex items-center justify-center" : ""}`}>
       <div className={`mx-auto flex w-full ${shellWidthClass} flex-col gap-4`}>
         <header className="overflow-hidden rounded-xl bg-white shadow-sm">
           <div className="h-[3px] bg-[#1F4E79]" />
           <div className="flex items-start justify-between gap-4 px-5 py-4 sm:px-6 sm:py-5">
             <div className="min-w-0">
               <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{title}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {activeProfile && step === "question" ? profileSummary(activeProfile) : activeStepMeta.helper}
-              </p>
+              {(activeProfile && step === "question") && (
+                <p className="mt-1 text-sm text-muted-foreground">{profileSummary(activeProfile)}</p>
+              )}
             </div>
             <nav className="flex shrink-0 items-center gap-1.5 pt-0.5" aria-label="검사 단계">
               {(["profile", "question", "complete"] as AssessmentStep[]).map((itemStep, index) => {

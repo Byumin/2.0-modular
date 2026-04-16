@@ -561,6 +561,7 @@ def create_admin_custom_test_batch(
         additional_profile_fields_json=serialize_additional_profile_payload(
             normalized_fields,
         ),
+        requires_consent=payload.requires_consent,
     )
     db.add(row)
     db.flush()
@@ -610,6 +611,7 @@ def get_admin_custom_test(db: Session, admin_session: str | None, custom_test_id
         "test_configs": test_configs,
         "selected_scale_codes": selected_scale_codes,
         "additional_profile_fields": additional_profile_fields,
+        "requires_consent": bool(getattr(row, "requires_consent", False)),
         "scale_count": len(selected_scale_pairs),
         "created_at": row.created_at.isoformat(),
     }
@@ -637,6 +639,7 @@ def update_admin_custom_test(
 
     row.custom_test_name = trimmed_name
     row.client_intake_mode = client_intake_mode
+    row.requires_consent = payload.requires_consent
     commit(db)
     return {"message": "검사 설정이 수정되었습니다."}
 

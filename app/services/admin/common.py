@@ -489,6 +489,7 @@ def build_custom_test_items(db, admin_id: int) -> list[dict]:
                 "test_configs": test_configs,
                 "selected_scale_codes": selected_scale_codes,
                 "additional_profile_fields": additional_profile_fields,
+                "requires_consent": bool(getattr(row, "requires_consent", False)),
                 "scale_count": len(selected_scale_pairs),
                 "assigned_count": assigned_count,
                 "assessed_count": assessed_count,

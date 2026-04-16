@@ -12,7 +12,10 @@ from app.db.schema_migrations import (
     ensure_admin_client_group_tables,
     ensure_admin_client_identity_review_table,
     ensure_admin_client_report_table,
+    ensure_admin_settings_table,
     ensure_child_test_client_intake_mode_column,
+    ensure_child_test_requires_consent_column,
+    ensure_client_consent_record_table,
     ensure_submission_client_id_column,
     ensure_submission_scoring_result_table,
 )
@@ -25,6 +28,7 @@ from app.router.dashboard_router import router as dashboard_router
 from app.router.identity_review_router import router as identity_review_router
 from app.router.page_router import router as page_router
 from app.router.scoring_router import router as scoring_router
+from app.router.settings_router import router as settings_router
 from app.services.admin.auth import seed_default_admin
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -76,6 +80,7 @@ app.include_router(assessment_link_router)
 app.include_router(dashboard_router)
 app.include_router(identity_review_router)
 app.include_router(scoring_router)
+app.include_router(settings_router)
 
 
 @app.on_event("startup")
@@ -91,4 +96,7 @@ def on_startup() -> None:
     ensure_admin_client_group_tables()
     ensure_admin_client_report_table()
     ensure_admin_client_identity_review_table()
+    ensure_child_test_requires_consent_column()
+    ensure_admin_settings_table()
+    ensure_client_consent_record_table()
     seed_default_admin()

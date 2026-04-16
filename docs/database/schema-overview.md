@@ -94,6 +94,26 @@
   - `result_json`
   - `created_at`
 
+### `admin_settings`
+- 관리자별 설정 정보 (개인정보동의 텍스트 등)
+- 코드 모델명: `AdminSettings`
+- 주요 필드:
+  - `id`
+  - `admin_user_id` (UNIQUE)
+  - `consent_text`
+  - `updated_at`
+
+### `client_consent_record`
+- 수검자의 개인정보동의 제출 기록
+- 코드 모델명: `ClientConsentRecord`
+- 주요 필드:
+  - `id`
+  - `admin_user_id`
+  - `admin_client_id`
+  - `admin_custom_test_id`
+  - `consented`
+  - `consented_at`
+
 ## Important Relationship Summary
 - `admin_user` -> 모든 관리자 도메인 데이터의 상위 소유자
 - `child_test` -> 커스텀 검사 본체

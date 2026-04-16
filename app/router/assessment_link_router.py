@@ -8,8 +8,10 @@ from app.schemas.assessment_links import (
     ValidateAssessmentProfileIn,
 )
 from app.services.admin.assessment_links import (
+    get_consent_info_by_token,
     get_custom_test_by_access_link,
     register_client_for_custom_test_by_access_link,
+    submit_consent_by_token,
     submit_custom_test_by_access_link,
     validate_custom_test_profile_by_access_link,
 )
@@ -64,3 +66,27 @@ def submit_assessment(
         responder_choice=payload.responder_choice,
         candidate_client_ids=payload.candidate_client_ids,
     )
+
+
+@router.get("/api/assessment-links/{access_token}/consent")
+def get_consent(
+    access_token: str,
+    db: Session = Depends(get_db),
+) -> dict:
+    return get_consent_info_by_token(db, access_token)
+
+
+from pydantic import BaseModel
+
+class ConsentSubmitIn(BaseModel):
+    client_id: int
+    consented: bool
+
+
+@router.post("/api/assessment-links/{access_token}/consent")
+def submit_consent(
+    access_token: str,
+    payload: ConsentSubmitIn,
+    db: Session = Depends(get_db),
+) -> dict:
+    return submit_consent_by_token(db, access_token, payload.client_id, payload.consented)

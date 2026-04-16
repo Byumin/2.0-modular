@@ -1,6 +1,6 @@
 import * as React from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { IconPlus, IconSearch, IconSettings, IconUsers, IconClipboardList } from "@tabler/icons-react"
+import { IconPlus, IconSearch, IconSettings, IconUsers, IconClipboardList, IconChevronDown } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -70,7 +70,6 @@ export function ClientManagement() {
   const [viewMode, setViewMode] = React.useState<"client" | "test">("client")
   const [clients, setClients] = React.useState<Client[]>([])
   const [search, setSearch] = React.useState("")
-  const [gender, setGender] = React.useState("")
   const [status, setStatus] = React.useState("")
   const [groupId, setGroupId] = React.useState("")
   const [selectedTestGroupId, setSelectedTestGroupId] = React.useState("")
@@ -96,7 +95,6 @@ export function ClientManagement() {
     const searchText = search.trim()
     if (groupId && viewMode === "client") params.set("group_id", groupId)
     if (searchText) params.set("q", searchText)
-    if (gender) params.set("gender", gender)
     if (status) params.set("status", status)
     fetch(`/api/admin/clients?${params}`)
       .then((r) => r.json())
@@ -105,7 +103,7 @@ export function ClientManagement() {
       })
       .catch(() => setClients([]))
       .finally(() => setLoading(false))
-  }, [search, gender, status, groupId, viewMode])
+  }, [search, status, groupId, viewMode])
 
   const fetchGroups = React.useCallback(() => {
     fetch("/api/admin/client-groups").then((r) => r.json()).then((d) => setGroups(d.items ?? [])).catch(() => {})
@@ -154,23 +152,11 @@ export function ClientManagement() {
     return sorted
   }, [clients, viewMode])
 
-  const selectedTestGroup = React.useMemo(() => {
-    if (testGroups.length === 0) return null
-    return testGroups.find((group) => String(group.id) === selectedTestGroupId) ?? testGroups[0]
-  }, [selectedTestGroupId, testGroups])
-
-  const selectedOverviewItem = React.useMemo(() => (
-    testOverviewItems.find((item) => String(item.custom_test_id) === selectedTestGroupId) ?? testOverviewItems[0] ?? null
-  ), [selectedTestGroupId, testOverviewItems])
-
   React.useEffect(() => {
     if (viewMode !== "test") return
-    if (testOverviewItems.length === 0) {
-      setSelectedTestGroupId("")
-      return
-    }
+    if (!selectedTestGroupId) return
     if (!testOverviewItems.some((item) => String(item.custom_test_id) === selectedTestGroupId)) {
-      setSelectedTestGroupId(String(testOverviewItems[0].custom_test_id))
+      setSelectedTestGroupId("")
     }
   }, [selectedTestGroupId, testOverviewItems, viewMode])
 
@@ -279,15 +265,6 @@ export function ClientManagement() {
             </select>
           )}
           <select
-            value={gender}
-            onChange={(e) => setGender(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            <option value="">성별 전체</option>
-            <option value="male">남성</option>
-            <option value="female">여성</option>
-          </select>
-          <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
@@ -326,7 +303,7 @@ export function ClientManagement() {
 
       {/* 내담자별 뷰 */}
       {viewMode === "client" && (
-        <Card>
+        <Card className="py-0 gap-0">
           <CardContent className="p-0">
             {loading ? (
               <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">불러오는 중...</div>
@@ -334,7 +311,7 @@ export function ClientManagement() {
               <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">내담자가 없습니다.</div>
             ) : (
               <>
-                <div className="hidden md:grid md:grid-cols-[40px_1fr_1.5fr_2fr_1fr_0.8fr_72px] gap-2 px-4 py-2 border-b text-xs font-medium text-muted-foreground">
+                <div className="hidden md:grid md:grid-cols-[40px_1fr_1.5fr_2fr_1fr_0.8fr_72px] gap-2 px-4 h-10 border-b-2 text-xs font-medium text-foreground items-center content-center bg-muted">
                   <span className="text-center">#</span>
                   <span className="text-center">이름</span>
                   <span className="text-center">그룹</span>
@@ -394,32 +371,33 @@ export function ClientManagement() {
           ) : testOverviewItems.length === 0 ? (
             <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">조건에 맞는 검사가 없습니다.</div>
           ) : (
-            <>
-              <Card>
-                <div className="flex flex-col gap-1 px-4 py-3 border-b">
-                  <span className="text-sm font-semibold">검사별 현황</span>
-                  <span className="text-xs text-muted-foreground">검사를 선택하면 해당 검사에 배정된 내담자만 아래에 표시됩니다.</span>
+            <Card className="py-0 gap-0">
+              <div className="flex items-center gap-2 px-4 py-3 border-b">
+                <span className="text-sm font-semibold">검사별 현황</span>
+                <span className="text-xs text-muted-foreground">검사 행을 클릭하면 배정된 내담자 목록이 펼쳐집니다.</span>
+              </div>
+              <CardContent className="p-0">
+                <div className="hidden md:grid md:grid-cols-[2fr_1.2fr_0.7fr_0.7fr_0.7fr_1fr_32px] gap-2 px-4 h-10 border-b-2 text-xs font-medium text-foreground items-center content-center bg-muted">
+                  <span className="text-center">검사명</span>
+                  <span className="text-center">기반 검사</span>
+                  <span className="text-center">배정</span>
+                  <span className="text-center">미실시</span>
+                  <span className="text-center">실시완료</span>
+                  <span className="text-center">마지막 실시일</span>
+                  <span />
                 </div>
-                <CardContent className="p-0">
-                  <div className="hidden md:grid md:grid-cols-[2fr_1.2fr_0.7fr_0.7fr_0.7fr_1fr] gap-2 px-4 py-2 border-b text-xs font-medium text-muted-foreground">
-                    <span className="text-center">검사명</span>
-                    <span className="text-center">기반 검사</span>
-                    <span className="text-center">배정</span>
-                    <span className="text-center">미실시</span>
-                    <span className="text-center">실시완료</span>
-                    <span className="text-center">마지막 실시일</span>
-                  </div>
-                  <div className="max-h-80 divide-y overflow-auto">
-                    {testOverviewItems.map((item) => {
-                      const selected = String(item.custom_test_id) === selectedTestGroupId
-                      return (
+                <div className="divide-y">
+                  {testOverviewItems.map((item) => {
+                    const isOpen = String(item.custom_test_id) === selectedTestGroupId
+                    const clientGroup = testGroups.find((g) => g.id === item.custom_test_id)
+                    return (
+                      <React.Fragment key={item.custom_test_id}>
                         <button
-                          key={item.custom_test_id}
                           type="button"
-                          className={`grid w-full grid-cols-1 gap-2 px-4 py-3 text-left transition-colors md:grid-cols-[2fr_1.2fr_0.7fr_0.7fr_0.7fr_1fr] md:items-center ${
-                            selected ? "bg-muted" : "hover:bg-muted/40"
+                          className={`grid w-full grid-cols-1 gap-2 px-4 py-3 text-left transition-colors md:grid-cols-[2fr_1.2fr_0.7fr_0.7fr_0.7fr_1fr_32px] md:items-center ${
+                            isOpen ? "bg-primary/10" : "hover:bg-muted/40"
                           }`}
-                          onClick={() => setSelectedTestGroupId(String(item.custom_test_id))}
+                          onClick={() => setSelectedTestGroupId(isOpen ? "" : String(item.custom_test_id))}
                         >
                           <span className="text-sm font-medium md:text-center">{item.custom_test_name}</span>
                           <span className="text-sm text-muted-foreground md:text-center">{item.parent_test_name ?? "—"}</span>
@@ -427,59 +405,54 @@ export function ClientManagement() {
                           <span className="text-sm text-muted-foreground md:text-center">{item.not_started_count}명</span>
                           <span className="text-sm text-muted-foreground md:text-center">{item.completed_count}명</span>
                           <span className="text-sm text-muted-foreground md:text-center">{item.last_assessed_on ?? "—"}</span>
+                          <div className="flex justify-center">
+                            <IconChevronDown className={`size-4 text-muted-foreground transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+                          </div>
                         </button>
-                      )
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <div className="flex flex-col gap-3 px-4 py-3 border-b sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-semibold">{selectedOverviewItem?.custom_test_name ?? "검사 선택"}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {selectedOverviewItem?.parent_test_name ? `기반: ${selectedOverviewItem.parent_test_name} · ` : ""}
-                      배정 {selectedOverviewItem?.assigned_count ?? 0}명 · 미실시 {selectedOverviewItem?.not_started_count ?? 0}명 · 실시완료 {selectedOverviewItem?.completed_count ?? 0}명
-                    </span>
-                  </div>
+                        {isOpen && (
+                          <div className="border-b bg-muted/20">
+                            <div className="hidden md:grid md:grid-cols-[40px_1.5fr_1fr_0.8fr_72px] gap-2 px-4 h-10 border-b text-xs font-medium text-foreground items-center content-center bg-muted/60">
+                              <span className="text-center">#</span>
+                              <span className="text-center">이름</span>
+                              <span className="text-center">마지막 실시일</span>
+                              <span className="text-center">상태</span>
+                              <span />
+                            </div>
+                            {clientGroup && clientGroup.clients.length > 0 ? (
+                              <div className="divide-y">
+                                {clientGroup.clients.map((client, idx) => (
+                                  <div
+                                    key={client.id}
+                                    className="grid grid-cols-1 md:grid-cols-[40px_1.5fr_1fr_0.8fr_72px] gap-2 items-center px-4 py-3 hover:bg-muted/40 cursor-pointer"
+                                    onClick={() => navigate(`/admin/clients/${client.id}`)}
+                                  >
+                                    <span className="hidden md:block text-center text-xs text-muted-foreground">{idx + 1}</span>
+                                    <span className="text-sm font-medium text-center">{client.name}</span>
+                                    <span className="text-sm text-muted-foreground text-center">{client.last_assessed_on ?? "—"}</span>
+                                    <div className="flex justify-center">
+                                      <Badge variant={statusVariant(client.status)}>{client.status}</Badge>
+                                    </div>
+                                    <div className="flex justify-center">
+                                      <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                                        <Link to={`/admin/clients/${client.id}`}>상세</Link>
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                                {search.trim() ? "검색 조건에 맞는 내담자가 없습니다." : "배정된 내담자가 없습니다."}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </React.Fragment>
+                    )
+                  })}
                 </div>
-                {selectedTestGroup ? (
-                  <CardContent className="p-0">
-                    <div className="hidden md:grid md:grid-cols-[40px_1.5fr_1fr_0.8fr_72px] gap-2 px-4 py-2 border-b text-xs font-medium text-muted-foreground">
-                      <span className="text-center">#</span>
-                      <span className="text-center">이름</span>
-                      <span className="text-center">마지막 실시일</span>
-                      <span className="text-center">상태</span>
-                      <span />
-                    </div>
-                    <div className="divide-y">
-                      {selectedTestGroup.clients.map((client, idx) => (
-                        <div
-                          key={client.id}
-                          className="grid grid-cols-1 md:grid-cols-[40px_1.5fr_1fr_0.8fr_72px] gap-2 items-center px-4 py-3 hover:bg-muted/40 cursor-pointer"
-                          onClick={() => navigate(`/admin/clients/${client.id}`)}
-                        >
-                          <span className="hidden md:block text-center text-xs text-muted-foreground">{idx + 1}</span>
-                          <span className="text-sm font-medium text-center">{client.name}</span>
-                          <span className="text-sm text-muted-foreground text-center">{client.last_assessed_on ?? "—"}</span>
-                          <div className="flex justify-center">
-                            <Badge variant={statusVariant(client.status)}>{client.status}</Badge>
-                          </div>
-                          <div className="flex justify-center">
-                            <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                              <Link to={`/admin/clients/${client.id}`}>상세</Link>
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                ) : (
-                  <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">선택한 검사에 표시할 내담자가 없습니다.</div>
-                )}
-              </Card>
-            </>
+              </CardContent>
+            </Card>
           )}
         </div>
       )}

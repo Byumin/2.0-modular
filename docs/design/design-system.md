@@ -159,11 +159,46 @@
 ### 리스트 테이블 열 정렬 규칙
 관리자 리스트 화면(내담자 관리, 검사 관리 등)의 CSS Grid 기반 테이블은 아래 규칙을 따른다.
 
+**리스트 테이블 Card 설정 — 반드시 지킬 것**
+
+```jsx
+/* 올바른 리스트 카드 구조 */
+<Card className="py-0">
+  <CardContent className="p-0">
+    <div className="hidden md:grid md:grid-cols-[...] gap-2 px-4 h-8 border-b
+                    text-xs font-medium text-muted-foreground items-center content-center">
+      <span className="text-center">컬럼명</span>
+      ...
+    </div>
+    ...
+  </CardContent>
+</Card>
+```
+
+- **Card에 반드시 `py-0` 적용**: Card 기본값 `py-6`(24px)이 컬럼명 row 위에 빈 공간을 만들어, 시각적으로 컬럼 텍스트가 "헤더 영역" 하단에 쏠려 보이는 원인이 된다.
+- **헤더 row: `h-8 items-center content-center`** 세 가지를 반드시 같이 사용. **`py-X` 방식 금지.**
+  - `h-8`(32px): 고정 height로 예측 가능한 헤더 높이 확보
+  - `content-center`: grid row 전체를 h-8 컨테이너 세로 중앙에 배치
+  - `items-center`: 각 span을 grid 셀 내 세로 중앙에 배치
+  - 셋 중 하나라도 빠지면 텍스트가 상단 또는 하단에 쏠림
+- 모든 헤더 `<span>`에 `text-center` 적용.
+
 **열 정렬 (Alignment)**
-- 헤더 셀과 데이터 셀 모두 **열 기준 중앙정렬**(`text-center` / `justify-center`)을 기본으로 한다.
-- 텍스트 셀: `text-center`
-- 뱃지·칩·버튼 셀(flex 컨테이너): `justify-center`
-- 모든 열에 예외 없이 일관 적용한다.
+- 헤더 셀과 데이터 셀 모두 **열 기준 중앙정렬**을 기본으로 한다.
+- 텍스트 셀(`<span>`): `text-center`
+- flex 컨테이너 셀(뱃지·버튼 등): `justify-center`
+- `flex-col`로 2줄 표시하는 셀: 컨테이너에 `items-center`, 내부 span에 `text-center`
+- ClientManagement와 TestManagement 동일 룰. 화면마다 달리 적용하지 않는다.
+
+**액션 버튼 열 너비 — `auto` 금지**
+헤더와 각 row는 서로 다른 독립 grid 컨텍스트다. `auto`를 쓰면 헤더(빈 span → 0px)와 row(실제 버튼 크기)가 각자 다른 너비로 계산돼 열 위치가 어긋난다.
+반드시 고정 px 사용:
+
+| 버튼 구성 | 고정 너비 |
+|-----------|-----------|
+| URL + 상세 + 삭제(아이콘) | `152px` |
+| 결과 + 내담자 | `108px` |
+| 상세 단독 | `72px` |
 
 **열 너비 배분 기준**
 열 너비는 해당 열에 들어오는 텍스트 최대 길이를 기준으로 비율을 설정한다.
@@ -175,14 +210,19 @@
 | 뱃지·칩 복합 (그룹 등) | 중간 | `1.5fr` |
 | 긴 텍스트 (검사명 등) | 길 수 있음 | `2fr` |
 | 날짜 (YYYY-MM-DD) | 고정 10자 | `1fr` |
+| 숫자 집계 (X명) | 짧음 | `0.7fr` |
 | 상태 뱃지 (4자 이내) | 짧음 | `0.8fr` |
-| 액션 버튼 열 | 버튼 크기 기준 | 고정 `72px` |
+| 액션 버튼 열 | 버튼 크기 기준 | 고정 px (위 표 참조) |
 
-**내담자 관리 현행 적용값**
+**현행 적용값**
 ```
-grid-cols-[40px_1fr_1.5fr_2fr_1fr_0.8fr_72px]
+내담자 관리 (내담자별):  grid-cols-[40px_1fr_1.5fr_2fr_1fr_0.8fr_72px]
+내담자 관리 (검사별 현황): grid-cols-[2fr_1.2fr_0.7fr_0.7fr_0.7fr_1fr]
+내담자 관리 (검사별 내담자): grid-cols-[40px_1.5fr_1fr_0.8fr_72px]
+검사 관리 (커스텀 검사): grid-cols-[2fr_1fr_1fr_1fr_1fr_152px]
+검사 관리 (실시 현황):  grid-cols-[2fr_1.2fr_0.7fr_0.7fr_0.7fr_1fr]
+검사 관리 (검사 결과):  grid-cols-[1.1fr_1fr_2fr_1.1fr_0.8fr_108px]
 ```
-열 순서: # / 이름 / 그룹 / 배정 검사 / 마지막 실시일 / 상태 / 상세버튼
 
 새 리스트 화면을 추가하거나 열을 변경할 때 위 기준표를 먼저 참조한다.
 

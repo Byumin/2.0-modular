@@ -601,7 +601,11 @@ def list_admin_client_test_overview(
     log_rows = get_last_assessed_rows(db, admin_user_id=admin.id)
     log_map = {row.client_id: row.last_assessed_on for row in log_rows}
 
+    client_rows = list_admin_clients_by_admin(db, admin_user_id=admin.id)
+    client_name_map = {c.id: c.name for c in client_rows}
+
     overview_map: dict[int, dict[str, Any]] = {}
+    test_client_ids: dict[int, set[int]] = {}
     for row in assignment_rows:
         assignment = row.AdminClientAssignment
         custom_test_id = assignment.admin_custom_test_id
@@ -619,6 +623,7 @@ def list_admin_client_test_overview(
                 "last_assessed_on": None,
             },
         )
+        test_client_ids.setdefault(custom_test_id, set()).add(assignment.admin_client_id)
         assessed_on = log_map.get(assignment.admin_client_id)
         item["assigned_count"] += 1
         if assessed_on is None:
@@ -633,9 +638,13 @@ def list_admin_client_test_overview(
     items = []
     for item in overview_map.values():
         if search_query:
+            client_names = " ".join(
+                client_name_map.get(cid, "")
+                for cid in test_client_ids.get(item["custom_test_id"], set())
+            )
             search_text = " ".join(
                 str(value or "")
-                for value in (item["custom_test_name"], item["parent_test_name"])
+                for value in (item["custom_test_name"], item["parent_test_name"], client_names)
             ).casefold()
             if search_query not in search_text:
                 continue
