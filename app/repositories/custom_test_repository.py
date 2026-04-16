@@ -90,6 +90,10 @@ def get_custom_test_by_id_and_admin(
         .first()
     )
 
+def get_custom_test_by_id(db: Session, custom_test_id: int) -> AdminCustomTest | None:
+    return db.query(AdminCustomTest).filter(AdminCustomTest.id == custom_test_id).first()
+
+
 # 제출 데이터 조회 (admin_user_id + submission_id)
 def get_submission_by_id_and_admin(
     db: Session,

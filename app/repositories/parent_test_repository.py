@@ -154,8 +154,8 @@ def _load_variant_rows(test_id: str, db: Session | None = None) -> list[dict[str
                 sc.name AS condition_name,
                 sc.condition AS sub_test_json,
                 s.struct AS scale_struct
-            FROM SCALE s
-            LEFT JOIN SCALECONDITION sc
+            FROM scale s
+            LEFT JOIN scalecondition sc
               ON sc.id = s."condition.id"
              AND sc."test.id" = s."test.id"
             WHERE s."test.id" = :test_id
@@ -183,13 +183,13 @@ def _load_items_by_variant(test_id: str, db: Session | None = None) -> dict[str,
                 ic.name AS condition_name,
                 c.contents AS choice_contents,
                 t.type AS template_type
-            FROM ITEM i
-            LEFT JOIN ITEMCONDITION ic
+            FROM item i
+            LEFT JOIN itemcondition ic
               ON ic.id = i."condition.id"
              AND ic."test.id" = i."test.id"
-            LEFT JOIN CHOICE c
+            LEFT JOIN choice c
               ON c.id = i."choice.id"
-            LEFT JOIN TEMPLATE t
+            LEFT JOIN template t
               ON t.id = i.template_id
             WHERE i."test.id" = :test_id
             ORDER BY i."condition.id", CAST(i.no AS INTEGER), i.no
@@ -277,7 +277,7 @@ def fetch_parent_scale_struct(test_id: str, sub_test_json: str, db: Session | No
 
 def fetch_parent_catalog_rows(db: Session | None = None):
     records: list[SimpleNamespace] = []
-    result = _execute_sql('SELECT id FROM TEST ORDER BY id', {}, db)
+    result = _execute_sql('SELECT id FROM test ORDER BY id', {}, db)
     test_ids = [
         str(row[0]).strip()
         for row in result.fetchall()

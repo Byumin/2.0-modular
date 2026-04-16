@@ -26,6 +26,7 @@ class AdminCustomTest(Base):
     client_intake_mode: Mapped[str] = mapped_column(String(40), nullable=False, default="pre_registered_only")
     selected_scales_json: Mapped[str] = mapped_column(Text, nullable=False)
     additional_profile_fields_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    requires_consent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
@@ -158,6 +159,26 @@ class AdminClientIdentityReview(Base):
     reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("admin_user.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AdminSettings(Base):
+    __tablename__ = "admin_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_user_id: Mapped[int] = mapped_column(ForeignKey("admin_user.id"), nullable=False, unique=True, index=True)
+    consent_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ClientConsentRecord(Base):
+    __tablename__ = "client_consent_record"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_user_id: Mapped[int] = mapped_column(ForeignKey("admin_user.id"), nullable=False, index=True)
+    admin_client_id: Mapped[int] = mapped_column(ForeignKey("admin_client.id"), nullable=False, index=True)
+    admin_custom_test_id: Mapped[int] = mapped_column(ForeignKey("child_test.id"), nullable=False, index=True)
+    consented: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    consented_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class SubmissionScoringResult(Base):

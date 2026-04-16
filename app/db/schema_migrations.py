@@ -260,3 +260,76 @@ def ensure_admin_client_identity_review_table() -> None:
             ON admin_client_identity_review (review_status)
             """
         )
+
+
+def ensure_child_test_requires_consent_column() -> None:
+    """child_test 테이블에 requires_consent 컬럼 추가."""
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("child_test")}
+    with engine.begin() as conn:
+        if "requires_consent" not in columns:
+            conn.exec_driver_sql(
+                "ALTER TABLE child_test ADD COLUMN requires_consent INTEGER NOT NULL DEFAULT 0"
+            )
+
+
+def ensure_admin_settings_table() -> None:
+    """admin_settings 테이블 생성."""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        if "admin_settings" not in tables:
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE admin_settings (
+                    id INTEGER PRIMARY KEY,
+                    admin_user_id INTEGER NOT NULL UNIQUE,
+                    consent_text TEXT NOT NULL DEFAULT '',
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        conn.exec_driver_sql(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS ix_admin_settings_admin_user_id
+            ON admin_settings (admin_user_id)
+            """
+        )
+
+
+def ensure_client_consent_record_table() -> None:
+    """client_consent_record 테이블 생성."""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        if "client_consent_record" not in tables:
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE client_consent_record (
+                    id INTEGER PRIMARY KEY,
+                    admin_user_id INTEGER NOT NULL,
+                    admin_client_id INTEGER NOT NULL,
+                    admin_custom_test_id INTEGER NOT NULL,
+                    consented INTEGER NOT NULL,
+                    consented_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        conn.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_client_consent_record_admin_user_id
+            ON client_consent_record (admin_user_id)
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_client_consent_record_admin_client_id
+            ON client_consent_record (admin_client_id)
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_client_consent_record_admin_custom_test_id
+            ON client_consent_record (admin_custom_test_id)
+            """
+        )

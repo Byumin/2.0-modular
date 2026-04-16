@@ -58,7 +58,7 @@ export interface Profile {
 
 export type AnswerState = Record<string, string>
 
-export type AssessmentStep = 'profile' | 'question' | 'complete'
+export type AssessmentStep = 'consent' | 'profile' | 'question' | 'complete'
 
 export const QUESTION_PAGE_SIZE = 5
 export const AUTO_CREATE_CONFIRM_REQUIRED_CODE = 'AUTO_CREATE_CONFIRM_REQUIRED'

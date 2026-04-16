@@ -29,21 +29,7 @@ interface TestOverviewItem {
   last_assessed_on?: string | null
 }
 
-interface CustomTestResultItem {
-  submission_id: number
-  scoring_result_id?: number | null
-  custom_test_id: number
-  custom_test_name: string
-  parent_test_name?: string | null
-  client_id?: number | null
-  client_name?: string | null
-  responder_name: string
-  submitted_at: string
-  scored_at?: string | null
-  scoring_status: string
-}
-
-type ManagementTab = "custom-tests" | "status" | "results"
+type ManagementTab = "custom-tests" | "status"
 
 interface CatalogScale {
   code: string
@@ -99,6 +85,7 @@ interface MissingVariant {
 interface CreatePayload {
   custom_test_name: string
   client_intake_mode: string
+  requires_consent: boolean
   test_configs: Array<{
     test_id: string
     selected_scale_codes: string[]
@@ -189,16 +176,15 @@ export function TestManagement() {
   const [activeTab, setActiveTab] = React.useState<ManagementTab>("custom-tests")
   const [tests, setTests] = React.useState<CustomTest[]>([])
   const [testOverviewItems, setTestOverviewItems] = React.useState<TestOverviewItem[]>([])
-  const [resultItems, setResultItems] = React.useState<CustomTestResultItem[]>([])
   const [search, setSearch] = React.useState("")
   const [loading, setLoading] = React.useState(true)
   const [overviewLoading, setOverviewLoading] = React.useState(false)
-  const [resultsLoading, setResultsLoading] = React.useState(false)
   const [generatingId, setGeneratingId] = React.useState<number | null>(null)
   const [catalog, setCatalog] = React.useState<CatalogTest[]>([])
   const [showCreateModal, setShowCreateModal] = React.useState(false)
   const [createName, setCreateName] = React.useState("")
   const [createIntakeMode, setCreateIntakeMode] = React.useState("pre_registered_only")
+  const [createRequiresConsent, setCreateRequiresConsent] = React.useState(false)
   const [createMessage, setCreateMessage] = React.useState<{ text: string; error: boolean } | null>(null)
   const [catalogMessage, setCatalogMessage] = React.useState("")
   const [creating, setCreating] = React.useState(false)
@@ -277,20 +263,8 @@ export function TestManagement() {
       .finally(() => setOverviewLoading(false))
   }, [activeTab, search])
 
-  const fetchResults = React.useCallback(() => {
-    if (activeTab !== "results") return
-    setResultsLoading(true)
-    const qs = search ? `q=${encodeURIComponent(search)}` : ""
-    fetch(`/api/admin/custom-tests/results${qs ? `?${qs}` : ""}`)
-      .then((r) => r.json())
-      .then((data) => setResultItems(data.items ?? []))
-      .catch(() => setResultItems([]))
-      .finally(() => setResultsLoading(false))
-  }, [activeTab, search])
-
   React.useEffect(() => { fetchTests() }, [fetchTests])
   React.useEffect(() => { fetchTestOverview() }, [fetchTestOverview])
-  React.useEffect(() => { fetchResults() }, [fetchResults])
 
   React.useEffect(() => {
     fetch("/api/admin/tests/catalog")
@@ -309,6 +283,7 @@ export function TestManagement() {
   const resetCreateForm = React.useCallback(() => {
     setCreateName("")
     setCreateIntakeMode("pre_registered_only")
+    setCreateRequiresConsent(false)
     setCreateMessage(null)
     setSelectedTestIds([])
     setExpandedTestIds(new Set())
@@ -324,6 +299,10 @@ export function TestManagement() {
     try {
       const res = await fetch(`/api/admin/custom-tests/${id}/access-link`, { method: "POST" })
       const data = await res.json()
+      if (!res.ok || !data.assessment_url) {
+        alert("URL 생성에 실패했습니다.")
+        return
+      }
       const fullUrl = `${window.location.origin}${data.assessment_url}`
       await navigator.clipboard.writeText(fullUrl)
       alert("URL이 클립보드에 복사되었습니다.")
@@ -487,6 +466,7 @@ export function TestManagement() {
       requestBody: {
         custom_test_name: createName.trim(),
         client_intake_mode: normalizeClientIntakeMode(createIntakeMode),
+        requires_consent: createRequiresConsent,
         test_configs,
         additional_profile_fields,
       },
@@ -546,14 +526,11 @@ export function TestManagement() {
     ])
   }
 
-  const searchPlaceholder = activeTab === "results"
-    ? "내담자·응답자·검사명 검색..."
-    : "검사명·기반 검사 검색..."
+  const searchPlaceholder = "검사명·기반 검사 검색..."
 
   const tabs: Array<{ value: ManagementTab; label: string }> = [
     { value: "custom-tests", label: "커스텀 검사" },
     { value: "status", label: "실시 현황" },
-    { value: "results", label: "검사 결과" },
   ]
 
   return (
@@ -604,7 +581,7 @@ export function TestManagement() {
       </div>
 
       {activeTab === "custom-tests" && (
-      <Card>
+      <Card className="py-0 gap-0">
         <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
@@ -616,32 +593,32 @@ export function TestManagement() {
             </div>
           ) : (
             <>
-              <div className="hidden grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 border-b px-4 py-2 text-xs font-medium text-muted-foreground md:grid">
-                <span>검사명</span>
-                <span>기반 검사</span>
-                <span>척도 수</span>
-                <span>배정 / 실시</span>
-                <span>진행 상태</span>
+              <div className="hidden grid-cols-[2fr_1fr_1fr_1fr_1fr_152px] gap-2 border-b-2 px-4 h-10 text-xs font-medium text-foreground items-center content-center bg-muted md:grid">
+                <span className="text-center">검사명</span>
+                <span className="text-center">기반 검사</span>
+                <span className="text-center">척도 수</span>
+                <span className="text-center">배정 / 실시</span>
+                <span className="text-center">진행 상태</span>
                 <span></span>
               </div>
               <div className="divide-y">
                 {tests.map((test) => (
                   <div
                     key={test.id}
-                    className="grid grid-cols-1 items-center gap-2 px-4 py-3 hover:bg-muted/40 md:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto]"
+                    className="grid grid-cols-1 items-center gap-2 px-4 py-3 hover:bg-muted/40 md:grid-cols-[2fr_1fr_1fr_1fr_1fr_152px]"
                   >
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-medium">{test.custom_test_name}</span>
-                      <span className="text-xs text-muted-foreground">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="text-sm font-medium text-center">{test.custom_test_name}</span>
+                      <span className="text-xs text-muted-foreground text-center">
                         {new Date(test.created_at).toLocaleDateString("ko-KR")} 생성
                       </span>
                     </div>
-                    <span className="text-sm text-muted-foreground">{test.test_id}</span>
-                    <span className="text-sm">척도 {test.scale_count}개</span>
-                    <span className={`text-sm ${test.assigned_count === 0 ? "text-yellow-600" : ""}`}>
+                    <span className="text-sm text-muted-foreground text-center">{test.test_id}</span>
+                    <span className="text-sm text-center">척도 {test.scale_count}개</span>
+                    <span className={`text-sm text-center ${test.assigned_count === 0 ? "text-yellow-600" : ""}`}>
                       {test.assigned_count} / {test.assessed_count}
                     </span>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-center gap-1">
                       <Badge variant={test.status === "운영중" ? "success" : "secondary"}>
                         {test.status}
                       </Badge>
@@ -649,7 +626,7 @@ export function TestManagement() {
                         {test.progress_status}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-center gap-1">
                       <Button
                         variant="outline"
                         size="sm"
@@ -687,7 +664,7 @@ export function TestManagement() {
       )}
 
       {activeTab === "status" && (
-        <Card>
+        <Card className="py-0 gap-0">
           <CardContent className="p-0">
             {overviewLoading ? (
               <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
@@ -699,13 +676,13 @@ export function TestManagement() {
               </div>
             ) : (
               <>
-                <div className="hidden grid-cols-[2fr_1.2fr_0.7fr_0.7fr_0.7fr_1fr] gap-2 border-b px-4 py-2 text-xs font-medium text-muted-foreground md:grid">
-                  <span>검사명</span>
-                  <span>기반 검사</span>
-                  <span>배정</span>
-                  <span>미실시</span>
-                  <span>실시완료</span>
-                  <span>마지막 실시일</span>
+                <div className="hidden grid-cols-[2fr_1.2fr_0.7fr_0.7fr_0.7fr_1fr] gap-2 border-b-2 px-4 h-10 text-xs font-medium text-foreground items-center content-center bg-muted md:grid">
+                  <span className="text-center">검사명</span>
+                  <span className="text-center">기반 검사</span>
+                  <span className="text-center">배정</span>
+                  <span className="text-center">미실시</span>
+                  <span className="text-center">실시완료</span>
+                  <span className="text-center">마지막 실시일</span>
                 </div>
                 <div className="divide-y">
                   {testOverviewItems.map((item) => (
@@ -713,12 +690,12 @@ export function TestManagement() {
                       key={item.custom_test_id}
                       className="grid grid-cols-1 items-center gap-2 px-4 py-3 hover:bg-muted/40 md:grid-cols-[2fr_1.2fr_0.7fr_0.7fr_0.7fr_1fr]"
                     >
-                      <span className="text-sm font-medium">{item.custom_test_name}</span>
-                      <span className="text-sm text-muted-foreground">{item.parent_test_name ?? "—"}</span>
-                      <span className="text-sm">{item.assigned_count}명</span>
-                      <span className="text-sm text-yellow-700">{item.not_started_count}명</span>
-                      <span className="text-sm text-green-700">{item.completed_count}명</span>
-                      <span className="text-sm text-muted-foreground">{item.last_assessed_on ?? "—"}</span>
+                      <span className="text-sm font-medium text-center">{item.custom_test_name}</span>
+                      <span className="text-sm text-muted-foreground text-center">{item.parent_test_name ?? "—"}</span>
+                      <span className="text-sm text-center">{item.assigned_count}명</span>
+                      <span className="text-sm text-yellow-700 text-center">{item.not_started_count}명</span>
+                      <span className="text-sm text-green-700 text-center">{item.completed_count}명</span>
+                      <span className="text-sm text-muted-foreground text-center">{item.last_assessed_on ?? "—"}</span>
                     </div>
                   ))}
                 </div>
@@ -728,75 +705,6 @@ export function TestManagement() {
         </Card>
       )}
 
-      {activeTab === "results" && (
-        <Card>
-          <CardContent className="p-0">
-            {resultsLoading ? (
-              <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                불러오는 중...
-              </div>
-            ) : resultItems.length === 0 ? (
-              <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                조건에 맞는 검사 결과가 없습니다.
-              </div>
-            ) : (
-              <>
-                <div className="hidden grid-cols-[1.1fr_1fr_2fr_1.1fr_0.8fr_auto] gap-2 border-b px-4 py-2 text-xs font-medium text-muted-foreground md:grid">
-                  <span>제출일</span>
-                  <span>내담자</span>
-                  <span>커스텀 검사</span>
-                  <span>기반 검사</span>
-                  <span>채점 상태</span>
-                  <span></span>
-                </div>
-                <div className="divide-y">
-                  {resultItems.map((item) => (
-                    <div
-                      key={item.submission_id}
-                      className="grid grid-cols-1 items-center gap-2 px-4 py-3 hover:bg-muted/40 md:grid-cols-[1.1fr_1fr_2fr_1.1fr_0.8fr_auto]"
-                    >
-                      <span className="text-sm text-muted-foreground">
-                        {new Date(item.submitted_at).toLocaleDateString("ko-KR")}
-                      </span>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-sm font-medium">{item.client_name ?? "미연결"}</span>
-                        {item.responder_name && item.responder_name !== item.client_name && (
-                          <span className="text-xs text-muted-foreground">응답자: {item.responder_name}</span>
-                        )}
-                      </div>
-                      <span className="text-sm text-muted-foreground">{item.custom_test_name}</span>
-                      <span className="text-sm text-muted-foreground">{item.parent_test_name ?? "—"}</span>
-                      <Badge variant={item.scoring_result_id ? "success" : "warning"}>
-                        {item.scoring_result_id ? item.scoring_status : "채점 대기"}
-                      </Badge>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs"
-                          disabled={!item.client_id}
-                          onClick={() => item.client_id && navigate(`/admin/clients/${item.client_id}/result`)}
-                        >
-                          결과
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs"
-                          disabled={!item.client_id}
-                          onClick={() => item.client_id && navigate(`/admin/clients/${item.client_id}`)}
-                        >
-                          내담자
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
@@ -833,6 +741,19 @@ export function TestManagement() {
                           <option value="auto_create">검사 진행 시 자동 생성 허용</option>
                         </select>
                         <p className="text-xs text-muted-foreground">자동 생성 허용은 검사 링크에서 내담자 등록과 배정을 진행합니다.</p>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium">개인정보동의</label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={createRequiresConsent}
+                            onChange={(e) => setCreateRequiresConsent(e.target.checked)}
+                            className="size-4 rounded border-input"
+                          />
+                          <span className="text-sm">수검 전 개인정보 수집·이용 동의 받기</span>
+                        </label>
+                        <p className="text-xs text-muted-foreground">동의서 내용은 설정 메뉴에서 관리합니다.</p>
                       </div>
                     </div>
                   </div>

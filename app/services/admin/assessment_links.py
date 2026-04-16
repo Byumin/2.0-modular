@@ -1,12 +1,12 @@
 import json
 import secrets
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.db.models import AdminCustomTest
+from app.db.models import AdminCustomTest, AdminSettings, ClientConsentRecord
 from app.repositories.assessment_repository import create_assessment_log
 from app.repositories.custom_test_repository import (
     create_access_link,
@@ -1001,3 +1001,44 @@ def submit_custom_test_by_access_link(
         "scoring_result_id": scoring_result.get("scoring_result_id"),
         "scoring_status": scoring_result.get("status"),
     }
+
+
+def get_consent_info_by_token(db: Session, access_token: str) -> dict:
+    """수검자용: 해당 검사의 동의 필요 여부와 동의서 텍스트 반환."""
+    from app.repositories.custom_test_repository import get_active_access_link_by_token, get_custom_test_by_id
+    link = get_active_access_link_by_token(db, access_token)
+    if link is None:
+        raise HTTPException(status_code=404, detail="유효하지 않은 검사 URL입니다.")
+    custom_test = get_custom_test_by_id(db, link.admin_custom_test_id)
+    if custom_test is None:
+        raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
+    requires_consent = bool(getattr(custom_test, "requires_consent", False))
+    consent_text = ""
+    if requires_consent:
+        settings = db.query(AdminSettings).filter(AdminSettings.admin_user_id == link.admin_user_id).first()
+        consent_text = settings.consent_text if settings else ""
+    return {
+        "requires_consent": requires_consent,
+        "consent_text": consent_text,
+    }
+
+
+def submit_consent_by_token(db: Session, access_token: str, client_id: int, consented: bool) -> dict:
+    """수검자용: 동의 기록 저장."""
+    from app.repositories.custom_test_repository import get_active_access_link_by_token, get_custom_test_by_id
+    link = get_active_access_link_by_token(db, access_token)
+    if link is None:
+        raise HTTPException(status_code=404, detail="유효하지 않은 검사 URL입니다.")
+    custom_test = get_custom_test_by_id(db, link.admin_custom_test_id)
+    if custom_test is None:
+        raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
+    record = ClientConsentRecord(
+        admin_user_id=link.admin_user_id,
+        admin_client_id=client_id,
+        admin_custom_test_id=custom_test.id,
+        consented=consented,
+        consented_at=datetime.utcnow(),
+    )
+    db.add(record)
+    db.commit()
+    return {"message": "동의 기록이 저장되었습니다.", "consented": consented}
