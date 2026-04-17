@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from app.services.scoring.base import BaseScorer, UnsupportedScorer
 from app.services.scoring.tests.golden import GoldenScorer
+from app.services.scoring.tests.pet import PetScorer
 from app.services.scoring.tests.sts import StsScorer
 
 _DEFAULT_SCORERS: dict[str, BaseScorer] = {
     "STS": StsScorer(),
     "GOLDEN": GoldenScorer(),
+    "PET": PetScorer(),
 }
 
 

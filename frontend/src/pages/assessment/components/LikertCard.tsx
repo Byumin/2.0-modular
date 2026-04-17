@@ -28,6 +28,7 @@ export function LikertCard({ item, options, answerState, onAnswer, globalIndex }
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))]">
         {itemOptions.map((opt, i) => {
           const checked = answerState[item.id] === opt.value
+          const isNoAnswer = opt.label === "무응답"
           return (
             <label
               key={i}
@@ -37,9 +38,13 @@ export function LikertCard({ item, options, answerState, onAnswer, globalIndex }
               role="radio"
               aria-checked={checked}
               className={`assessment-option-card min-h-[4.75rem] cursor-pointer rounded-lg border px-3 py-2.5 text-center transition-colors
-                ${checked
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-accent"
+                ${isNoAnswer
+                  ? checked
+                    ? "border-gray-400 bg-gray-100 text-gray-500"
+                    : "border-border bg-background text-muted-foreground hover:border-gray-300 hover:bg-gray-50"
+                  : checked
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-accent"
                 }`}
             >
               <input
@@ -50,7 +55,11 @@ export function LikertCard({ item, options, answerState, onAnswer, globalIndex }
                 onChange={() => onAnswer(item.id, opt.value)}
                 className="sr-only"
               />
-              <span className={`mx-auto flex size-8 items-center justify-center rounded-md text-sm font-extrabold ${checked ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
+              <span className={`mx-auto flex size-8 items-center justify-center rounded-md text-sm font-extrabold ${
+                isNoAnswer
+                  ? checked ? "bg-gray-300 text-gray-600" : "bg-muted/50 text-muted-foreground"
+                  : checked ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+              }`}>
                 {opt.value}
               </span>
               {opt.label && (

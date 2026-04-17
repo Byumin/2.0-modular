@@ -296,6 +296,25 @@ def get_last_submission_by_client(
     )
 
 
+def get_latest_submission_by_client_and_test(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+    custom_test_id: int,
+) -> AdminCustomTestSubmission | None:
+    return (
+        db.query(AdminCustomTestSubmission)
+        .filter(
+            AdminCustomTestSubmission.admin_user_id == admin_user_id,
+            AdminCustomTestSubmission.client_id == client_id,
+            AdminCustomTestSubmission.admin_custom_test_id == custom_test_id,
+        )
+        .order_by(AdminCustomTestSubmission.created_at.desc(), AdminCustomTestSubmission.id.desc())
+        .first()
+    )
+
+
 def count_submissions_by_client_since(
     db: Session,
     *,

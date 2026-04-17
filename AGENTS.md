@@ -8,7 +8,7 @@
 - 앱: FastAPI 백엔드 + React SPA 관리자/수검자 화면
 - 운영 엔트리포인트: `app/main.py` (`main.py`는 호환 shim)
 - 운영 DB: 루트 `modular.db`
-- React browser route: `/`, `/admin/*`, `/assessment/custom/{token}`
+- React browser route: `/`, `/admin/*`, `/assessment/custom/{token}`, `/report/{submissionId}`, `/admin/report/{submissionId}`
 - 정적 자원: `static/`은 운영 React SPA가 아니라 보고서/레거시 보조 자원 용도
 - 레거시 정적 HTML/JS 화면은 운영 기준에서 제외한다.
 

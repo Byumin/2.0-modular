@@ -35,6 +35,7 @@ export interface AdditionalProfileField {
 
 export interface InitialPayload {
   custom_test_name: string
+  display_name?: string
   client_intake_mode: string
   required_profile_fields: string[]
   additional_profile_fields: Array<AdditionalProfileField | string>
@@ -63,6 +64,7 @@ export type AssessmentStep = 'consent' | 'profile' | 'question' | 'complete'
 export const QUESTION_PAGE_SIZE = 5
 export const AUTO_CREATE_CONFIRM_REQUIRED_CODE = 'AUTO_CREATE_CONFIRM_REQUIRED'
 export const AMBIGUOUS_CLIENT_CODE = 'AMBIGUOUS_CLIENT'
+export const ALREADY_SUBMITTED_CONFIRM_REQUIRED_CODE = 'ALREADY_SUBMITTED_CONFIRM_REQUIRED'
 
 export interface AmbiguousCandidate {
   id: number

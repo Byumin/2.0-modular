@@ -16,6 +16,7 @@ from app.db.schema_migrations import (
     ensure_child_test_client_intake_mode_column,
     ensure_child_test_requires_consent_column,
     ensure_client_consent_record_table,
+    rotate_shared_submission_access_tokens,
     ensure_submission_client_id_column,
     ensure_submission_scoring_result_table,
 )
@@ -27,6 +28,7 @@ from app.router.custom_test_router import router as custom_test_router
 from app.router.dashboard_router import router as dashboard_router
 from app.router.identity_review_router import router as identity_review_router
 from app.router.page_router import router as page_router
+from app.router.report_router import router as report_router
 from app.router.scoring_router import router as scoring_router
 from app.router.settings_router import router as settings_router
 from app.services.admin.auth import seed_default_admin
@@ -80,6 +82,7 @@ app.include_router(assessment_link_router)
 app.include_router(dashboard_router)
 app.include_router(identity_review_router)
 app.include_router(scoring_router)
+app.include_router(report_router)
 app.include_router(settings_router)
 
 
@@ -99,4 +102,5 @@ def on_startup() -> None:
     ensure_child_test_requires_consent_column()
     ensure_admin_settings_table()
     ensure_client_consent_record_table()
+    rotate_shared_submission_access_tokens()
     seed_default_admin()

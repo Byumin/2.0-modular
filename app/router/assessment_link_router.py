@@ -37,6 +37,7 @@ def validate_profile(
         db, access_token, payload.profile or {},
         selected_client_id=payload.client_id,
         responder_choice=payload.responder_choice,
+        allow_retake=payload.allow_retake,
     )
 
 
