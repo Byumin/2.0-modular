@@ -30,6 +30,11 @@ def custom_assessment_page(access_token: str) -> FileResponse:
     return _react_index()
 
 
+@router.get("/report/{submission_id}")
+def report_page(submission_id: str) -> FileResponse:
+    return _react_index()
+
+
 # Admin routes → React SPA (handles routing client-side via React Router)
 @router.get("/admin")
 def admin_login_page() -> FileResponse:

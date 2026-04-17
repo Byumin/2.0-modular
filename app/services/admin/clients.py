@@ -50,6 +50,7 @@ from app.services.admin.common import serialize_admin_client, summarize_custom_t
 UNASSIGNED_CLIENT_REQUIRED_CODE = "UNASSIGNED_CLIENT_REQUIRED"
 AUTO_CREATE_CONFIRM_REQUIRED_CODE = "AUTO_CREATE_CONFIRM_REQUIRED"
 AMBIGUOUS_CLIENT_CODE = "AMBIGUOUS_CLIENT"
+ALREADY_SUBMITTED_CONFIRM_REQUIRED_CODE = "ALREADY_SUBMITTED_CONFIRM_REQUIRED"
 
 
 def _normalize_parent_test_text(raw_value: str | None) -> str | None:

@@ -17,6 +17,7 @@
 - `client-search-navigation-spec.md`: 내담자 검색/탐색 개선 API/UI 상세 스펙
 - `dashboard.md`: 관리자 대시보드와 평가 통계
 - `scoring-flow.md`: 제출 데이터 기반 채점 실행 흐름
+- `report-dashboard.md`: 채점 결과 보고서 대시보드 — 수검자/관리자 열람, 척도 트리 네비게이션, T점수 시각화
 - `privacy-consent-spec.md`: 개인정보동의 기능 — 검사별 동의 설정, 설정 메뉴, 수검자 동의 흐름, 동의 기록 저장
 
 ## Usage Rule

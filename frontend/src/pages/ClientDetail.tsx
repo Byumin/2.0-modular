@@ -646,9 +646,11 @@ export function ClientDetail() {
                         <Badge variant="outline" className="text-xs shrink-0">{log.custom_test_name}</Badge>
                         <span className="text-sm text-muted-foreground">{log.assessed_on}</span>
                       </div>
-                      <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                        <Link to={`/admin/clients/${id}/result`}>결과 확인</Link>
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                          <Link to={`/admin/report/${log.id}`}>결과 확인</Link>
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

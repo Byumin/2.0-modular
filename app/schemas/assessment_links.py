@@ -17,6 +17,7 @@ class ValidateAssessmentProfileIn(BaseModel):
     profile: dict[str, Any] = Field(default_factory=dict)
     client_id: int | None = None
     responder_choice: Literal["existing", "new"] | None = None
+    allow_retake: bool = False
 
 
 class RegisterAssessmentClientIn(BaseModel):

@@ -6,11 +6,12 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.db.models import AdminCustomTest, AdminSettings, ClientConsentRecord
+from app.db.models import AdminCustomTest, AdminCustomTestSubmission, AdminSettings, ClientConsentRecord
 from app.repositories.assessment_repository import create_assessment_log
 from app.repositories.custom_test_repository import (
     create_access_link,
     create_submission,
+    get_latest_submission_by_client_and_test,
     get_active_access_link_by_admin_and_test,
     get_active_access_link_by_token,
     get_custom_test_by_id_and_admin,
@@ -20,6 +21,7 @@ from app.schemas.values import normalize_gender_value
 from app.services.admin.auth import get_current_admin
 from app.services.admin.clients import (
     AMBIGUOUS_CLIENT_CODE,
+    ALREADY_SUBMITTED_CONFIRM_REQUIRED_CODE,
     AUTO_CREATE_CONFIRM_REQUIRED_CODE,
     create_provisional_client_and_assign_for_public_assessment,
     find_assigned_client_for_profile_with_code,
@@ -59,6 +61,15 @@ def _raise_assessment_error(
     if data:
         detail.update(data)
     raise HTTPException(status_code=status_code, detail=detail)
+
+
+def _generate_submission_report_token(db: Session) -> str:
+    for _ in range(10):
+        token = secrets.token_urlsafe(32)
+        exists = db.query(AdminCustomTestSubmission.id).filter_by(access_token=token).first()
+        if exists is None:
+            return token
+    raise HTTPException(status_code=500, detail="보고서 접근 토큰 생성에 실패했습니다.")
 
 
 def _validate_selected_client_matches_profile(client_row, profile: dict[str, Any]) -> None:
@@ -741,6 +752,7 @@ def validate_custom_test_profile_by_access_link(
     profile: dict[str, Any],
     selected_client_id: int | None = None,
     responder_choice: str | None = None,
+    allow_retake: bool = False,
 ) -> dict:
     link = get_active_access_link_by_token(db, access_token)
     if link is None:
@@ -811,6 +823,28 @@ def validate_custom_test_profile_by_access_link(
         else:
             # Case 1 실패: pre_registered_only에서 불일치
             _raise_assessment_error(403, error_message, error_code)
+
+    if not allow_retake:
+        latest_submission = get_latest_submission_by_client_and_test(
+            db,
+            admin_user_id=link.admin_user_id,
+            client_id=client.id,
+            custom_test_id=custom_test.id,
+        )
+        if latest_submission is not None:
+            submitted_at = latest_submission.created_at.isoformat() if latest_submission.created_at else ""
+            _raise_assessment_error(
+                409,
+                "이미 완료된 검사 결과가 있습니다. 기존 결과를 보거나 다시 실시할 수 있습니다.",
+                ALREADY_SUBMITTED_CONFIRM_REQUIRED_CODE,
+                data={
+                    "existing_submission": {
+                        "submission_id": latest_submission.id,
+                        "access_token": latest_submission.access_token,
+                        "submitted_at": submitted_at,
+                    }
+                },
+            )
 
     # client 확정 → 문항 payload 빌드
     assessment_payload = build_custom_assessment_question_payload(custom_test, profile or {})
@@ -939,12 +973,13 @@ def submit_custom_test_by_access_link(
     profile_name = str(clean_profile.get("name", "")).strip()
     final_responder_name = profile_name or responder_name.strip()
 
+    report_access_token = _generate_submission_report_token(db)
     submission = create_submission(
         db,
         admin_user_id=link.admin_user_id,
         custom_test_id=custom_test.id,
         client_id=client.id,
-        access_token=access_token,
+        access_token=report_access_token,
         responder_name=final_responder_name,
         answers_json=json.dumps(
             {
@@ -998,6 +1033,7 @@ def submit_custom_test_by_access_link(
         "message": "검사가 제출되었습니다.",
         "submitted_item_count": len(cleaned_answers),
         "submission_id": submission.id,
+        "access_token": submission.access_token,
         "scoring_result_id": scoring_result.get("scoring_result_id"),
         "scoring_status": scoring_result.get("status"),
     }

@@ -4,6 +4,7 @@ import { ProfileStep } from "./steps/ProfileStep"
 import { QuestionStep } from "./steps/QuestionStep"
 import { CompleteStep } from "./steps/CompleteStep"
 import {
+  ALREADY_SUBMITTED_CONFIRM_REQUIRED_CODE,
   AMBIGUOUS_CLIENT_CODE,
   AUTO_CREATE_CONFIRM_REQUIRED_CODE,
   type AmbiguousCandidate,
@@ -59,6 +60,19 @@ function completionStorageKey(token: string) {
   return `assessment_done_${token}`
 }
 
+function readCompletedSubmission(token: string): { submissionId: number; accessToken: string } | null {
+  try {
+    const raw = sessionStorage.getItem(completionStorageKey(token))
+    if (!raw) return null
+    if (raw === "1") return null
+    const parsed = JSON.parse(raw) as { submission_id?: unknown; access_token?: unknown }
+    if (typeof parsed.submission_id !== "number" || typeof parsed.access_token !== "string") return null
+    return { submissionId: parsed.submission_id, accessToken: parsed.access_token }
+  } catch {
+    return null
+  }
+}
+
 function normalizeAssessmentParts(payload: AssessmentPayload): AssessmentPart[] {
   const rawParts =
     Array.isArray(payload.parts) && payload.parts.length
@@ -110,10 +124,10 @@ export function AssessmentPage() {
   const [step, setStep] = React.useState<AssessmentStep>("profile")
   const [loading, setLoading] = React.useState(true)
   const [consentInfo, setConsentInfo] = React.useState<{ requires_consent: boolean; consent_text: string } | null>(null)
-  const [consentDeclined, setConsentDeclined] = React.useState(false)
-  const [consentGiven, setConsentGiven] = React.useState(false)
   const [profileLoading, setProfileLoading] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
+  const [completedSubmissionId, setCompletedSubmissionId] = React.useState<number | null>(null)
+  const [completedReportAccessToken, setCompletedReportAccessToken] = React.useState<string | null>(null)
   const [error, setError] = React.useState("")
   const [modalProfile, setModalProfile] = React.useState<Profile | null>(null)
   const [registering, setRegistering] = React.useState(false)
@@ -130,6 +144,19 @@ export function AssessmentPage() {
     responder_choice: "existing" | "new" | null
     candidate_client_ids: number[]
   } | null>(null)
+  const [retakePrompt, setRetakePrompt] = React.useState<{
+    existingSubmission: {
+      submission_id: number
+      access_token: string
+      submitted_at?: string
+    }
+    profile: Profile
+    options: {
+      client_id?: number | null
+      responder_choice?: "existing" | "new" | null
+      candidate_client_ids?: number[]
+    }
+  } | null>(null)
 
   React.useEffect(() => {
     let mounted = true
@@ -143,6 +170,13 @@ export function AssessmentPage() {
       try {
         if (sessionStorage.getItem(completionStorageKey(token)) === "1") {
           setStep("complete")
+        } else {
+          const storedSubmission = readCompletedSubmission(token)
+          if (storedSubmission !== null) {
+            setCompletedSubmissionId(storedSubmission.submissionId)
+            setCompletedReportAccessToken(storedSubmission.accessToken)
+            setStep("complete")
+          }
         }
       } catch {
         // Ignore storage failures.
@@ -156,9 +190,6 @@ export function AssessmentPage() {
         if (!mounted) return
         setInitialPayload(payload)
         setConsentInfo(consent)
-        if (consent.requires_consent) {
-          setStep("consent")
-        }
       } catch (err) {
         if (!mounted) return
         setError(err instanceof Error ? err.message : "검사 정보를 불러오지 못했습니다.")
@@ -179,10 +210,14 @@ export function AssessmentPage() {
       client_id?: number | null
       responder_choice?: "existing" | "new" | null
       candidate_client_ids?: number[]
+      allow_retake?: boolean
     } = {}
   ) {
-    const { reopenAutoCreateModal = true, client_id, responder_choice, candidate_client_ids } = options
+    const { reopenAutoCreateModal = true, client_id, responder_choice, candidate_client_ids, allow_retake = false } = options
     setError("")
+    if (!allow_retake) {
+      setRetakePrompt(null)
+    }
     setProfileLoading(true)
     try {
       const result = await api<{
@@ -199,6 +234,7 @@ export function AssessmentPage() {
             profile,
             client_id: client_id ?? null,
             responder_choice: responder_choice ?? null,
+            allow_retake,
           }),
         }
       )
@@ -215,7 +251,7 @@ export function AssessmentPage() {
       const resolvedClientId = result.client_id ?? null
       setConfirmedClientId(resolvedClientId)
       // Record consent if consent was given and client is now known
-      if (consentGiven && resolvedClientId !== null) {
+      if (consentInfo?.requires_consent && resolvedClientId !== null) {
         fetch(`/api/assessment-links/${token}/consent`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -252,6 +288,34 @@ export function AssessmentPage() {
         setAmbiguousProfile(profile)
         setError("")
         return
+      }
+      if (apiError.code === ALREADY_SUBMITTED_CONFIRM_REQUIRED_CODE) {
+        const detail = apiError.detail as Record<string, unknown> | null
+        const existing = detail?.existing_submission
+        if (existing && typeof existing === "object") {
+          const existingRecord = existing as Record<string, unknown>
+          const existingSubmissionId = existingRecord.submission_id
+          const existingAccessToken = existingRecord.access_token
+          if (typeof existingSubmissionId !== "number" || typeof existingAccessToken !== "string") {
+            setError(apiError.message || "기존 검사 결과 정보를 확인하지 못했습니다.")
+            return
+          }
+          setRetakePrompt({
+            existingSubmission: {
+              submission_id: existingSubmissionId,
+              access_token: existingAccessToken,
+              submitted_at: typeof existingRecord.submitted_at === "string" ? existingRecord.submitted_at : undefined,
+            },
+            profile,
+            options: {
+              client_id: client_id ?? null,
+              responder_choice: responder_choice ?? null,
+              candidate_client_ids: candidate_client_ids ?? [],
+            },
+          })
+          setError("")
+          return
+        }
       }
       setError(apiError.message || "배정된 내담자 확인에 실패했습니다.")
     } finally {
@@ -304,12 +368,32 @@ export function AssessmentPage() {
     }
   }
 
+  function handleViewExistingResult() {
+    if (!retakePrompt) return
+    const existing = retakePrompt.existingSubmission
+    window.open(
+      `/report/${existing.submission_id}?token=${encodeURIComponent(existing.access_token)}`,
+      "_blank",
+      "noopener,noreferrer"
+    )
+  }
+
+  async function handleRetakeConfirm() {
+    if (!retakePrompt || profileLoading) return
+    const { profile, options } = retakePrompt
+    setRetakePrompt(null)
+    await proceedToQuestionStep(profile, {
+      ...options,
+      allow_retake: true,
+    })
+  }
+
   async function handleSubmit(answers: AnswerState) {
     if (!activeProfile || submitting) return
     setSubmitting(true)
     setError("")
     try {
-      await api(`/api/assessment-links/${token}/submit`, {
+      const result = await api<{ submission_id?: number; access_token?: string }>(`/api/assessment-links/${token}/submit`, {
         method: "POST",
         body: JSON.stringify({
           responder_name: "",
@@ -321,8 +405,17 @@ export function AssessmentPage() {
           candidate_client_ids: ambiguousMatchContext?.candidate_client_ids ?? [],
         }),
       })
+      const submissionId = typeof result.submission_id === "number" ? result.submission_id : null
+      const reportAccessToken = typeof result.access_token === "string" ? result.access_token : null
+      setCompletedSubmissionId(submissionId)
+      setCompletedReportAccessToken(reportAccessToken)
       try {
-        sessionStorage.setItem(completionStorageKey(token), "1")
+        sessionStorage.setItem(
+          completionStorageKey(token),
+          submissionId === null || reportAccessToken === null
+            ? "1"
+            : JSON.stringify({ submission_id: submissionId, access_token: reportAccessToken })
+        )
       } catch {
         // Ignore storage failures.
       }
@@ -351,8 +444,8 @@ export function AssessmentPage() {
       helper: "개인정보 수집·이용 동의 여부를 선택해주세요.",
     },
     profile: {
-      label: "인적사항",
-      helper: "검사 시작 전 필요한 정보를 확인합니다.",
+      label: "본인 확인",
+      helper: "검사 대상 확인과 결과 연결에 필요한 정보를 입력합니다.",
     },
     question: {
       label: "검사 실시",
@@ -363,7 +456,7 @@ export function AssessmentPage() {
       helper: "응답 저장이 완료되었습니다.",
     },
   }
-  const shellWidthClass = step === "question" ? "max-w-7xl" : "max-w-[500px]"
+  const shellWidthClass = step === "profile" ? "w-full max-w-none" : step === "question" ? "w-full max-w-7xl" : "w-full max-w-5xl"
 
   if (loading) {
     return (
@@ -386,110 +479,65 @@ export function AssessmentPage() {
   }
 
   if (step === "complete") {
-    return <CompleteStep onRestart={handleRestart} />
-  }
-
-  if (step === "consent") {
-    if (consentDeclined) {
-      return (
-        <main className="min-h-screen bg-[#f5f7fa] flex items-center justify-center px-4 py-10">
-          <div className="mx-auto w-full max-w-[500px] rounded-xl bg-white p-8 shadow-sm text-center flex flex-col gap-4">
-            <p className="text-base font-semibold text-foreground">개인정보 수집·이용에 동의하지 않으셨습니다.</p>
-            <p className="text-sm text-muted-foreground">개인정보 수집에 동의하지 않으면 검사를 진행할 수 없습니다.</p>
-            <button
-              className="mt-2 text-sm text-primary underline underline-offset-4"
-              onClick={() => setConsentDeclined(false)}
-            >
-              다시 동의 화면으로 돌아가기
-            </button>
-          </div>
-        </main>
-      )
-    }
-    return (
-      <main className="min-h-screen bg-[#f5f7fa] flex items-center justify-center px-4 py-10">
-        <div className="mx-auto w-full max-w-[500px] rounded-xl bg-white shadow-sm overflow-hidden">
-          <div className="h-[3px] bg-[#1F4E79]" />
-          <div className="px-6 py-5 border-b">
-            <h1 className="text-lg font-bold text-foreground">{initialPayload?.custom_test_name ?? "검사"}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">검사를 시작하기 전에 아래 내용을 확인하고 동의 여부를 선택해주세요.</p>
-          </div>
-          <div className="px-6 py-5 flex flex-col gap-4">
-            <div className="rounded-lg border bg-muted/30 px-4 py-4 max-h-[55vh] overflow-y-auto">
-              <pre className="whitespace-pre-wrap text-sm text-foreground leading-relaxed font-sans">
-                {consentInfo?.consent_text || "동의서 내용이 없습니다."}
-              </pre>
-            </div>
-            <div className="flex gap-3 justify-end">
-              <button
-                className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
-                onClick={() => setConsentDeclined(true)}
-              >
-                동의하지 않습니다
-              </button>
-              <button
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-                onClick={() => { setConsentGiven(true); setStep("profile") }}
-              >
-                동의합니다
-              </button>
-            </div>
-          </div>
-        </div>
-      </main>
-    )
+    return <CompleteStep onRestart={handleRestart} reportAccessToken={completedReportAccessToken} submissionId={completedSubmissionId} />
   }
 
   return (
-    <main className={`min-h-screen bg-[#f5f7fa] px-4 py-6 sm:py-8${step === "profile" ? " flex items-center justify-center" : ""}`}>
-      <div className={`mx-auto flex w-full ${shellWidthClass} flex-col gap-4`}>
-        <header className="overflow-hidden rounded-xl bg-white shadow-sm">
-          <div className="h-[3px] bg-[#1F4E79]" />
-          <div className="flex items-start justify-between gap-4 px-5 py-4 sm:px-6 sm:py-5">
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{title}</h1>
-              {(activeProfile && step === "question") && (
-                <p className="mt-1 text-sm text-muted-foreground">{profileSummary(activeProfile)}</p>
-              )}
-            </div>
-            <nav className="flex shrink-0 items-center gap-1.5 pt-0.5" aria-label="검사 단계">
-              {(["profile", "question", "complete"] as AssessmentStep[]).map((itemStep, index) => {
-                const isCurrent = itemStep === step
-                const isPast = step === "question" && itemStep === "profile"
-                const isLast = index === 2
-                return (
-                  <React.Fragment key={itemStep}>
-                    <div className="flex items-center gap-1">
-                      <div
-                        className={`flex size-5 items-center justify-center rounded-full text-[10px] font-bold leading-none ${
-                          isCurrent
-                            ? "bg-primary text-primary-foreground"
-                            : isPast
-                              ? "bg-green-500 text-white"
-                              : "border border-border bg-background text-muted-foreground"
-                        }`}
-                      >
-                        {isPast ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-2.5" aria-hidden="true">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        ) : (
-                          String(index + 1)
-                        )}
+    <main className={step === "profile" ? "min-h-screen bg-[#f4f6f5]" : "min-h-screen bg-[#f5f7fa] px-4 py-6 sm:py-8"}>
+      <div className={`mx-auto flex ${shellWidthClass} flex-col gap-4`}>
+        {step !== "profile" && (
+          <header className="overflow-hidden rounded-xl border border-[#d8e3df] bg-white shadow-sm">
+            <div className="h-[3px] bg-[#175e63]" />
+            <div className="flex flex-col gap-4 px-5 py-4 sm:px-6 sm:py-5 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#175e63]">
+                  {stepMeta[step].label}
+                </p>
+                <h1 className="mt-1 text-xl font-bold tracking-tight text-foreground sm:text-2xl">{title}</h1>
+                <p className="mt-1 text-sm text-muted-foreground">{stepMeta[step].helper}</p>
+                {(activeProfile && step === "question") && (
+                  <p className="mt-1 text-sm text-muted-foreground">{profileSummary(activeProfile)}</p>
+                )}
+              </div>
+              <nav className="flex shrink-0 items-center gap-1.5 pt-0.5" aria-label="검사 단계">
+                {(["profile", "question", "complete"] as AssessmentStep[]).map((itemStep, index) => {
+                  const isCurrent = itemStep === step
+                  const isPast = step === "question" && itemStep === "profile"
+                  const isLast = index === 2
+                  return (
+                    <React.Fragment key={itemStep}>
+                      <div className="flex items-center gap-1">
+                        <div
+                          className={`flex size-5 items-center justify-center rounded-full text-[10px] font-bold leading-none ${
+                            isCurrent
+                              ? "bg-[#175e63] text-white"
+                              : isPast
+                                ? "bg-[#4f6f52] text-white"
+                                : "border border-border bg-background text-muted-foreground"
+                          }`}
+                        >
+                          {isPast ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-2.5" aria-hidden="true">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          ) : (
+                            String(index + 1)
+                          )}
+                        </div>
+                        <span className={`hidden text-xs sm:inline ${isCurrent ? "font-semibold text-[#175e63]" : isPast ? "text-[#4f6f52]" : "text-muted-foreground"}`}>
+                          {stepMeta[itemStep].label}
+                        </span>
                       </div>
-                      <span className={`hidden text-xs sm:inline ${isCurrent ? "font-semibold text-primary" : isPast ? "text-green-700" : "text-muted-foreground"}`}>
-                        {stepMeta[itemStep].label}
-                      </span>
-                    </div>
-                    {!isLast && (
-                      <div className={`h-px w-4 ${isPast ? "bg-green-300" : "bg-border"}`} />
-                    )}
-                  </React.Fragment>
-                )
-              })}
-            </nav>
-          </div>
-        </header>
+                      {!isLast && (
+                        <div className={`h-px w-4 ${isPast ? "bg-[#b8c9b9]" : "bg-border"}`} />
+                      )}
+                    </React.Fragment>
+                  )
+                })}
+              </nav>
+            </div>
+          </header>
+        )}
 
         {step === "profile" && initialPayload && (
           <ProfileStep
@@ -497,6 +545,13 @@ export function AssessmentPage() {
             onNext={proceedToQuestionStep}
             loading={profileLoading}
             error={error}
+            requiresConsent={consentInfo?.requires_consent ?? false}
+            consentText={consentInfo?.consent_text}
+            scrollToHistory={retakePrompt !== null}
+            retakeInfo={retakePrompt?.existingSubmission ?? null}
+            retakeProfile={retakePrompt?.profile ?? null}
+            onRetakeConfirm={handleRetakeConfirm}
+            onViewExistingResult={handleViewExistingResult}
           />
         )}
 
@@ -594,6 +649,7 @@ export function AssessmentPage() {
           </section>
         </div>
       )}
+
     </main>
   )
 }

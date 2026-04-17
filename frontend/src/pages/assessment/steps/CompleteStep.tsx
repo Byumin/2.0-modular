@@ -1,8 +1,10 @@
 interface Props {
   onRestart: () => void
+  reportAccessToken?: string | null
+  submissionId?: number | null
 }
 
-export function CompleteStep({ onRestart }: Props) {
+export function CompleteStep({ onRestart, reportAccessToken, submissionId }: Props) {
   return (
     <div className="flex min-h-screen w-full items-center justify-center bg-[#f5f7fa] px-4 py-10">
       <section className="w-full max-w-xl rounded-xl bg-white p-10 text-center shadow-sm">
@@ -15,13 +17,24 @@ export function CompleteStep({ onRestart }: Props) {
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
           응답이 저장되었습니다.<br />안내받은 다음 절차가 있다면 그대로 진행해주세요.
         </p>
-        <button
-          type="button"
-          onClick={onRestart}
-          className="mt-8 h-10 rounded-lg border border-input bg-background px-6 text-sm font-medium transition-colors hover:bg-accent"
-        >
-          처음으로
-        </button>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          {reportAccessToken && submissionId && (
+            <button
+              type="button"
+              onClick={() => window.open(`/report/${submissionId}?token=${encodeURIComponent(reportAccessToken)}`, "_blank", "noopener,noreferrer")}
+              className="h-10 rounded-lg bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              결과 보기
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onRestart}
+            className="h-10 rounded-lg border border-input bg-background px-6 text-sm font-medium transition-colors hover:bg-accent"
+          >
+            처음으로
+          </button>
+        </div>
       </section>
     </div>
   )

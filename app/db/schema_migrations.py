@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import secrets
+
 from sqlalchemy import inspect
 
 from app.db.session import engine
@@ -333,3 +335,44 @@ def ensure_client_consent_record_table() -> None:
             ON client_consent_record (admin_custom_test_id)
             """
         )
+
+
+def rotate_shared_submission_access_tokens() -> None:
+    """기존 검사 링크 토큰을 공유하던 제출 결과 토큰을 제출별 토큰으로 회전한다."""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "admin_custom_test_submission" not in tables or "admin_custom_test_access_link" not in tables:
+        return
+
+    with engine.begin() as conn:
+        link_tokens = {
+            row[0]
+            for row in conn.exec_driver_sql(
+                "SELECT access_token FROM admin_custom_test_access_link WHERE access_token IS NOT NULL"
+            )
+            if row[0]
+        }
+        if not link_tokens:
+            return
+
+        existing_tokens = {
+            row[0]
+            for row in conn.exec_driver_sql(
+                "SELECT access_token FROM admin_custom_test_submission WHERE access_token IS NOT NULL"
+            )
+            if row[0]
+        }
+        rows = conn.exec_driver_sql(
+            "SELECT id, access_token FROM admin_custom_test_submission"
+        ).fetchall()
+        for submission_id, token in rows:
+            if token not in link_tokens:
+                continue
+            new_token = secrets.token_urlsafe(32)
+            while new_token in existing_tokens:
+                new_token = secrets.token_urlsafe(32)
+            existing_tokens.add(new_token)
+            conn.exec_driver_sql(
+                "UPDATE admin_custom_test_submission SET access_token = ? WHERE id = ?",
+                (new_token, submission_id),
+            )
