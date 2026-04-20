@@ -444,7 +444,7 @@ export function AssessmentPage() {
       helper: "개인정보 수집·이용 동의 여부를 선택해주세요.",
     },
     profile: {
-      label: "본인 확인",
+      label: "인적사항",
       helper: "검사 대상 확인과 결과 연결에 필요한 정보를 입력합니다.",
     },
     question: {

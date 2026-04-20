@@ -307,14 +307,14 @@ export function ProfileStep({ payload, onNext, loading, error, requiresConsent =
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#2d7f8a]">Inpsyt Assessment</p>
                 <h1 className="mt-4 max-w-md text-3xl font-bold leading-tight sm:text-4xl">{testName}</h1>
-                <p className="mt-4 whitespace-nowrap text-sm leading-6 text-[#5f6f73]">
+                <p className="mt-4 max-w-[40rem] text-sm leading-6 text-[#5f6f73]">
                   검사 시작 전 본인 확인을 진행합니다. 응답은 제출 후 결과 산출과 관리자 확인에 사용됩니다.
                 </p>
               </div>
             </div>
           </section>
 
-          <section className="flex min-h-screen items-start bg-[#f7f8f7] px-5 py-10 sm:px-8 lg:px-12">
+          <section className="flex min-h-screen items-center bg-[#f7f8f7] px-5 py-8 sm:px-8 sm:py-10 lg:px-12">
             <div className="mx-auto w-full max-w-xl">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
