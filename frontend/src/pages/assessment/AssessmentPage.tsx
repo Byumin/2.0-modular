@@ -10,6 +10,7 @@ import {
   AUTO_CREATE_CONFIRM_REQUIRED_CODE,
   type AmbiguousCandidate,
   type AnswerState,
+  type AssessmentDraft,
   type AssessmentPart,
   type AssessmentPayload,
   type AssessmentStep,
@@ -22,6 +23,8 @@ interface ApiError extends Error {
   code?: string
   detail?: unknown
 }
+
+const STEP_TRANSITION_MS = 180
 
 async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
@@ -123,10 +126,14 @@ export function AssessmentPage() {
   const [parts, setParts] = React.useState<AssessmentPart[]>([])
   const [activeProfile, setActiveProfile] = React.useState<Profile | null>(null)
   const [step, setStep] = React.useState<AssessmentStep>("profile")
+  const [visibleStep, setVisibleStep] = React.useState<AssessmentStep>("profile")
+  const [stepTransitionState, setStepTransitionState] = React.useState<"idle" | "out" | "in">("idle")
   const [loading, setLoading] = React.useState(true)
   const [consentInfo, setConsentInfo] = React.useState<{ requires_consent: boolean; consent_text: string } | null>(null)
   const [profileLoading, setProfileLoading] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
+  const [activeDraft, setActiveDraft] = React.useState<AssessmentDraft | null>(null)
+  const [draftStatus, setDraftStatus] = React.useState<"idle" | "restored" | "saving" | "saved" | "error">("idle")
   const [completedSubmissionId, setCompletedSubmissionId] = React.useState<number | null>(null)
   const [completedReportAccessToken, setCompletedReportAccessToken] = React.useState<string | null>(null)
   const [error, setError] = React.useState("")
@@ -158,6 +165,36 @@ export function AssessmentPage() {
       candidate_client_ids?: number[]
     }
   } | null>(null)
+  const draftSaveTimerRef = React.useRef<number | null>(null)
+  const draftStatusTimerRef = React.useRef<number | null>(null)
+  const visibleStepRef = React.useRef<AssessmentStep>("profile")
+
+  React.useEffect(() => {
+    return () => {
+      if (draftSaveTimerRef.current !== null) window.clearTimeout(draftSaveTimerRef.current)
+      if (draftStatusTimerRef.current !== null) window.clearTimeout(draftStatusTimerRef.current)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    if (step === "complete" || step === visibleStepRef.current) return
+
+    let entryTimer: number | null = null
+    setStepTransitionState("out")
+    const exitTimer = window.setTimeout(() => {
+      visibleStepRef.current = step
+      setVisibleStep(step)
+      setStepTransitionState("in")
+      entryTimer = window.setTimeout(() => {
+        setStepTransitionState("idle")
+      }, 30)
+    }, STEP_TRANSITION_MS)
+
+    return () => {
+      window.clearTimeout(exitTimer)
+      if (entryTimer !== null) window.clearTimeout(entryTimer)
+    }
+  }, [step])
 
   React.useEffect(() => {
     let mounted = true
@@ -227,6 +264,7 @@ export function AssessmentPage() {
         is_ambiguous_match?: boolean
         responder_choice?: "existing" | "new" | null
         candidate_client_ids?: number[]
+        draft?: AssessmentDraft | null
       }>(
         `/api/assessment-links/${token}/validate-profile`,
         {
@@ -267,6 +305,13 @@ export function AssessmentPage() {
         })
       } else {
         setAmbiguousMatchContext(null)
+      }
+      if (result.draft) {
+        setActiveDraft(result.draft)
+        setDraftStatus("restored")
+      } else {
+        setActiveDraft(null)
+        setDraftStatus("idle")
       }
       setStep("intro")
     } catch (err) {
@@ -410,6 +455,12 @@ export function AssessmentPage() {
       const reportAccessToken = typeof result.access_token === "string" ? result.access_token : null
       setCompletedSubmissionId(submissionId)
       setCompletedReportAccessToken(reportAccessToken)
+      setActiveDraft(null)
+      setDraftStatus("idle")
+      if (draftSaveTimerRef.current !== null) {
+        window.clearTimeout(draftSaveTimerRef.current)
+        draftSaveTimerRef.current = null
+      }
       try {
         sessionStorage.setItem(
           completionStorageKey(token),
@@ -428,6 +479,38 @@ export function AssessmentPage() {
       setSubmitting(false)
     }
   }
+
+  const handleQuestionProgressChange = React.useCallback(
+    (state: { answers: AnswerState; currentPartIndex: number; currentPage: number }) => {
+      if (!activeProfile || confirmedClientId === null || submitting) return
+      if (draftSaveTimerRef.current !== null) window.clearTimeout(draftSaveTimerRef.current)
+      draftSaveTimerRef.current = window.setTimeout(async () => {
+        setDraftStatus("saving")
+        try {
+          const result = await api<{ draft?: AssessmentDraft | null }>(`/api/assessment-links/${token}/draft`, {
+            method: "PUT",
+            body: JSON.stringify({
+              profile: activeProfile,
+              answers: state.answers,
+              client_id: confirmedClientId,
+              current_part_index: state.currentPartIndex,
+              current_page: state.currentPage,
+              is_ambiguous_match: ambiguousMatchContext?.is_ambiguous_match ?? false,
+              responder_choice: ambiguousMatchContext?.responder_choice ?? null,
+              candidate_client_ids: ambiguousMatchContext?.candidate_client_ids ?? [],
+            }),
+          })
+          if (result.draft) setActiveDraft(result.draft)
+          setDraftStatus("saved")
+          if (draftStatusTimerRef.current !== null) window.clearTimeout(draftStatusTimerRef.current)
+          draftStatusTimerRef.current = window.setTimeout(() => setDraftStatus("idle"), 2500)
+        } catch {
+          setDraftStatus("error")
+        }
+      }, 900)
+    },
+    [activeProfile, ambiguousMatchContext, confirmedClientId, submitting, token]
+  )
 
   function handleRestart() {
     try {
@@ -461,13 +544,25 @@ export function AssessmentPage() {
       helper: "응답 저장이 완료되었습니다.",
     },
   }
+  const activeStep = visibleStep
   const shellWidthClass =
-    step === "profile" ? "w-full max-w-none"
-    : step === "question" ? "w-full"
-    : step === "intro" ? "w-full max-w-3xl"
+    activeStep === "profile" ? "w-full max-w-none"
+    : activeStep === "question" ? "w-full"
+    : activeStep === "intro" ? "w-full max-w-none"
     : "w-full max-w-5xl"
   const progressSteps: Exclude<AssessmentStep, "consent">[] = ["profile", "intro", "question", "complete"]
-  const currentStepIndex = progressSteps.findIndex((itemStep) => itemStep === step)
+  const currentStepIndex = progressSteps.findIndex((itemStep) => itemStep === activeStep)
+  const stepForProgress: AssessmentStep = activeStep
+  const stepTransitionClass =
+    stepTransitionState === "out" ? "assessment-step-out"
+    : stepTransitionState === "in" ? "assessment-step-in"
+    : "assessment-step-idle"
+  const draftStatusText =
+    draftStatus === "restored" ? "저장된 응답을 불러왔습니다."
+    : draftStatus === "saving" ? "임시저장 중..."
+    : draftStatus === "saved" ? "임시저장됨"
+    : draftStatus === "error" ? "임시저장 실패"
+    : ""
 
   if (loading) {
     return (
@@ -495,25 +590,26 @@ export function AssessmentPage() {
 
   return (
     <main className={
-      step === "profile" ? "min-h-screen bg-[#f4f6f5]"
-      : step === "question" ? "min-h-screen"
-      : "hero-tint min-h-screen bg-[#eef2f4] px-4 py-6 sm:py-8"
+      activeStep === "profile" ? "min-h-screen bg-[#f4f6f5] transition-colors duration-300 ease-out"
+      : activeStep === "question" ? "min-h-screen transition-colors duration-300 ease-out"
+      : activeStep === "intro" ? "min-h-screen bg-[#eef2f4] transition-colors duration-300 ease-out"
+      : "hero-tint min-h-screen bg-[#eef2f4] px-4 py-6 transition-colors duration-300 ease-out sm:py-8"
     }>
       <div className={`relative mx-auto flex ${shellWidthClass} flex-col gap-4`}>
-        {step !== "profile" && step !== "question" && (
+        {activeStep !== "profile" && activeStep !== "question" && activeStep !== "intro" && (
           <header className="overflow-hidden rounded-xl border border-[#d8e3df] bg-white assessment-card">
             <div className="h-[3px] bg-[#175e63]" />
             <div className="flex flex-col gap-4 px-5 py-4 sm:px-6 sm:py-5 md:flex-row md:items-start md:justify-between">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#175e63]">
-                  {stepMeta[step].label}
+                  {stepMeta[activeStep].label}
                 </p>
                 <h1 className="mt-1 text-xl font-bold tracking-tight text-foreground sm:text-2xl">{title}</h1>
-                <p className="mt-1 text-sm text-muted-foreground">{stepMeta[step].helper}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{stepMeta[activeStep].helper}</p>
               </div>
               <nav className="flex shrink-0 items-center gap-1.5 pt-0.5" aria-label="검사 단계">
                 {progressSteps.map((itemStep, index) => {
-                  const isCurrent = itemStep === step
+                  const isCurrent = itemStep === stepForProgress
                   const isPast = currentStepIndex >= 0 && index < currentStepIndex
                   const isLast = index === progressSteps.length - 1
                   return (
@@ -551,49 +647,56 @@ export function AssessmentPage() {
           </header>
         )}
 
-        {step === "profile" && initialPayload && (
-          <ProfileStep
-            payload={initialPayload}
-            onNext={proceedToQuestionStep}
-            loading={profileLoading}
-            error={error}
-            initialProfile={activeProfile}
-            requiresConsent={consentInfo?.requires_consent ?? false}
-            consentText={consentInfo?.consent_text}
-            scrollToHistory={retakePrompt !== null}
-            retakeInfo={retakePrompt?.existingSubmission ?? null}
-            retakeProfile={retakePrompt?.profile ?? null}
-            onRetakeConfirm={handleRetakeConfirm}
-            onViewExistingResult={handleViewExistingResult}
-          />
-        )}
+        <div className={`assessment-step-frame ${stepTransitionClass}`} data-assessment-step={activeStep}>
+          {activeStep === "profile" && initialPayload && (
+            <ProfileStep
+              payload={initialPayload}
+              onNext={proceedToQuestionStep}
+              loading={profileLoading}
+              error={error}
+              initialProfile={activeProfile}
+              requiresConsent={consentInfo?.requires_consent ?? false}
+              consentText={consentInfo?.consent_text}
+              scrollToHistory={retakePrompt !== null}
+              retakeInfo={retakePrompt?.existingSubmission ?? null}
+              retakeProfile={retakePrompt?.profile ?? null}
+              onRetakeConfirm={handleRetakeConfirm}
+              onViewExistingResult={handleViewExistingResult}
+            />
+          )}
 
-        {step === "intro" && initialPayload && parts.length > 0 && (
-          <IntroStep
-            payload={initialPayload}
-            parts={parts}
-            profile={activeProfile}
-            onStart={() => setStep("question")}
-            onBack={() => setStep("profile")}
-          />
-        )}
+          {activeStep === "intro" && initialPayload && parts.length > 0 && (
+            <IntroStep
+              payload={initialPayload}
+              parts={parts}
+              profile={activeProfile}
+              onStart={() => setStep("question")}
+              onBack={() => setStep("profile")}
+            />
+          )}
 
-        {step === "question" && activeProfile && (
-          <QuestionStep
-            parts={parts}
-            onSubmit={handleSubmit}
-            submitting={submitting}
-            error={error}
-            testName={title}
-            userSummary={profileSummary(activeProfile)}
-          />
-        )}
+          {activeStep === "question" && activeProfile && (
+            <QuestionStep
+              parts={parts}
+              onSubmit={handleSubmit}
+              submitting={submitting}
+              error={error}
+              testName={title}
+              userSummary={profileSummary(activeProfile)}
+              saveStatusText={draftStatusText}
+              initialAnswers={activeDraft?.answers}
+              initialPartIndex={activeDraft?.current_part_index ?? 0}
+              initialPage={activeDraft?.current_page ?? 0}
+              onProgressChange={handleQuestionProgressChange}
+            />
+          )}
+        </div>
 
       </div>
 
       {modalProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f2a2c]/35 px-4 backdrop-blur-sm">
-          <section className="w-full max-w-md overflow-hidden rounded-2xl border border-[#dfe5e3] bg-white shadow-2xl">
+          <section className="assessment-modal-fit overflow-hidden rounded-2xl border border-[#dfe5e3] bg-white shadow-2xl">
             <div className="h-[3px] bg-[#175e63]" />
             <div className="p-6">
               <h2 className="text-lg font-semibold text-[#161d1b]">내담자 연결 확인</h2>
@@ -627,7 +730,7 @@ export function AssessmentPage() {
 
       {ambiguousProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f2a2c]/35 px-4 backdrop-blur-sm">
-          <section className="w-full max-w-md overflow-hidden rounded-2xl border border-[#dfe5e3] bg-white shadow-2xl">
+          <section className="assessment-modal-fit-wide overflow-hidden rounded-2xl border border-[#dfe5e3] bg-white shadow-2xl">
             <div className="h-[3px] bg-[#175e63]" />
             <div className="p-6">
               <h2 className="text-lg font-semibold text-[#161d1b]">내담자 확인</h2>

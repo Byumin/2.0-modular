@@ -13,6 +13,17 @@ class SubmitCustomAssessmentIn(BaseModel):
     candidate_client_ids: list[int] = Field(default_factory=list)
 
 
+class SaveAssessmentDraftIn(BaseModel):
+    profile: dict[str, Any] = Field(default_factory=dict)
+    answers: dict[str, str] = Field(default_factory=dict)
+    client_id: int
+    current_part_index: int = Field(default=0, ge=0)
+    current_page: int = Field(default=0, ge=0)
+    is_ambiguous_match: bool = False
+    responder_choice: Literal["existing", "new"] | None = None
+    candidate_client_ids: list[int] = Field(default_factory=list)
+
+
 class ValidateAssessmentProfileIn(BaseModel):
     profile: dict[str, Any] = Field(default_factory=dict)
     client_id: int | None = None

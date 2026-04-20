@@ -11,10 +11,13 @@ from app.repositories.assessment_repository import create_assessment_log
 from app.repositories.custom_test_repository import (
     create_access_link,
     create_submission,
+    delete_assessment_draft,
+    get_assessment_draft,
     get_latest_submission_by_client_and_test,
     get_active_access_link_by_admin_and_test,
     get_active_access_link_by_token,
     get_custom_test_by_id_and_admin,
+    upsert_assessment_draft,
 )
 from app.repositories.parent_test_repository import fetch_parent_item_bundle
 from app.schemas.values import normalize_gender_value
@@ -70,6 +73,75 @@ def _generate_submission_report_token(db: Session) -> str:
         if exists is None:
             return token
     raise HTTPException(status_code=500, detail="보고서 접근 토큰 생성에 실패했습니다.")
+
+
+def _sanitize_profile_value(value: Any) -> Any:
+    if value is None:
+        return ""
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, list):
+        return [str(v) for v in value if v is not None]
+    return str(value)
+
+
+def _clean_profile(profile: dict[str, Any] | None) -> dict[str, Any]:
+    return {str(k): _sanitize_profile_value(v) for k, v in (profile or {}).items()}
+
+
+def _valid_item_ids_for_profile(custom_test: AdminCustomTest, profile: dict[str, Any]) -> set[str]:
+    assessment_payload = build_custom_assessment_question_payload(custom_test, profile)
+    return {
+        str(item.get("id", "")).strip()
+        for item in assessment_payload["items"]
+        if str(item.get("id", "")).strip()
+    }
+
+
+def _clean_answers_for_items(answers: dict[str, Any] | None, valid_item_ids: set[str]) -> dict[str, str]:
+    cleaned_answers: dict[str, str] = {}
+    for item_id, value in (answers or {}).items():
+        key = str(item_id)
+        if key not in valid_item_ids:
+            continue
+        answer = str(value).strip()
+        if answer:
+            cleaned_answers[key] = answer
+    return cleaned_answers
+
+
+def _parse_json_object(raw: str | None) -> dict[str, Any]:
+    if not raw:
+        return {}
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _parse_json_list(raw: str | None) -> list[Any]:
+    if not raw:
+        return []
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    return value if isinstance(value, list) else []
+
+
+def _serialize_assessment_draft(row) -> dict[str, Any]:
+    return {
+        "client_id": row.admin_client_id,
+        "profile": _parse_json_object(row.profile_json),
+        "answers": _parse_json_object(row.answers_json),
+        "current_part_index": row.current_part_index,
+        "current_page": row.current_page,
+        "is_ambiguous_match": bool(row.is_ambiguous_match),
+        "responder_choice": row.responder_choice,
+        "candidate_client_ids": _parse_json_list(row.candidate_client_ids_json),
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
 
 
 def _validate_selected_client_matches_profile(client_row, profile: dict[str, Any]) -> None:
@@ -848,6 +920,12 @@ def validate_custom_test_profile_by_access_link(
 
     # client 확정 → 문항 payload 빌드
     assessment_payload = build_custom_assessment_question_payload(custom_test, profile or {})
+    draft = get_assessment_draft(
+        db,
+        admin_user_id=link.admin_user_id,
+        custom_test_id=custom_test.id,
+        client_id=client.id,
+    )
     return {
         "message": "배정된 내담자 확인이 완료되었습니다.",
         "client_id": client.id,
@@ -855,6 +933,7 @@ def validate_custom_test_profile_by_access_link(
         "responder_choice": responder_choice if is_ambiguous_match else None,
         "candidate_client_ids": [c.id for c in candidates] if is_ambiguous_match else [],
         "assessment_payload": assessment_payload,
+        "draft": _serialize_assessment_draft(draft) if draft is not None else None,
     }
 
 
@@ -890,6 +969,100 @@ def register_client_for_custom_test_by_access_link(
     }
 
 
+def get_assessment_draft_by_access_link(
+    db: Session,
+    access_token: str,
+    client_id: int,
+) -> dict:
+    link = get_active_access_link_by_token(db, access_token)
+    if link is None:
+        raise HTTPException(status_code=404, detail="유효하지 않은 검사 URL입니다.")
+
+    custom_test = get_custom_test_by_id_and_admin(
+        db,
+        custom_test_id=link.admin_custom_test_id,
+        admin_user_id=link.admin_user_id,
+    )
+    if custom_test is None:
+        raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
+
+    from app.repositories.client_repository import get_admin_client_by_id_and_admin, get_assignment_by_admin_client_and_test
+
+    client = get_admin_client_by_id_and_admin(db, client_id=client_id, admin_user_id=link.admin_user_id)
+    if client is None:
+        _raise_assessment_error(403, "내담자를 찾을 수 없습니다.")
+    assignment = get_assignment_by_admin_client_and_test(db, link.admin_user_id, client_id, custom_test.id)
+    if assignment is None:
+        _raise_assessment_error(403, "이 검사에 배정된 내담자가 아닙니다.")
+
+    draft = get_assessment_draft(
+        db,
+        admin_user_id=link.admin_user_id,
+        custom_test_id=custom_test.id,
+        client_id=client_id,
+    )
+    return {"draft": _serialize_assessment_draft(draft) if draft is not None else None}
+
+
+def save_assessment_draft_by_access_link(
+    db: Session,
+    access_token: str,
+    *,
+    profile: dict[str, Any],
+    answers: dict[str, str],
+    client_id: int,
+    current_part_index: int,
+    current_page: int,
+    is_ambiguous_match: bool = False,
+    responder_choice: str | None = None,
+    candidate_client_ids: list[int] | None = None,
+) -> dict:
+    link = get_active_access_link_by_token(db, access_token)
+    if link is None:
+        raise HTTPException(status_code=404, detail="유효하지 않은 검사 URL입니다.")
+
+    custom_test = get_custom_test_by_id_and_admin(
+        db,
+        custom_test_id=link.admin_custom_test_id,
+        admin_user_id=link.admin_user_id,
+    )
+    if custom_test is None:
+        raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
+
+    from app.repositories.client_repository import get_admin_client_by_id_and_admin, get_assignment_by_admin_client_and_test
+
+    client = get_admin_client_by_id_and_admin(db, client_id=client_id, admin_user_id=link.admin_user_id)
+    if client is None:
+        _raise_assessment_error(403, "내담자를 찾을 수 없습니다.")
+    assignment = get_assignment_by_admin_client_and_test(db, link.admin_user_id, client_id, custom_test.id)
+    if assignment is None:
+        _raise_assessment_error(403, "이 검사에 배정된 내담자가 아닙니다.")
+
+    clean_profile = _clean_profile(profile)
+    valid_item_ids = _valid_item_ids_for_profile(custom_test, clean_profile)
+    if not valid_item_ids:
+        raise HTTPException(status_code=400, detail="문항 데이터가 없습니다.")
+    cleaned_answers = _clean_answers_for_items(answers, valid_item_ids)
+    if responder_choice not in ("existing", "new"):
+        responder_choice = None
+
+    draft = upsert_assessment_draft(
+        db,
+        admin_user_id=link.admin_user_id,
+        custom_test_id=custom_test.id,
+        client_id=client_id,
+        access_token=access_token,
+        profile_json=json.dumps(clean_profile, ensure_ascii=False),
+        answers_json=json.dumps(cleaned_answers, ensure_ascii=False),
+        current_part_index=max(0, int(current_part_index)),
+        current_page=max(0, int(current_page)),
+        is_ambiguous_match=is_ambiguous_match,
+        responder_choice=responder_choice,
+        candidate_client_ids_json=json.dumps(candidate_client_ids or [], ensure_ascii=False),
+    )
+    return {"message": "임시저장되었습니다.", "draft": _serialize_assessment_draft(draft)}
+
+
 def submit_custom_test_by_access_link(
     db: Session,
     access_token: str,
@@ -915,16 +1088,7 @@ def submit_custom_test_by_access_link(
     if custom_test is None:
         raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
 
-    def sanitize_profile_value(value: Any) -> Any:
-        if value is None:
-            return ""
-        if isinstance(value, (str, int, float, bool)):
-            return value
-        if isinstance(value, list):
-            return [str(v) for v in value if v is not None]
-        return str(value)
-
-    clean_profile: dict[str, Any] = {str(k): sanitize_profile_value(v) for k, v in (profile or {}).items()}
+    clean_profile = _clean_profile(profile)
 
     assessment_payload = build_custom_assessment_question_payload(custom_test, clean_profile)
     valid_item_ids = {
@@ -935,12 +1099,7 @@ def submit_custom_test_by_access_link(
     if not valid_item_ids:
         raise HTTPException(status_code=400, detail="문항 데이터가 없습니다.")
 
-    cleaned_answers: dict[str, str] = {}
-    for item_id, value in (answers or {}).items():
-        key = str(item_id)
-        if key not in valid_item_ids:
-            continue
-        cleaned_answers[key] = str(value)
+    cleaned_answers = _clean_answers_for_items(answers, valid_item_ids)
 
     if len(cleaned_answers) != len(valid_item_ids):
         raise HTTPException(status_code=400, detail="모든 문항에 응답해주세요.")
@@ -1004,6 +1163,13 @@ def submit_custom_test_by_access_link(
         admin_user_id=link.admin_user_id,
         client_id=client.id,
         assessed_on=date.today(),
+    )
+
+    delete_assessment_draft(
+        db,
+        admin_user_id=link.admin_user_id,
+        custom_test_id=custom_test.id,
+        client_id=client.id,
     )
 
     if is_ambiguous_match and responder_choice in ("existing", "new"):

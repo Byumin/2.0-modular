@@ -337,6 +337,59 @@ def ensure_client_consent_record_table() -> None:
         )
 
 
+def ensure_admin_assessment_draft_table() -> None:
+    """수검자 검사 진행 중 서버 임시저장 테이블 생성."""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        if "admin_assessment_draft" not in tables:
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE admin_assessment_draft (
+                    id INTEGER PRIMARY KEY,
+                    admin_user_id INTEGER NOT NULL,
+                    admin_custom_test_id INTEGER NOT NULL,
+                    admin_client_id INTEGER NOT NULL,
+                    access_token VARCHAR(120) NOT NULL,
+                    profile_json TEXT NOT NULL DEFAULT '{}',
+                    answers_json TEXT NOT NULL DEFAULT '{}',
+                    current_part_index INTEGER NOT NULL DEFAULT 0,
+                    current_page INTEGER NOT NULL DEFAULT 0,
+                    is_ambiguous_match INTEGER NOT NULL DEFAULT 0,
+                    responder_choice VARCHAR(20),
+                    candidate_client_ids_json TEXT NOT NULL DEFAULT '[]',
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (admin_user_id, admin_custom_test_id, admin_client_id)
+                )
+                """
+            )
+        conn.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_admin_assessment_draft_admin_user_id
+            ON admin_assessment_draft (admin_user_id)
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_admin_assessment_draft_admin_custom_test_id
+            ON admin_assessment_draft (admin_custom_test_id)
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_admin_assessment_draft_admin_client_id
+            ON admin_assessment_draft (admin_client_id)
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS ix_admin_assessment_draft_access_token
+            ON admin_assessment_draft (access_token)
+            """
+        )
+
+
 def rotate_shared_submission_access_tokens() -> None:
     """기존 검사 링크 토큰을 공유하던 제출 결과 토큰을 제출별 토큰으로 회전한다."""
     inspector = inspect(engine)

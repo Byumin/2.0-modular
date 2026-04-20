@@ -8,143 +8,118 @@ interface Props {
   onBack: () => void
 }
 
-function profileSummary(profile: Profile) {
-  const entries = [
-    profile.name && profile.name,
-    profile.gender && (profile.gender === "male" ? "남성" : profile.gender === "female" ? "여성" : profile.gender),
-    profile.birth_day && profile.birth_day,
-    profile.school_age && profile.school_age,
-  ]
-  return entries.filter(Boolean).join(" · ")
-}
-
 const TIPS = [
-  "방해받지 않는 조용한 환경에서 혼자 응답하세요.",
-  "정답은 없습니다. 솔직하게 응답하는 것이 가장 좋습니다.",
-  "제출 후에는 수정이 어려우니 응답을 확인하고 제출하세요.",
+  "정답이나 오답이 없습니다. 평소 자신의 모습에 가장 가까운 응답을 선택하세요.",
+  "너무 오래 고민하지 마시고, 첫 번째 느낌으로 응답해주세요.",
+  "검사 도중 중단하더라도 응답은 자동 저장됩니다.",
+  "모든 문항에 응답해야 결과를 확인할 수 있습니다.",
 ]
 
-export function IntroStep({ payload, parts, profile, onStart, onBack }: Props) {
+function responseScaleLabel(parts: AssessmentPart[]) {
+  const options = parts.find((part) => part.response_options?.length)?.response_options ?? []
+  const scoredOptions = options.filter((option) => option.label !== "무응답")
+  if (!scoredOptions.length) return "응답 척도"
+  return `${scoredOptions.length}점 척도`
+}
+
+export function IntroStep({ payload, parts, onStart }: Props) {
   const testName = payload.custom_test_name || payload.display_name || "검사"
   const totalQuestions = parts.reduce((s, p) => s + (p.item_count ?? p.items?.length ?? 0), 0)
-  const multiPart = parts.length > 1
+  const estimatedMinutes = payload.estimated_time_minutes ? `약 ${payload.estimated_time_minutes}분` : "약 10-15분"
+  const scaleLabel = responseScaleLabel(parts)
 
   return (
-    <div className="w-full">
-      <div className="overflow-hidden rounded-2xl border border-[#dfe5e3] bg-white assessment-card">
-        <div className="h-[3px] bg-[#175e63]" />
+    <div
+      className="relative min-h-screen overflow-hidden text-white"
+      style={{ background: "linear-gradient(180deg, #0d3b3f 0%, #0f4a4e 52%, #124b4f 100%)" }}
+    >
+      <div className="h-[3px] bg-gradient-to-r from-[#175e63] via-[#5ce1e6] to-[#175e63]" />
 
-        <div className="px-8 py-8 sm:px-10 sm:py-10">
-          {/* 헤더 */}
-          <div className="mb-8">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#175e63]">
-              Inpsyt Assessment
-            </p>
-            <h1 className="mt-3 text-2xl font-bold tracking-tight text-[#161d1b] sm:text-3xl">
-              {testName}
-            </h1>
-            {payload.description && (
-              <p className="mt-2 text-sm leading-6 text-[#5f6f73]">{payload.description}</p>
-            )}
+      <header className="relative z-10 border-b border-white/10 bg-white/[0.04] backdrop-blur-md">
+        <div className="mx-auto flex max-w-[620px] items-center gap-3 px-4 py-4">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#175e63] text-sm font-bold text-white shadow-[0_12px_26px_rgba(0,0,0,0.22)]">
+            H
           </div>
-
-          <div className="grid gap-5 sm:grid-cols-2">
-            {/* 검사 구성 */}
-            <section className="rounded-xl border border-[#dfe5e3] bg-[#eef2f4]/60 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#175e63]">
-                검사 구성
-              </p>
-              <div className="mt-3 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-[#5f6f73]">총 문항 수</span>
-                  <span className="text-sm font-semibold text-[#161d1b]">{totalQuestions}문항</span>
-                </div>
-                {payload.estimated_time_minutes && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-[#5f6f73]">예상 소요 시간</span>
-                    <span className="text-sm font-semibold text-[#161d1b]">
-                      약 {payload.estimated_time_minutes}분
-                    </span>
-                  </div>
-                )}
-                {multiPart && (
-                  <div className="flex items-start justify-between gap-4">
-                    <span className="shrink-0 text-sm text-[#5f6f73]">파트 구성</span>
-                    <div className="flex flex-col items-end gap-1">
-                      {parts.map((part, i) => (
-                        <span key={i} className="text-sm font-medium text-[#161d1b]">
-                          {part.title}
-                          <span className="ml-1 text-xs text-[#5f6f73]">
-                            ({part.item_count ?? part.items?.length ?? 0}문항)
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* 응답 안내 */}
-            <section className="rounded-xl border border-[#dfe5e3] bg-[#eef2f4]/60 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#175e63]">
-                응답 안내
-              </p>
-              <ul className="mt-3 flex flex-col gap-2.5">
-                {TIPS.map((tip, i) => (
-                  <li key={i} className="flex items-start gap-2.5 text-sm leading-5 text-[#3a4a47]">
-                    <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-[#175e63]/10 text-[10px] font-bold text-[#175e63]">
-                      {i + 1}
-                    </span>
-                    {tip}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          </div>
-
-          {/* 수검자 정보 확인 */}
-          {profile && (
-            <div className="mt-5 flex items-center gap-3 rounded-lg border border-[#e4ebe9] bg-[#eef2f4]/40 px-4 py-3">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#175e63]/10">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#175e63" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5" aria-hidden="true">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6f73]">수검자</p>
-                <p className="mt-0.5 text-sm font-medium text-[#161d1b]">{profileSummary(profile)}</p>
-              </div>
-              <button
-                type="button"
-                onClick={onBack}
-                className="ml-auto shrink-0 text-xs text-[#175e63] underline underline-offset-2 hover:text-[#124b4f]"
-              >
-                수정
-              </button>
-            </div>
-          )}
-
-          {/* 버튼 */}
-          <div className="mt-8 flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={onBack}
-              className="h-11 rounded-lg border border-[#dfe5e3] bg-white px-5 text-sm font-medium text-[#3a4a47] transition-colors hover:bg-[#f3f5f4]"
-            >
-              뒤로
-            </button>
-            <button
-              type="button"
-              onClick={onStart}
-              className="h-11 flex-1 rounded-lg bg-[#175e63] px-6 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#124b4f] sm:flex-none sm:min-w-[180px]"
-            >
-              검사 시작하기
-            </button>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#5ce1e6]/85">Inpsyt Assessment</p>
+            <p className="truncate text-sm font-semibold text-white/90">{testName}</p>
           </div>
         </div>
-      </div>
+      </header>
+
+      <div className="assessment-intro-blob assessment-intro-blob-1" data-intro-blob="1" />
+      <div className="assessment-intro-blob assessment-intro-blob-2" data-intro-blob="2" />
+      <div className="assessment-intro-blob assessment-intro-blob-3" data-intro-blob="3" />
+
+      <main className="relative z-10 mx-auto flex w-full max-w-[620px] flex-col px-4 pb-10 pt-11 sm:pt-12">
+        <section className="rounded-[22px] border border-white/[0.18] bg-white/[0.12] px-8 py-8 shadow-[0_18px_55px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl sm:px-9 sm:py-9">
+          <div className="flex items-center gap-3 text-[12px] font-semibold tracking-[0.18em] text-[#5ce1e6]/85">
+            <span className="h-px w-7 bg-[#5ce1e6]/40" />
+            검사 안내
+          </div>
+          <h1 className="mt-6 text-[26px] font-bold leading-tight tracking-tight text-white">
+            검사 안내
+          </h1>
+          <p className="mt-6 max-w-[500px] text-sm leading-7 text-white/62">
+            본 검사는 심리적 특성과 행동 패턴을 파악하기 위한 표준화된 도구입니다. 솔직하게 응답해주시면 더 정확한 결과를 얻을 수 있습니다.
+          </p>
+
+          <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-white/55">
+            <span className="flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#5ce1e6" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="size-3.5" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              {estimatedMinutes}
+            </span>
+            <span className="h-3 w-px bg-white/15" />
+            <span className="flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#5ce1e6" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="size-3.5" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              총 {totalQuestions}문항 · {scaleLabel}
+            </span>
+            <span className="h-3 w-px bg-white/15" />
+            <span className="flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#5ce1e6" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="size-3.5" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="10" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              응답 정보 보호
+            </span>
+          </div>
+        </section>
+
+        <section className="mt-9 rounded-lg border border-white/[0.18] bg-white/[0.12] px-8 py-7 shadow-[0_18px_55px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl sm:px-9">
+          <h2 className="text-base font-bold text-white">검사 안내사항</h2>
+          <ul className="mt-5 space-y-3.5">
+            {TIPS.map((tip, i) => (
+              <li key={i} className="flex items-start gap-3">
+                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-[#5ce1e6]/15 text-[10px] font-bold text-[#5ce1e6]">
+                  {i + 1}
+                </span>
+                <span className="text-sm leading-6 text-white/62">{tip}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <button
+          type="button"
+          onClick={onStart}
+          className="mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#175e63] to-[#1e8a8a] text-base font-semibold text-white shadow-[0_16px_28px_rgba(0,0,0,0.26)] transition-all hover:shadow-[0_18px_34px_rgba(92,225,230,0.16)] active:scale-[0.99]"
+        >
+          검사 시작하기
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4" aria-hidden="true">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      </main>
+
+      <footer className="relative z-10 pb-5 text-center text-xs text-white/35">
+        © 2026 Inpsyt. All rights reserved.
+      </footer>
     </div>
   )
 }

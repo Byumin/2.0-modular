@@ -518,7 +518,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
           onClick={() => setPrivacyModalOpen(false)}
         >
           <div
-            className="w-full max-w-lg rounded-2xl bg-white shadow-2xl"
+            className="assessment-modal-fit-wide rounded-2xl bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[#edf0ef] px-6 py-4">
@@ -561,7 +561,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
           onClick={() => setRetakeConfirmOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-white shadow-2xl"
+            className="assessment-modal-fit rounded-2xl bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-5">

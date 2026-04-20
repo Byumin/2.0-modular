@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import (
     AdminAssessmentLog,
+    AdminAssessmentDraft,
     AdminClientAssignment,
     AdminCustomTest,
     AdminCustomTestAccessLink,
@@ -219,6 +220,89 @@ def create_submission(
     db.commit()
     db.refresh(row)
     return row
+
+
+def get_assessment_draft(
+    db: Session,
+    *,
+    admin_user_id: int,
+    custom_test_id: int,
+    client_id: int,
+) -> AdminAssessmentDraft | None:
+    return (
+        db.query(AdminAssessmentDraft)
+        .filter(
+            AdminAssessmentDraft.admin_user_id == admin_user_id,
+            AdminAssessmentDraft.admin_custom_test_id == custom_test_id,
+            AdminAssessmentDraft.admin_client_id == client_id,
+        )
+        .first()
+    )
+
+
+def upsert_assessment_draft(
+    db: Session,
+    *,
+    admin_user_id: int,
+    custom_test_id: int,
+    client_id: int,
+    access_token: str,
+    profile_json: str,
+    answers_json: str,
+    current_part_index: int,
+    current_page: int,
+    is_ambiguous_match: bool,
+    responder_choice: str | None,
+    candidate_client_ids_json: str,
+) -> AdminAssessmentDraft:
+    row = get_assessment_draft(
+        db,
+        admin_user_id=admin_user_id,
+        custom_test_id=custom_test_id,
+        client_id=client_id,
+    )
+    if row is None:
+        row = AdminAssessmentDraft(
+            admin_user_id=admin_user_id,
+            admin_custom_test_id=custom_test_id,
+            admin_client_id=client_id,
+            access_token=access_token,
+            profile_json=profile_json,
+            answers_json=answers_json,
+            current_part_index=current_part_index,
+            current_page=current_page,
+            is_ambiguous_match=is_ambiguous_match,
+            responder_choice=responder_choice,
+            candidate_client_ids_json=candidate_client_ids_json,
+        )
+        db.add(row)
+    else:
+        row.access_token = access_token
+        row.profile_json = profile_json
+        row.answers_json = answers_json
+        row.current_part_index = current_part_index
+        row.current_page = current_page
+        row.is_ambiguous_match = is_ambiguous_match
+        row.responder_choice = responder_choice
+        row.candidate_client_ids_json = candidate_client_ids_json
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def delete_assessment_draft(
+    db: Session,
+    *,
+    admin_user_id: int,
+    custom_test_id: int,
+    client_id: int,
+) -> None:
+    db.query(AdminAssessmentDraft).filter(
+        AdminAssessmentDraft.admin_user_id == admin_user_id,
+        AdminAssessmentDraft.admin_custom_test_id == custom_test_id,
+        AdminAssessmentDraft.admin_client_id == client_id,
+    ).delete()
+    db.commit()
 
 
 def create_submission_scoring_result(

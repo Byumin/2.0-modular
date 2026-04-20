@@ -84,22 +84,39 @@ interface Props {
   error: string
   testName?: string
   userSummary?: string
+  saveStatusText?: string
+  initialAnswers?: AnswerState
+  initialPartIndex?: number
+  initialPage?: number
+  onProgressChange?: (state: { answers: AnswerState; currentPartIndex: number; currentPage: number }) => void
 }
 
-export function QuestionStep({ parts, onSubmit, submitting, error, testName = "검사 실시", userSummary }: Props) {
-  const [partIndex, setPartIndex] = React.useState(0)
-  const [page, setPage] = React.useState(0)
-  const [answers, setAnswers] = React.useState<AnswerState>({})
+export function QuestionStep({
+  parts,
+  onSubmit,
+  submitting,
+  error,
+  testName = "검사 실시",
+  userSummary,
+  saveStatusText,
+  initialAnswers,
+  initialPartIndex = 0,
+  initialPage = 0,
+  onProgressChange,
+}: Props) {
+  const safeInitialPartIndex = Math.min(Math.max(initialPartIndex, 0), Math.max(parts.length - 1, 0))
+  const [partIndex, setPartIndex] = React.useState(safeInitialPartIndex)
+  const [page, setPage] = React.useState(Math.max(initialPage, 0))
+  const [answers, setAnswers] = React.useState<AnswerState>(() => initialAnswers ?? {})
   const [showMissingHighlight, setShowMissingHighlight] = React.useState(false)
   const [viewMode, setViewMode] = React.useState<ViewMode>("cards")
   const questionAreaRef = React.useRef<HTMLDivElement | null>(null)
   const pendingScrollRef = React.useRef<"first" | string | null>("first")
-  const answersRef = React.useRef<AnswerState>({})
-  const partIndexRef = React.useRef(0)
-  const pageRef = React.useRef(0)
+  const answersRef = React.useRef<AnswerState>(initialAnswers ?? {})
+  const partIndexRef = React.useRef(safeInitialPartIndex)
+  const pageRef = React.useRef(Math.max(initialPage, 0))
 
   const activePart = parts[partIndex] ?? parts[0]
-  const items = React.useMemo(() => activePart?.items ?? [], [activePart])
   const options: ResponseOption[] = activePart?.response_options ?? []
 
   const partBundles = React.useMemo(
@@ -121,6 +138,15 @@ export function QuestionStep({ parts, onSubmit, submitting, error, testName = "�
   React.useEffect(() => { answersRef.current = answers }, [answers])
   React.useEffect(() => { partIndexRef.current = partIndex }, [partIndex])
   React.useEffect(() => { pageRef.current = page }, [page])
+  React.useEffect(() => {
+    if (bundles.length === 0 || page < bundles.length) return
+    const nextPage = Math.max(bundles.length - 1, 0)
+    pageRef.current = nextPage
+    setPage(nextPage)
+  }, [bundles.length, page])
+  React.useEffect(() => {
+    onProgressChange?.({ answers, currentPartIndex: partIndex, currentPage: page })
+  }, [answers, partIndex, page, onProgressChange])
 
   function answered(id: string) { return Boolean(answers[id]?.trim()) }
   function itemOptions(item: QuestionItem) {
@@ -428,6 +454,7 @@ export function QuestionStep({ parts, onSubmit, submitting, error, testName = "�
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {saveStatusText && <span className="hidden text-xs text-[#6d7d79] sm:inline">{saveStatusText}</span>}
             <span className="text-xs text-[#8a9a96]">{done}/{total} 응답</span>
             <button
               type="button"
@@ -624,6 +651,8 @@ export function QuestionStep({ parts, onSubmit, submitting, error, testName = "�
               {userSummary && <p className="text-[11px] text-[#8a9a96]">{userSummary} · {activePart?.title}</p>}
             </div>
           </div>
+
+          {saveStatusText && <p className="ml-auto text-[11px] text-[#6d7d79] sm:hidden">{saveStatusText}</p>}
 
           {/* Right: stepper */}
           <nav className="ml-auto hidden items-center gap-1 sm:flex" aria-label="검사 단계">

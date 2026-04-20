@@ -141,6 +141,38 @@ class AdminCustomTestSubmission(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class AdminAssessmentDraft(Base):
+    __tablename__ = "admin_assessment_draft"
+    __table_args__ = (
+        UniqueConstraint(
+            "admin_user_id",
+            "admin_custom_test_id",
+            "admin_client_id",
+            name="uq_admin_assessment_draft_client_test",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_user_id: Mapped[int] = mapped_column(ForeignKey("admin_user.id"), nullable=False, index=True)
+    admin_custom_test_id: Mapped[int] = mapped_column(ForeignKey("child_test.id"), nullable=False, index=True)
+    admin_client_id: Mapped[int] = mapped_column(ForeignKey("admin_client.id"), nullable=False, index=True)
+    access_token: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    profile_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    answers_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    current_part_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    current_page: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_ambiguous_match: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    responder_choice: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    candidate_client_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class AdminClientIdentityReview(Base):
     """애매 매칭 케이스에서 수검자 선택을 기록하고 관리자 사후 검토를 처리하는 테이블."""
     __tablename__ = "admin_client_identity_review"
