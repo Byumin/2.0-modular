@@ -361,15 +361,17 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
 
   return (
     <div className="grid w-full gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(250px,280px)]">
-      <section className="min-w-0 rounded-xl bg-white shadow-sm">
-        <div className="border-b px-4 py-3">
-          <p className="text-sm font-semibold text-foreground">{activePart?.title || "파트"}</p>
+      <section className="min-w-0 overflow-hidden rounded-xl border border-[#dfe5e3] bg-white assessment-card">
+        <div className="h-[2px] bg-[#175e63]/70" />
+        <div className="border-b border-[#edf0ef] px-5 py-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#175e63]">검사 파트</p>
+          <p className="mt-1 text-sm font-semibold text-[#161d1b]">{activePart?.title || "파트"}</p>
         </div>
-        <div ref={questionAreaRef} className="flex flex-col gap-3 p-4">
+        <div ref={questionAreaRef} className="flex flex-col gap-3 p-5">
           {viewMode === "step" && (
-            <div className="flex flex-col gap-1 rounded-lg border-l-4 border-primary bg-[#f5f7fa] px-4 py-3">
-              <p className="text-xs font-semibold text-muted-foreground">집중형 보기</p>
-              <h3 className="text-lg font-semibold">
+            <div className="flex flex-col gap-1 rounded-lg border border-[#dfe5e3] border-l-4 border-l-[#175e63] bg-[#eef2f4]/60 px-4 py-3">
+              <p className="text-xs font-semibold text-[#175e63]">집중형 보기</p>
+              <h3 className="text-lg font-semibold text-[#161d1b]">
                 {currentBundle.startIndex + 1} / {items.length}
               </h3>
               <p className="text-xs text-muted-foreground">한 문항에 집중해서 응답한 뒤 다음 문항으로 이동할 수 있습니다.</p>
@@ -417,14 +419,14 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
       </section>
 
       <aside className="h-fit lg:sticky lg:top-4">
-        <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-[#dfe5e3] bg-white assessment-card">
           {/* 진행 현황 */}
-          <div className="px-4 py-3">
-            <p className="text-xs font-medium text-muted-foreground">진행 현황</p>
-            <p className="mt-1 text-lg font-bold text-foreground">{done} / {total} 문항</p>
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-border">
+          <div className="px-4 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#175e63]">진행 현황</p>
+            <p className="mt-1.5 text-lg font-bold text-[#161d1b]">{done} <span className="text-sm font-medium text-muted-foreground">/ {total} 문항</span></p>
+            <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-[#eef2f4]">
               <div
-                className="h-full rounded-full bg-primary transition-all duration-300"
+                className="h-full rounded-full bg-[#175e63] transition-all duration-300"
                 style={{ width: `${percent}%` }}
               />
             </div>
@@ -434,13 +436,13 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
           </div>
 
           {/* 상태 */}
-          <div className="border-t px-4 py-3">
+          <div className="border-t border-[#edf0ef] px-4 py-3">
             <button
               type="button"
               onClick={() => setShowMissingHighlight(true)}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
                 allAnswered()
-                  ? "border-green-200 bg-green-50 text-green-700"
+                  ? "border-[#cfe4d3] bg-[#eaf3eb] text-[#3f6a44]"
                   : "border-amber-200 bg-amber-50 text-amber-700"
               }`}
             >
@@ -453,8 +455,8 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
 
           {/* 파트 이동 */}
           {parts.length > 1 && (
-            <div className="border-t px-4 py-3">
-              <p className="mb-2 text-xs font-medium text-muted-foreground">파트 이동</p>
+            <div className="border-t border-[#edf0ef] px-4 py-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">파트 이동</p>
               <div className="flex flex-wrap gap-1.5">
                 {parts.map((part, pi) => (
                   <button
@@ -463,10 +465,10 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
                     onClick={() => { setPartIndex(pi); setPage(0); setShowMissingHighlight(false) }}
                     className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors ${
                       pi === partIndex
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-[#175e63] text-white"
                         : partAllAnswered(pi)
-                          ? "bg-green-50 text-green-700"
-                          : "bg-[#f5f7fa] text-muted-foreground hover:bg-border"
+                          ? "bg-[#eaf3eb] text-[#3f6a44]"
+                          : "bg-[#eef2f4] text-[#3a4a47] hover:bg-[#dfe6e6]"
                     }`}
                   >
                     {part.title} ({(part.items ?? []).filter(i => answered(i.id)).length}/{part.items?.length ?? 0})
@@ -477,14 +479,14 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
           )}
 
           {/* 문항 이동 */}
-          <div className="border-t px-4 py-3">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">문항 이동</p>
+          <div className="border-t border-[#edf0ef] px-4 py-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">문항 이동</p>
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
               <button
                 type="button"
                 onClick={handlePrev}
                 disabled={isFirstPage}
-                className="h-9 rounded-lg border border-input bg-background px-3 text-sm font-medium transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-40"
+                className="h-9 rounded-lg border border-[#dfe5e3] bg-white px-3 text-sm font-medium text-[#3a4a47] transition-colors hover:bg-[#f3f5f4] disabled:pointer-events-none disabled:opacity-40"
               >
                 {page === 0 && partIndex > 0 ? "이전 파트" : "이전 문항"}
               </button>
@@ -492,7 +494,7 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
                 type="button"
                 onClick={handleNext}
                 disabled={isLastPage && isLastPart}
-                className="h-9 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-40"
+                className="h-9 rounded-lg bg-[#175e63] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#124b4f] disabled:pointer-events-none disabled:opacity-40"
               >
                 {isLastPage && !isLastPart ? "다음 파트" : "다음 문항"}
               </button>
@@ -500,32 +502,32 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
           </div>
 
           {/* 응답 방식 */}
-          <div className="border-t px-4 py-3">
-            <p className="mb-2 text-xs font-medium text-muted-foreground">응답 방식</p>
-            <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#f5f7fa] p-1">
+          <div className="border-t border-[#edf0ef] px-4 py-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">응답 방식</p>
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#eef2f4] p-1">
               <button
                 type="button"
                 onClick={() => handleViewModeChange("cards")}
-                className={`h-8 rounded-md text-xs font-semibold transition-colors ${viewMode === "cards" ? "bg-white text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                className={`h-8 rounded-md text-xs font-semibold transition-colors ${viewMode === "cards" ? "bg-white text-[#175e63] shadow-sm" : "text-muted-foreground hover:text-[#161d1b]"}`}
               >
                 카드형
               </button>
               <button
                 type="button"
                 onClick={() => handleViewModeChange("step")}
-                className={`h-8 rounded-md text-xs font-semibold transition-colors ${viewMode === "step" ? "bg-white text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                className={`h-8 rounded-md text-xs font-semibold transition-colors ${viewMode === "step" ? "bg-white text-[#175e63] shadow-sm" : "text-muted-foreground hover:text-[#161d1b]"}`}
               >
                 집중형
               </button>
             </div>
           </div>
           {/* 최종 제출 */}
-          <div className="border-t px-4 py-3">
+          <div className="border-t border-[#edf0ef] px-4 py-4">
             <button
               type="button"
               onClick={handleSubmitClick}
               disabled={submitting || !allAnswered()}
-              className="h-11 w-full rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+              className="h-11 w-full rounded-lg bg-[#175e63] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#124b4f] disabled:pointer-events-none disabled:opacity-50"
             >
               {submitting ? "제출 중..." : "제출"}
             </button>

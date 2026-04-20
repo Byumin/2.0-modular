@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useParams } from "react-router-dom"
 import { ProfileStep } from "./steps/ProfileStep"
+import { IntroStep } from "./steps/IntroStep"
 import { QuestionStep } from "./steps/QuestionStep"
 import { CompleteStep } from "./steps/CompleteStep"
 import {
@@ -267,7 +268,7 @@ export function AssessmentPage() {
       } else {
         setAmbiguousMatchContext(null)
       }
-      setStep("question")
+      setStep("intro")
     } catch (err) {
       const apiError = err as ApiError
       if (apiError.code === AUTO_CREATE_CONFIRM_REQUIRED_CODE) {
@@ -447,6 +448,10 @@ export function AssessmentPage() {
       label: "인적사항",
       helper: "검사 대상 확인과 결과 연결에 필요한 정보를 입력합니다.",
     },
+    intro: {
+      label: "검사 안내",
+      helper: "검사 방법과 구성을 확인한 뒤 시작하세요.",
+    },
     question: {
       label: "검사 실시",
       helper: "문항을 읽고 가장 가까운 응답을 선택해주세요.",
@@ -456,12 +461,16 @@ export function AssessmentPage() {
       helper: "응답 저장이 완료되었습니다.",
     },
   }
-  const shellWidthClass = step === "profile" ? "w-full max-w-none" : step === "question" ? "w-full max-w-7xl" : "w-full max-w-5xl"
+  const shellWidthClass =
+    step === "profile" ? "w-full max-w-none"
+    : step === "question" ? "w-full max-w-7xl"
+    : step === "intro" ? "w-full max-w-3xl"
+    : "w-full max-w-5xl"
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#f5f7fa] px-4 py-10">
-        <div className="mx-auto max-w-[500px] rounded-xl bg-white p-6 text-center text-sm text-muted-foreground shadow-sm">
+      <main className="hero-tint min-h-screen bg-[#eef2f4] px-4 py-10">
+        <div className="mx-auto max-w-[500px] rounded-xl bg-white p-6 text-center text-sm text-muted-foreground assessment-card">
           검사 정보를 불러오는 중입니다.
         </div>
       </main>
@@ -470,8 +479,8 @@ export function AssessmentPage() {
 
   if (!initialPayload && step !== "complete") {
     return (
-      <main className="min-h-screen bg-[#f5f7fa] px-4 py-10">
-        <div className="mx-auto max-w-[500px] rounded-xl bg-white p-6 text-center text-sm text-destructive shadow-sm">
+      <main className="hero-tint min-h-screen bg-[#eef2f4] px-4 py-10">
+        <div className="mx-auto max-w-[500px] rounded-xl bg-white p-6 text-center text-sm text-destructive assessment-card">
           {error || "검사 정보를 불러오지 못했습니다."}
         </div>
       </main>
@@ -483,10 +492,10 @@ export function AssessmentPage() {
   }
 
   return (
-    <main className={step === "profile" ? "min-h-screen bg-[#f4f6f5]" : "min-h-screen bg-[#f5f7fa] px-4 py-6 sm:py-8"}>
-      <div className={`mx-auto flex ${shellWidthClass} flex-col gap-4`}>
+    <main className={step === "profile" ? "min-h-screen bg-[#f4f6f5]" : "hero-tint min-h-screen bg-[#eef2f4] px-4 py-6 sm:py-8"}>
+      <div className={`relative mx-auto flex ${shellWidthClass} flex-col gap-4`}>
         {step !== "profile" && (
-          <header className="overflow-hidden rounded-xl border border-[#d8e3df] bg-white shadow-sm">
+          <header className="overflow-hidden rounded-xl border border-[#d8e3df] bg-white assessment-card">
             <div className="h-[3px] bg-[#175e63]" />
             <div className="flex flex-col gap-4 px-5 py-4 sm:px-6 sm:py-5 md:flex-row md:items-start md:justify-between">
               <div className="min-w-0">
@@ -500,10 +509,13 @@ export function AssessmentPage() {
                 )}
               </div>
               <nav className="flex shrink-0 items-center gap-1.5 pt-0.5" aria-label="검사 단계">
-                {(["profile", "question", "complete"] as AssessmentStep[]).map((itemStep, index) => {
+                {(["profile", "intro", "question", "complete"] as AssessmentStep[]).map((itemStep, index) => {
                   const isCurrent = itemStep === step
-                  const isPast = step === "question" && itemStep === "profile"
-                  const isLast = index === 2
+                  const isPast =
+                    (step === "intro" && itemStep === "profile") ||
+                    (step === "question" && (itemStep === "profile" || itemStep === "intro")) ||
+                    (step === "complete" && itemStep !== "complete")
+                  const isLast = index === 3
                   return (
                     <React.Fragment key={itemStep}>
                       <div className="flex items-center gap-1">
@@ -555,6 +567,16 @@ export function AssessmentPage() {
           />
         )}
 
+        {step === "intro" && initialPayload && parts.length > 0 && (
+          <IntroStep
+            payload={initialPayload}
+            parts={parts}
+            profile={activeProfile}
+            onStart={() => setStep("question")}
+            onBack={() => setStep("profile")}
+          />
+        )}
+
         {step === "question" && activeProfile && (
           <QuestionStep
             parts={parts}
@@ -567,22 +589,22 @@ export function AssessmentPage() {
       </div>
 
       {modalProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <section className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl">
-            <div className="h-1 bg-[#1F4E79]" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f2a2c]/35 px-4 backdrop-blur-sm">
+          <section className="w-full max-w-md overflow-hidden rounded-2xl border border-[#dfe5e3] bg-white shadow-2xl">
+            <div className="h-[3px] bg-[#175e63]" />
             <div className="p-6">
-              <h2 className="text-lg font-semibold">내담자 연결 확인</h2>
+              <h2 className="text-lg font-semibold text-[#161d1b]">내담자 연결 확인</h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 기존 내담자를 재사용하거나 신규 내담자로 등록해 현재 검사에 연결합니다.
               </p>
-              <p className="mt-4 rounded-lg bg-[#f5f7fa] p-3 text-sm">{profileSummary(modalProfile)}</p>
+              <p className="mt-4 rounded-lg border border-[#e4ebe9] bg-[#eef2f4]/60 p-3 text-sm text-[#3a4a47]">{profileSummary(modalProfile)}</p>
               {error && <p className="mt-3 text-sm text-muted-foreground">{error}</p>}
               <div className="mt-6 flex justify-end gap-2">
                 <button
                   type="button"
                   disabled={registering}
                   onClick={() => setModalProfile(null)}
-                  className="h-10 rounded-lg border border-input bg-background px-4 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-50"
+                  className="h-10 rounded-lg border border-[#dfe5e3] bg-white px-4 text-sm font-medium text-[#3a4a47] transition-colors hover:bg-[#f3f5f4] disabled:opacity-50"
                 >
                   취소
                 </button>
@@ -590,7 +612,7 @@ export function AssessmentPage() {
                   type="button"
                   disabled={registering}
                   onClick={handleRegisterClient}
-                  className="h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                  className="h-10 rounded-lg bg-[#175e63] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#124b4f] disabled:opacity-50"
                 >
                   {registering ? "등록 중..." : "예"}
                 </button>
@@ -601,11 +623,11 @@ export function AssessmentPage() {
       )}
 
       {ambiguousProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <section className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl">
-            <div className="h-1 bg-[#1F4E79]" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f2a2c]/35 px-4 backdrop-blur-sm">
+          <section className="w-full max-w-md overflow-hidden rounded-2xl border border-[#dfe5e3] bg-white shadow-2xl">
+            <div className="h-[3px] bg-[#175e63]" />
             <div className="p-6">
-              <h2 className="text-lg font-semibold">내담자 확인</h2>
+              <h2 className="text-lg font-semibold text-[#161d1b]">내담자 확인</h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 입력하신 인적정보와 일치하는 내담자가 여러 명 있습니다. 본인에 해당하는 내담자를 선택하거나 신규 등록을 진행해주세요.
               </p>
@@ -616,9 +638,9 @@ export function AssessmentPage() {
                     type="button"
                     disabled={ambiguousResolving}
                     onClick={() => handleAmbiguousSelect({ type: "existing", clientId: c.id })}
-                    className="flex w-full items-center justify-between rounded-lg border border-input bg-background px-4 py-3 text-sm transition-colors hover:bg-accent disabled:opacity-50"
+                    className="flex w-full items-center justify-between rounded-lg border border-[#dfe5e3] bg-white px-4 py-3 text-sm transition-colors hover:border-[#175e63]/40 hover:bg-[#eef2f4]/60 disabled:opacity-50"
                   >
-                    <span className="font-medium">{c.name}</span>
+                    <span className="font-medium text-[#161d1b]">{c.name}</span>
                     <span className="text-muted-foreground">
                       {c.gender === "male" ? "남" : c.gender === "female" ? "여" : c.gender}
                       {c.birth_day ? ` · ${c.birth_day}` : ""}
@@ -632,7 +654,7 @@ export function AssessmentPage() {
                   type="button"
                   disabled={ambiguousResolving}
                   onClick={() => { setAmbiguousProfile(null); setAmbiguousCandidates([]) }}
-                  className="h-10 rounded-lg border border-input bg-background px-4 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-50"
+                  className="h-10 rounded-lg border border-[#dfe5e3] bg-white px-4 text-sm font-medium text-[#3a4a47] transition-colors hover:bg-[#f3f5f4] disabled:opacity-50"
                 >
                   취소
                 </button>
@@ -640,7 +662,7 @@ export function AssessmentPage() {
                   type="button"
                   disabled={ambiguousResolving}
                   onClick={() => handleAmbiguousSelect({ type: "new" })}
-                  className="h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                  className="h-10 rounded-lg bg-[#175e63] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#124b4f] disabled:opacity-50"
                 >
                   {ambiguousResolving ? "처리 중..." : "신규 내담자로 등록"}
                 </button>

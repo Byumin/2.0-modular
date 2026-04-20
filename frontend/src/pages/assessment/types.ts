@@ -36,6 +36,8 @@ export interface AdditionalProfileField {
 export interface InitialPayload {
   custom_test_name: string
   display_name?: string
+  description?: string
+  estimated_time_minutes?: number
   client_intake_mode: string
   required_profile_fields: string[]
   additional_profile_fields: Array<AdditionalProfileField | string>
@@ -59,7 +61,7 @@ export interface Profile {
 
 export type AnswerState = Record<string, string>
 
-export type AssessmentStep = 'consent' | 'profile' | 'question' | 'complete'
+export type AssessmentStep = 'consent' | 'profile' | 'intro' | 'question' | 'complete'
 
 export const QUESTION_PAGE_SIZE = 5
 export const AUTO_CREATE_CONFIRM_REQUIRED_CODE = 'AUTO_CREATE_CONFIRM_REQUIRED'
