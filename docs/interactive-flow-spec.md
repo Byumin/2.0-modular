@@ -25,7 +25,7 @@
 4. 사람이 클릭하며 볼 수 있는 인터랙션 웹 산출물을 만든다.
 5. 필요하면 텍스트 요약은 보조로만 붙인다.
 
-실제 작업 순서와 검증 체크리스트는 [playbook.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/playbook.md)에서 본다.
+실제 작업 순서와 검증 체크리스트는 [playbook.md](code-cleanup/playbook.md)에서 본다.
 
 ## Output Location
 
@@ -124,9 +124,9 @@
 ## Document Roles
 
 - 이 문서는 `무엇을 만족해야 하는지`를 정한다.
-- 실제 작업 절차와 실패 조건은 [playbook.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/playbook.md)에서 관리한다.
-- 시작용 골격은 [interactive-flow-template.html](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/templates/interactive-flow-template.html)에서 본다.
-- 코드 정리 문서군 전체 지도는 [docs/code-cleanup/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/README.md)에서 본다.
+- 실제 작업 절차와 실패 조건은 [playbook.md](code-cleanup/playbook.md)에서 관리한다.
+- 시작용 골격은 [interactive-flow-template.html](code-cleanup/templates/interactive-flow-template.html)에서 본다.
+- 코드 정리 문서군 전체 지도는 [docs/code-cleanup/README.md](code-cleanup/README.md)에서 본다.
 
 ## Scope Guidance
 
@@ -144,11 +144,11 @@
 
 ## Related Documents
 
-- [AGENTS.md](/mnt/c/Users/user/workspace/2.0-modular/AGENTS.md)
-- [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
-- [code-cleanup/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/README.md)
-- [playbook.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/playbook.md)
-- [interactive-flow-template.html](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/templates/interactive-flow-template.html)
-- [admin-login-session-flow.html](/mnt/c/Users/user/workspace/2.0-modular/artifacts/interactive-flows/admin-login-session-flow.html)
-- [docs/debug/explanation-rule.md](/mnt/c/Users/user/workspace/2.0-modular/docs/debug/explanation-rule.md)
-- [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)
+- [AGENTS.md](../AGENTS.md)
+- [Documentation Hub](README.md)
+- [code-cleanup/README.md](code-cleanup/README.md)
+- [playbook.md](code-cleanup/playbook.md)
+- [interactive-flow-template.html](code-cleanup/templates/interactive-flow-template.html)
+- [admin-login-session-flow.html](../artifacts/interactive-flows/admin-login-session-flow.html)
+- [docs/debug/explanation-rule.md](debug/explanation-rule.md)
+- [ARCHITECTURE.md](../ARCHITECTURE.md)

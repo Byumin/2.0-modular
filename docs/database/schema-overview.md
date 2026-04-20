@@ -25,6 +25,7 @@
   - `client_intake_mode`
   - `selected_scales_json`
   - `additional_profile_fields_json`
+  - `requires_consent`
   - `created_at`
 
 ### `admin_client`
@@ -35,10 +36,46 @@
   - `name`
   - `gender`
   - `birth_day`
+  - `phone`
+  - `address`
+  - `is_closed`
+  - `tags_json`
   - `memo`
   - `created_source`
   - `created_at`
   - `updated_at`
+
+### `admin_client_group`
+- 내담자 그룹 정보
+- 코드 모델명: `AdminClientGroup`
+- 주요 필드:
+  - `id`
+  - `admin_user_id`
+  - `name`
+  - `color`
+  - `created_at`
+
+### `admin_client_group_member`
+- 내담자와 그룹의 연결 테이블
+- 코드 모델명: `AdminClientGroupMember`
+- 주요 필드:
+  - `id`
+  - `group_id`
+  - `client_id`
+  - `created_at`
+- 주요 제약:
+  - `(group_id, client_id)` unique
+
+### `admin_client_report`
+- 내담자별 리포트 섹션 저장
+- 코드 모델명: `AdminClientReport`
+- 주요 필드:
+  - `id`
+  - `admin_user_id`
+  - `client_id`
+  - `sections_json`
+  - `updated_at`
+  - `created_at`
 
 ### `admin_assessment_log`
 - 평가 이력 로그
@@ -82,6 +119,25 @@
   - `answers_json`
   - `created_at`
 
+### `admin_client_identity_review`
+- 애매 매칭 케이스에서 수검자 선택과 관리자 사후 검토를 기록한다.
+- 코드 모델명: `AdminClientIdentityReview`
+- 주요 필드:
+  - `id`
+  - `admin_user_id`
+  - `admin_custom_test_id`
+  - `submission_id`
+  - `access_token`
+  - `input_profile_json`
+  - `candidate_client_ids_json`
+  - `responder_choice`
+  - `chosen_client_id`
+  - `provisional_client_id`
+  - `review_status`
+  - `reviewed_by`
+  - `reviewed_at`
+  - `created_at`
+
 ### `submission_scoring_result`
 - 제출 채점 결과
 - 주요 필드:
@@ -118,9 +174,13 @@
 - `admin_user` -> 모든 관리자 도메인 데이터의 상위 소유자
 - `child_test` -> 커스텀 검사 본체
 - `admin_client_assignment` -> 내담자와 커스텀 검사 연결
+- `admin_client_group`, `admin_client_group_member` -> 내담자 그룹 관리
+- `admin_client_report` -> 내담자 상세 리포트 섹션 저장
 - `admin_custom_test_access_link` -> 외부 수검 진입용 토큰
 - `admin_custom_test_submission` -> 실제 응답 저장
+- `admin_client_identity_review` -> 애매한 동일인 매칭 검토
 - `submission_scoring_result` -> 제출 기반 채점 결과 저장
+- `admin_settings`, `client_consent_record` -> 개인정보동의 설정과 기록
 
 ## Practical Reading Rule
 기능 흐름을 분석할 때는 아래 순서로 같이 보는 것이 좋다.
@@ -133,9 +193,9 @@
 테이블 이름과 코드 모델명이 다를 수 있으므로, 설명 시 둘 다 같이 적는 편이 안전하다.
 
 ## Related Documents
-- [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)
-- [docs/database/runtime-db.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/runtime-db.md)
-- [docs/database/assets-inventory.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/assets-inventory.md)
-- [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
-- [docs/features/custom-test-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/custom-test-management.md)
-- [docs/features/scoring-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/scoring-flow.md)
+- [docs/database/README.md](README.md)
+- [docs/database/runtime-db.md](runtime-db.md)
+- [docs/database/assets-inventory.md](assets-inventory.md)
+- [docs/features/client-management.md](../features/client-management.md)
+- [docs/features/custom-test-management.md](../features/custom-test-management.md)
+- [docs/features/scoring-flow.md](../features/scoring-flow.md)

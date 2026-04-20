@@ -34,8 +34,18 @@
 4. `admin_client_assignment`의 `(admin_user_id, admin_client_id, admin_custom_test_id)` unique index 보정
 5. `admin_custom_test_submission.client_id` 컬럼 보정
 6. `submission_scoring_result` 테이블 생성 및 인덱스 보정
+7. `admin_client.birth_day` 기존 NULL 값 보정
+8. `admin_client` 확장 필드(`phone`, `address`, `is_closed`, `tags_json`) 보정
+9. 내담자 그룹 테이블(`admin_client_group`, `admin_client_group_member`) 보정
+10. 내담자 리포트 테이블(`admin_client_report`) 보정
+11. 동일인 검토 테이블(`admin_client_identity_review`) 보정
+12. `child_test.requires_consent` 컬럼 보정
+13. 관리자 설정 테이블(`admin_settings`) 보정
+14. 개인정보동의 기록 테이블(`client_consent_record`) 보정
+15. 제출별 보고서 접근 토큰 회전(`rotate_shared_submission_access_tokens`)
 
 즉, DB 구조는 모델 정의만 보는 것으로 끝나지 않고 startup 보정 코드까지 함께 봐야 한다.
+정확한 최신 실행 순서는 `app/main.py`의 `on_startup()` 함수와 `app/db/schema_migrations.py`를 최종 기준으로 본다.
 
 ## Operational Interpretation
 - 루트 `modular.db`: 현재 앱이 기본적으로 읽고 쓰는 SQLite 파일
@@ -48,8 +58,8 @@
 - 인증/관리자 검증처럼 SQLite를 직접 여는 코드도 같은 `modular.db` 기준을 따라야 한다.
 
 ## Related Documents
-- [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)
-- [docs/database/schema-overview.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/schema-overview.md)
-- [docs/database/assets-inventory.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/assets-inventory.md)
-- [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)
-- [docs/features/admin-auth.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/admin-auth.md)
+- [docs/database/README.md](README.md)
+- [docs/database/schema-overview.md](schema-overview.md)
+- [docs/database/assets-inventory.md](assets-inventory.md)
+- [ARCHITECTURE.md](../../ARCHITECTURE.md)
+- [docs/features/admin-auth.md](../features/admin-auth.md)

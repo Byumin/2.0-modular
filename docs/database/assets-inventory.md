@@ -9,16 +9,20 @@
   - `scripts/create_modular_db.py`는 기본적으로 기존 파일을 덮어쓰지 않으며, 재생성이 필요할 때만 `--force`를 명시해서 사용해야 함
 - `app.db`
   - 과거 런타임 기준 또는 보조 자산으로 남아 있는 파일
-- `legacy_parent.db`
-  - 구 `parent_*` 테이블 실험/참고용으로만 사용하는 레거시 DB 경로
-  - 현재 운영 코드에서는 사용하지 않음
 - `modular.mwb`
   - MySQL Workbench 모델 파일로 보이는 참고 자산
+- `modular.mwb.bak`
+  - 루트 Workbench 모델의 백업 자산
 
 ### App Package
 - `app/modular.mwb`
   - 앱 패키지 내부에 위치한 Workbench 모델 파일
   - 루트 `modular.mwb`와 중복/파생 관계일 가능성이 있어 용도 확인이 필요함
+
+### Frontend
+- `frontend/modular.db`
+  - 운영 FastAPI 런타임 DB가 아님
+  - 프런트엔드 디렉터리 안에 남아 있는 참고/혼동 주의 자산
 
 ### Docs Assets
 - `docs/modular.db`
@@ -35,6 +39,8 @@
   - 테스트용 DB 자산
 - `docs/modular_test.mwb`
   - 테스트용 Workbench 모델 자산
+- `docs/modular_test.mwb.bak`
+  - 테스트용 Workbench 모델 백업 자산
 - `docs/modular_test_rebuilt.db`
   - 재구성된 테스트 DB 자산
 - `docs/modular_test_schema.sql`
@@ -47,7 +53,7 @@
 
 - `modular.db`
   - 현재 앱 런타임 기준
-- 루트/`docs/`/`app/` 내 다른 `.db`, `.mwb`, `.sql`
+- 루트/`docs/`/`app/`/`frontend/` 내 다른 `.db`, `.mwb`, `.sql`
   - 참고, 백업, 테스트, 모델링 자산
 
 ## Recommended Future Organization
@@ -55,10 +61,9 @@
 
 - 운영 기준 DB:
   - `modular.db`
-- 레거시 parent 참고 DB:
-  - `legacy_parent.db`
 - 참고 스키마/모델링 자산:
   - `modular.mwb`
+  - `modular.mwb.bak`
   - `app/modular.mwb`
   - `docs/*.sql`
 - 백업/이력 자산:
@@ -69,7 +74,10 @@
   - `docs/modular_test.db`
   - `docs/modular_test_rebuilt.db`
   - `docs/modular_test.mwb`
+  - `docs/modular_test.mwb.bak`
   - `docs/modular_test_schema.sql`
+- 혼동 주의:
+  - `frontend/modular.db`
 
 ## Recommended Documentation Rule
 앞으로 DB 관련 설명 문서를 쓸 때는 아래 방식으로 적는 것이 좋다.
@@ -89,8 +97,8 @@
 따라서 지금 단계에서는 이 파일들을 운영 기준으로 단정하지 말고, 참고 자산으로 분류하는 것이 안전하다.
 
 ## Related Documents
-- [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)
-- [docs/database/runtime-db.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/runtime-db.md)
-- [docs/database/schema-overview.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/schema-overview.md)
-- [docs/exec-plans/2026-04-08-runtime-db-switch-to-modular.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-08-runtime-db-switch-to-modular.md)
-- [AGENTS.md](/mnt/c/Users/user/workspace/2.0-modular/AGENTS.md)
+- [docs/database/README.md](README.md)
+- [docs/database/runtime-db.md](runtime-db.md)
+- [docs/database/schema-overview.md](schema-overview.md)
+- [docs/exec-plans/2026-04-08-runtime-db-switch-to-modular.md](../exec-plans/2026-04-08-runtime-db-switch-to-modular.md)
+- [AGENTS.md](../../AGENTS.md)

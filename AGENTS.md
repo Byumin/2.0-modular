@@ -8,17 +8,17 @@
 - 앱: FastAPI 백엔드 + React SPA 관리자/수검자 화면
 - 운영 엔트리포인트: `app/main.py` (`main.py`는 호환 shim)
 - 운영 DB: 루트 `modular.db`
-- React browser route: `/`, `/admin/*`, `/assessment/custom/{token}`, `/report/{submissionId}`, `/admin/report/{submissionId}`
+- React browser route: `/`, `/admin/*`, `/assessment/custom/{token}`, `/report/{submissionId}?token={accessToken}`, `/admin/report/{submissionId}`
 - 정적 자원: `static/`은 운영 React SPA가 아니라 보고서/레거시 보조 자원 용도
 - 레거시 정적 HTML/JS 화면은 운영 기준에서 제외한다.
 
 ## Source Map
-- 구조/계층/폴더/DB/도메인 기준: [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)
-- 문서 체계와 중복 방지: [docs/doc-governance.md](/mnt/c/Users/user/workspace/2.0-modular/docs/doc-governance.md)
-- 설명/흐름 추적/디버깅 응답: [docs/debug/explanation-rule.md](/mnt/c/Users/user/workspace/2.0-modular/docs/debug/explanation-rule.md)
-- `코드 정리` 인터랙션 웹 산출물: [docs/code-cleanup/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/README.md)
-- 실행 계획/회고 문서: [docs/exec-plans/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/README.md)
-- UI 검증과 스크린샷 기준: [QUALIT_SCORE.md](/mnt/c/Users/user/workspace/2.0-modular/QUALIT_SCORE.md)
+- 구조/계층/폴더/DB/도메인 기준: [ARCHITECTURE.md](ARCHITECTURE.md)
+- 문서 체계와 중복 방지: [docs/doc-governance.md](docs/doc-governance.md)
+- 설명/흐름 추적/디버깅 응답: [docs/debug/explanation-rule.md](docs/debug/explanation-rule.md)
+- `코드 정리` 인터랙션 웹 산출물: [docs/code-cleanup/README.md](docs/code-cleanup/README.md)
+- 실행 계획/회고 문서: [docs/exec-plans/README.md](docs/exec-plans/README.md)
+- UI 검증과 스크린샷 기준: [QUALIT_SCORE.md](QUALIT_SCORE.md)
 
 ## Working Rules
 - 기능 설명이나 디버깅 흐름 추적은 `docs/debug/explanation-rule.md`를 먼저 따른다.

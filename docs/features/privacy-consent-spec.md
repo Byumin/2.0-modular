@@ -82,8 +82,8 @@ requires_consent == true?
 ### API
 | Method | Path | 설명 |
 |--------|------|------|
-| GET | `/api/assessment/custom/{token}/consent` | 동의 필요 여부 및 텍스트 조회 |
-| POST | `/api/assessment/custom/{token}/consent` | 동의 제출 기록 저장 |
+| GET | `/api/assessment-links/{access_token}/consent` | 동의 필요 여부 및 텍스트 조회 |
+| POST | `/api/assessment-links/{access_token}/consent` | 동의 제출 기록 저장 |
 
 ---
 
@@ -140,7 +140,6 @@ requires_consent == true?
 | 사이드바 | 설정 메뉴 링크 추가 |
 | `/admin/settings` | 신규 페이지 — 동의서 텍스트 편집 |
 | 검사 생성/수정 | `requires_consent` 토글 추가 |
-| TestManagement | `검사 결과` 탭 제거 |
 | `/assessment/custom/{token}` | 동의 단계 추가 |
 
 ---
@@ -150,11 +149,10 @@ requires_consent == true?
 2. 백엔드 API (설정, 검사 수정, 수검자 동의)
 3. 설정 메뉴 UI
 4. 검사 생성/수정 토글
-5. TestManagement 검사 결과 탭 제거
-6. 수검자 동의 화면
+5. 수검자 동의 화면
 
 ## Related Documents
-- [docs/exec-plans/2026-04-15-privacy-consent-feature.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-15-privacy-consent-feature.md)
-- [docs/features/custom-test-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/custom-test-management.md)
-- [docs/database/schema-overview.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/schema-overview.md)
-- [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)
+- [docs/exec-plans/2026-04-15-privacy-consent-feature.md](../exec-plans/2026-04-15-privacy-consent-feature.md)
+- [docs/features/custom-test-management.md](custom-test-management.md)
+- [docs/database/schema-overview.md](../database/schema-overview.md)
+- [ARCHITECTURE.md](../../ARCHITECTURE.md)
