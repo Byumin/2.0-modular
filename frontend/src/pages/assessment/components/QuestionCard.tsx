@@ -9,6 +9,7 @@ interface Props {
   answerState: AnswerState
   onAnswer: (itemId: string, value: string) => void
   globalIndex: number
+  hideHeader?: boolean
 }
 
 function resolveRenderType(item: QuestionItem): string {
@@ -19,7 +20,7 @@ function resolveRenderType(item: QuestionItem): string {
   return "likert"
 }
 
-export function QuestionCard({ item, options, answerState, onAnswer, globalIndex }: Props) {
+export function QuestionCard({ item, options, answerState, onAnswer, globalIndex, hideHeader }: Props) {
   const renderType = resolveRenderType(item)
 
   if (renderType === "text") {
@@ -29,6 +30,7 @@ export function QuestionCard({ item, options, answerState, onAnswer, globalIndex
         answerState={answerState}
         onAnswer={onAnswer}
         globalIndex={globalIndex}
+        hideHeader={hideHeader}
       />
     )
   }
@@ -46,6 +48,7 @@ export function QuestionCard({ item, options, answerState, onAnswer, globalIndex
         onAnswer={onAnswer}
         globalIndex={globalIndex}
         renderType={renderType}
+        hideHeader={hideHeader}
       />
     )
   }
@@ -58,6 +61,7 @@ export function QuestionCard({ item, options, answerState, onAnswer, globalIndex
       answerState={answerState}
       onAnswer={onAnswer}
       globalIndex={globalIndex}
+      hideHeader={hideHeader}
     />
   )
 }

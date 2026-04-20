@@ -463,9 +463,11 @@ export function AssessmentPage() {
   }
   const shellWidthClass =
     step === "profile" ? "w-full max-w-none"
-    : step === "question" ? "w-full max-w-7xl"
+    : step === "question" ? "w-full"
     : step === "intro" ? "w-full max-w-3xl"
     : "w-full max-w-5xl"
+  const progressSteps: Exclude<AssessmentStep, "consent">[] = ["profile", "intro", "question", "complete"]
+  const currentStepIndex = progressSteps.findIndex((itemStep) => itemStep === step)
 
   if (loading) {
     return (
@@ -492,9 +494,13 @@ export function AssessmentPage() {
   }
 
   return (
-    <main className={step === "profile" ? "min-h-screen bg-[#f4f6f5]" : "hero-tint min-h-screen bg-[#eef2f4] px-4 py-6 sm:py-8"}>
+    <main className={
+      step === "profile" ? "min-h-screen bg-[#f4f6f5]"
+      : step === "question" ? "min-h-screen"
+      : "hero-tint min-h-screen bg-[#eef2f4] px-4 py-6 sm:py-8"
+    }>
       <div className={`relative mx-auto flex ${shellWidthClass} flex-col gap-4`}>
-        {step !== "profile" && (
+        {step !== "profile" && step !== "question" && (
           <header className="overflow-hidden rounded-xl border border-[#d8e3df] bg-white assessment-card">
             <div className="h-[3px] bg-[#175e63]" />
             <div className="flex flex-col gap-4 px-5 py-4 sm:px-6 sm:py-5 md:flex-row md:items-start md:justify-between">
@@ -504,18 +510,12 @@ export function AssessmentPage() {
                 </p>
                 <h1 className="mt-1 text-xl font-bold tracking-tight text-foreground sm:text-2xl">{title}</h1>
                 <p className="mt-1 text-sm text-muted-foreground">{stepMeta[step].helper}</p>
-                {(activeProfile && step === "question") && (
-                  <p className="mt-1 text-sm text-muted-foreground">{profileSummary(activeProfile)}</p>
-                )}
               </div>
               <nav className="flex shrink-0 items-center gap-1.5 pt-0.5" aria-label="검사 단계">
-                {(["profile", "intro", "question", "complete"] as AssessmentStep[]).map((itemStep, index) => {
+                {progressSteps.map((itemStep, index) => {
                   const isCurrent = itemStep === step
-                  const isPast =
-                    (step === "intro" && itemStep === "profile") ||
-                    (step === "question" && (itemStep === "profile" || itemStep === "intro")) ||
-                    (step === "complete" && itemStep !== "complete")
-                  const isLast = index === 3
+                  const isPast = currentStepIndex >= 0 && index < currentStepIndex
+                  const isLast = index === progressSteps.length - 1
                   return (
                     <React.Fragment key={itemStep}>
                       <div className="flex items-center gap-1">
@@ -557,6 +557,7 @@ export function AssessmentPage() {
             onNext={proceedToQuestionStep}
             loading={profileLoading}
             error={error}
+            initialProfile={activeProfile}
             requiresConsent={consentInfo?.requires_consent ?? false}
             consentText={consentInfo?.consent_text}
             scrollToHistory={retakePrompt !== null}
@@ -583,6 +584,8 @@ export function AssessmentPage() {
             onSubmit={handleSubmit}
             submitting={submitting}
             error={error}
+            testName={title}
+            userSummary={profileSummary(activeProfile)}
           />
         )}
 
