@@ -82,9 +82,11 @@ interface Props {
   onSubmit: (answers: AnswerState) => void
   submitting: boolean
   error: string
+  testName?: string
+  userSummary?: string
 }
 
-export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
+export function QuestionStep({ parts, onSubmit, submitting, error, testName = "검사 실시", userSummary }: Props) {
   const [partIndex, setPartIndex] = React.useState(0)
   const [page, setPage] = React.useState(0)
   const [answers, setAnswers] = React.useState<AnswerState>({})
@@ -116,17 +118,9 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
     [parts, partBundles]
   )
 
-  React.useEffect(() => {
-    answersRef.current = answers
-  }, [answers])
-
-  React.useEffect(() => {
-    partIndexRef.current = partIndex
-  }, [partIndex])
-
-  React.useEffect(() => {
-    pageRef.current = page
-  }, [page])
+  React.useEffect(() => { answersRef.current = answers }, [answers])
+  React.useEffect(() => { partIndexRef.current = partIndex }, [partIndex])
+  React.useEffect(() => { pageRef.current = page }, [page])
 
   function answered(id: string) { return Boolean(answers[id]?.trim()) }
   function itemOptions(item: QuestionItem) {
@@ -178,7 +172,6 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
   function moveToItem(itemId: string, { focus = true } = {}) {
     const location = flatItems.find(({ item }) => item.id === itemId)
     if (!location) return
-
     const needsPageChange = location.partIndex !== partIndexRef.current || location.page !== pageRef.current
     if (needsPageChange) {
       partIndexRef.current = location.partIndex
@@ -230,10 +223,14 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
     answersRef.current = updatedAnswers
     setAnswers(updatedAnswers)
     setShowMissingHighlight(false)
-
-    const nextMissing = nextMissingAfterItem(id, updatedAnswers)
-    if (nextMissing) {
-      moveToItem(nextMissing.item.id, { focus: true })
+    if (viewMode === "step") {
+      const nextMissing = nextMissingAfterItem(id, updatedAnswers)
+      if (nextMissing) {
+        setTimeout(() => moveToItem(nextMissing.item.id, { focus: true }), 350)
+      }
+    } else {
+      const nextMissing = nextMissingAfterItem(id, updatedAnswers)
+      if (nextMissing) moveToItem(nextMissing.item.id, { focus: true })
     }
   }
 
@@ -280,7 +277,6 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
   function handleSubmitClick() {
     if (!allAnswered()) {
       setShowMissingHighlight(true)
-      // 첫 번째 미응답 파트로 이동
       const firstIncompletePart = parts.findIndex(p => (p.items ?? []).some(i => !answered(i.id)))
       if (firstIncompletePart >= 0 && firstIncompletePart !== partIndex) {
         partIndexRef.current = firstIncompletePart
@@ -300,11 +296,40 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
   }
 
   function handleViewModeChange(nextMode: ViewMode) {
+    const anchorItemId = currentItems[0]?.id ?? null
+
+    if (nextMode === "cards" && viewMode === "step") {
+      // 집중형 → 카드형: 현재 문항이 속한 카드형 페이지로 이동
+      if (anchorItemId) {
+        const cardBundles = buildCardPageBundles(parts[partIndexRef.current]?.items ?? [])
+        const targetPage = cardBundles.findIndex(b => b.items.some(i => i.id === anchorItemId))
+        const newPage = targetPage >= 0 ? targetPage : 0
+        pageRef.current = newPage
+        setPage(newPage)
+      } else {
+        pageRef.current = 0
+        setPage(0)
+      }
+    } else if (nextMode === "step" && viewMode === "cards") {
+      // 카드형 → 집중형: 현재 카드 페이지의 첫 문항 위치로 이동
+      if (anchorItemId) {
+        const stepBundles = buildStepPageBundles(parts[partIndexRef.current]?.items ?? [])
+        const targetPage = stepBundles.findIndex(b => b.items.some(i => i.id === anchorItemId))
+        const newPage = targetPage >= 0 ? targetPage : 0
+        pageRef.current = newPage
+        setPage(newPage)
+      } else {
+        pageRef.current = 0
+        setPage(0)
+      }
+    } else {
+      pageRef.current = 0
+      setPage(0)
+    }
+
     setViewMode(nextMode)
-    pageRef.current = 0
-    setPage(0)
     setShowMissingHighlight(false)
-    pendingScrollRef.current = "first"
+    pendingScrollRef.current = anchorItemId ?? "first"
   }
 
   React.useEffect(() => {
@@ -325,9 +350,22 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
           }
           return
         }
-
         if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
           if (!optionCard) return
+        }
+      }
+
+      // step mode arrow navigation
+      if (viewMode === "step") {
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+          event.preventDefault()
+          handleNext()
+          return
+        }
+        if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+          event.preventDefault()
+          handlePrev()
+          return
         }
       }
 
@@ -352,188 +390,512 @@ export function QuestionStep({ parts, onSubmit, submitting, error }: Props) {
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flatItems, currentItems, options, submitting])
+  }, [flatItems, currentItems, options, submitting, viewMode, page, partIndex, bundles])
 
   const percent = total ? Math.round((done / total) * 100) : 0
   const isFirstPage = page === 0 && partIndex === 0
   const isLastPage = page >= bundles.length - 1
   const isLastPart = partIndex >= parts.length - 1
+  const totalPages = bundles.length
 
-  return (
-    <div className="grid w-full gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(250px,280px)]">
-      <section className="min-w-0 overflow-hidden rounded-xl border border-[#dfe5e3] bg-white assessment-card">
-        <div className="h-[2px] bg-[#175e63]/70" />
-        <div className="border-b border-[#edf0ef] px-5 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#175e63]">검사 파트</p>
-          <p className="mt-1 text-sm font-semibold text-[#161d1b]">{activePart?.title || "파트"}</p>
+  // ── 집중형 (editorial) ────────────────────────────────────────────
+  if (viewMode === "step") {
+    const currentItem = currentItems[0] ?? null
+    const globalIndex = currentItem?.global_order_index ?? currentBundle.startIndex + 1
+    const flatAllItems = parts.flatMap(p => p.items ?? [])
+    const flatCurrentIndex = flatAllItems.findIndex(i => i.id === currentItem?.id)
+    const showDots = total <= 20
+
+    return (
+      <div className="flex min-h-screen flex-col bg-[#fafbfc]">
+        {/* Top progress bar */}
+        <div className="h-1 bg-[#edf0ef]">
+          <div
+            className="h-full bg-[#175e63] transition-all duration-500 ease-out"
+            style={{ width: `${percent}%` }}
+          />
         </div>
-        <div ref={questionAreaRef} className="flex flex-col gap-3 p-5">
-          {viewMode === "step" && (
-            <div className="flex flex-col gap-1 rounded-lg border border-[#dfe5e3] border-l-4 border-l-[#175e63] bg-[#eef2f4]/60 px-4 py-3">
-              <p className="text-xs font-semibold text-[#175e63]">집중형 보기</p>
-              <h3 className="text-lg font-semibold text-[#161d1b]">
-                {currentBundle.startIndex + 1} / {items.length}
-              </h3>
-              <p className="text-xs text-muted-foreground">한 문항에 집중해서 응답한 뒤 다음 문항으로 이동할 수 있습니다.</p>
-            </div>
-          )}
 
-          {currentItems.map((item, idx) => {
-            if (isMatrixItem(item)) {
-              if (idx === 0) {
-                const hasMissingMatrixAnswer = showMissingHighlight && currentItems.some((matrixItem) => !answered(matrixItem.id))
-                return (
-                  <div key={item.id} className={hasMissingMatrixAnswer ? "rounded-lg ring-2 ring-destructive/50" : ""}>
-                    <MatrixCard
-                      groupItems={currentItems}
-                      options={options}
-                      answerState={answers}
-                      onAnswer={handleAnswer}
-                      startGlobalIndex={(item.global_order_index ?? currentBundle.startIndex + 1)}
-                    />
-                  </div>
-                )
-              }
-              return null
-            }
-            const isMissing = showMissingHighlight && !answered(item.id)
-            return (
-              <div key={item.id} className={isMissing ? "rounded-lg ring-2 ring-destructive/50" : ""}>
-                <QuestionCard
-                  item={item}
-                  options={options}
-                  answerState={answers}
-                  onAnswer={handleAnswer}
-                  globalIndex={item.global_order_index ?? currentBundle.startIndex + idx + 1}
-                />
-              </div>
-            )
-          })}
-
-          {(error || (showMissingHighlight && !allAnswered())) && (
-            <div className="rounded-lg bg-red-50 px-3 py-2 text-center text-sm text-destructive">
-              {error || "모든 문항에 응답해주세요."}
+        {/* Minimal header */}
+        <header className="flex items-center justify-between px-6 py-4 sm:px-10">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#175e63] text-xs font-bold text-white">
+              {testName.charAt(0).toUpperCase()}
             </div>
-          )}
-        </div>
-      </section>
-
-      <aside className="h-fit lg:sticky lg:top-4">
-        <div className="overflow-hidden rounded-xl border border-[#dfe5e3] bg-white assessment-card">
-          {/* 진행 현황 */}
-          <div className="px-4 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#175e63]">진행 현황</p>
-            <p className="mt-1.5 text-lg font-bold text-[#161d1b]">{done} <span className="text-sm font-medium text-muted-foreground">/ {total} 문항</span></p>
-            <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-[#eef2f4]">
-              <div
-                className="h-full rounded-full bg-[#175e63] transition-all duration-300"
-                style={{ width: `${percent}%` }}
-              />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-[#161d1b]">{testName}</p>
+              {userSummary && <p className="text-xs text-[#8a9a96]">{userSummary}</p>}
             </div>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {allAnswered() ? "모든 응답 완료" : `${percent}% 완료`}
-            </p>
           </div>
-
-          {/* 상태 */}
-          <div className="border-t border-[#edf0ef] px-4 py-3">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-[#8a9a96]">{done}/{total} 응답</span>
             <button
               type="button"
-              onClick={() => setShowMissingHighlight(true)}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-                allAnswered()
-                  ? "border-[#cfe4d3] bg-[#eaf3eb] text-[#3f6a44]"
-                  : "border-amber-200 bg-amber-50 text-amber-700"
-              }`}
+              onClick={() => handleViewModeChange("cards")}
+              className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-1.5 text-xs font-medium text-[#5f6f73] transition-colors hover:bg-[#f5f7fa] hover:text-[#175e63]"
             >
-              {allAnswered() ? "응답 완료" : `미응답 ${total - done}개`}
+              카드형
             </button>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {activePart?.title} · {page + 1} / {Math.max(bundles.length, 1)} 페이지
-            </p>
-          </div>
-
-          {/* 파트 이동 */}
-          {parts.length > 1 && (
-            <div className="border-t border-[#edf0ef] px-4 py-3">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">파트 이동</p>
-              <div className="flex flex-wrap gap-1.5">
-                {parts.map((part, pi) => (
-                  <button
-                    key={pi}
-                    type="button"
-                    onClick={() => { setPartIndex(pi); setPage(0); setShowMissingHighlight(false) }}
-                    className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-                      pi === partIndex
-                        ? "bg-[#175e63] text-white"
-                        : partAllAnswered(pi)
-                          ? "bg-[#eaf3eb] text-[#3f6a44]"
-                          : "bg-[#eef2f4] text-[#3a4a47] hover:bg-[#dfe6e6]"
-                    }`}
-                  >
-                    {part.title} ({(part.items ?? []).filter(i => answered(i.id)).length}/{part.items?.length ?? 0})
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 문항 이동 */}
-          <div className="border-t border-[#edf0ef] px-4 py-3">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">문항 이동</p>
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
-              <button
-                type="button"
-                onClick={handlePrev}
-                disabled={isFirstPage}
-                className="h-9 rounded-lg border border-[#dfe5e3] bg-white px-3 text-sm font-medium text-[#3a4a47] transition-colors hover:bg-[#f3f5f4] disabled:pointer-events-none disabled:opacity-40"
-              >
-                {page === 0 && partIndex > 0 ? "이전 파트" : "이전 문항"}
-              </button>
-              <button
-                type="button"
-                onClick={handleNext}
-                disabled={isLastPage && isLastPart}
-                className="h-9 rounded-lg bg-[#175e63] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#124b4f] disabled:pointer-events-none disabled:opacity-40"
-              >
-                {isLastPage && !isLastPart ? "다음 파트" : "다음 문항"}
-              </button>
-            </div>
-          </div>
-
-          {/* 응답 방식 */}
-          <div className="border-t border-[#edf0ef] px-4 py-3">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">응답 방식</p>
-            <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#eef2f4] p-1">
-              <button
-                type="button"
-                onClick={() => handleViewModeChange("cards")}
-                className={`h-8 rounded-md text-xs font-semibold transition-colors ${viewMode === "cards" ? "bg-white text-[#175e63] shadow-sm" : "text-muted-foreground hover:text-[#161d1b]"}`}
-              >
-                카드형
-              </button>
-              <button
-                type="button"
-                onClick={() => handleViewModeChange("step")}
-                className={`h-8 rounded-md text-xs font-semibold transition-colors ${viewMode === "step" ? "bg-white text-[#175e63] shadow-sm" : "text-muted-foreground hover:text-[#161d1b]"}`}
-              >
-                집중형
-              </button>
-            </div>
-          </div>
-          {/* 최종 제출 */}
-          <div className="border-t border-[#edf0ef] px-4 py-4">
             <button
               type="button"
               onClick={handleSubmitClick}
-              disabled={submitting || !allAnswered()}
-              className="h-11 w-full rounded-lg bg-[#175e63] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#124b4f] disabled:pointer-events-none disabled:opacity-50"
+              disabled={!allAnswered() || submitting}
+              className="rounded-lg bg-[#175e63] px-5 py-1.5 text-sm font-semibold text-white transition-all hover:bg-[#124b4f] disabled:opacity-30"
             >
-              {submitting ? "제출 중..." : "제출"}
+              {submitting ? "제출 중..." : "제출하기"}
             </button>
           </div>
+        </header>
+
+        {/* Main question */}
+        <main ref={questionAreaRef} className="flex flex-1 flex-col items-center justify-center px-4 pb-32 sm:px-8">
+          <div className="w-full max-w-3xl">
+            {/* Watermark number */}
+            <div className="mb-4 flex items-baseline gap-4">
+              <span className="text-[80px] font-black leading-none text-[#175e63]/10 sm:text-[120px]">
+                {String(globalIndex).padStart(2, "0")}
+              </span>
+              <span className="text-xs font-medium uppercase tracking-widest text-[#175e63]">
+                Question {globalIndex} of {total}
+              </span>
+            </div>
+
+            {/* Question text with animation */}
+            {currentItem && !isMatrixItem(currentItem) && !isTextItem(currentItem) ? (
+              <>
+                <h2
+                  key={currentItem.id}
+                  className="text-2xl font-semibold leading-relaxed text-[#161d1b] animate-[fadeSlide_0.3s_ease-out] sm:text-3xl"
+                >
+                  {currentItem.text}
+                </h2>
+
+                {/* Large options */}
+                {(() => {
+                  const visibleOpts = itemOptions(currentItem).filter(opt => opt.label !== "무응답")
+                  const firstLabel = visibleOpts[0]?.label
+                  const lastLabel = visibleOpts[visibleOpts.length - 1]?.label
+                  const showEndLabels = firstLabel && lastLabel && firstLabel !== lastLabel
+                  return (
+                    <div className="mt-12">
+                      <div className="flex items-end justify-between gap-2 sm:gap-3">
+                        {visibleOpts.map((opt) => {
+                          const isSelected = answers[currentItem.id] === opt.value
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              data-item-id={currentItem.id}
+                              data-option-index={itemOptions(currentItem).indexOf(opt)}
+                              onClick={() => handleAnswer(currentItem.id, opt.value)}
+                              className="assessment-option-card group flex flex-1 flex-col items-center gap-2"
+                            >
+                              <div
+                                className={`flex size-14 items-center justify-center rounded-2xl border-2 text-lg font-bold transition-all duration-200 sm:size-16
+                                  ${isSelected
+                                    ? "border-[#175e63] bg-[#175e63] text-white shadow-lg shadow-[#175e63]/20 scale-110"
+                                    : "border-[#e2e8f0] bg-white text-[#8a9a96] hover:border-[#175e63]/40 hover:text-[#175e63] hover:scale-105"
+                                  }`}
+                              >
+                                {opt.value}
+                              </div>
+                              <span className={`text-[11px] transition-colors ${isSelected ? "font-semibold text-[#175e63]" : "text-[#8a9a96]"}`}>
+                                {opt.label}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="mt-3 flex items-center px-7 sm:px-8">
+                        <div className="h-px flex-1 bg-[#e2e8f0]" />
+                      </div>
+                      {showEndLabels && (
+                        <div className="mt-1 flex justify-between px-7 text-[10px] text-[#b0bab7] sm:px-8">
+                          <span>{firstLabel}</span>
+                          <span>{lastLabel}</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {/* Keyboard hint */}
+                <p className="mt-6 text-center text-xs text-[#b0bab7]">
+                  키보드{" "}
+                  <kbd className="mx-0.5 rounded border border-[#e2e8f0] bg-white px-1.5 py-0.5 font-mono text-[10px]">1</kbd>~
+                  <kbd className="mx-0.5 rounded border border-[#e2e8f0] bg-white px-1.5 py-0.5 font-mono text-[10px]">5</kbd>
+                  {" "}또는{" "}
+                  <kbd className="mx-0.5 rounded border border-[#e2e8f0] bg-white px-1.5 py-0.5 font-mono text-[10px]">←</kbd>
+                  <kbd className="mx-0.5 rounded border border-[#e2e8f0] bg-white px-1.5 py-0.5 font-mono text-[10px]">→</kbd>
+                  {" "}로 이동
+                </p>
+              </>
+            ) : (
+              // matrix나 text 문항은 카드형으로 폴백
+              <div className="flex flex-col gap-3">
+                {currentItems.map((item, idx) => {
+                  if (isMatrixItem(item)) {
+                    if (idx === 0) {
+                      const hasMissing = showMissingHighlight && currentItems.some(m => !answered(m.id))
+                      return (
+                        <div key={item.id} className={hasMissing ? "rounded-2xl ring-2 ring-red-200" : ""}>
+                          <MatrixCard groupItems={currentItems} options={options} answerState={answers} onAnswer={handleAnswer} startGlobalIndex={item.global_order_index ?? currentBundle.startIndex + 1} />
+                        </div>
+                      )
+                    }
+                    return null
+                  }
+                  const isMissing = showMissingHighlight && !answered(item.id)
+                  return (
+                    <div key={item.id} className={isMissing ? "rounded-2xl ring-2 ring-red-200" : ""}>
+                      <QuestionCard item={item} options={options} answerState={answers} onAnswer={handleAnswer} globalIndex={item.global_order_index ?? currentBundle.startIndex + idx + 1} />
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {(error || (showMissingHighlight && !allAnswered())) && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-600">
+                {error || "모든 문항에 응답해주세요."}
+              </div>
+            )}
+          </div>
+        </main>
+
+        {/* Fixed bottom dot navigation */}
+        <footer className="fixed bottom-0 left-0 right-0 flex items-center justify-center gap-1 border-t border-[#edf0ef] bg-white/85 px-4 py-4 backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={handlePrev}
+            disabled={isFirstPage}
+            className="mr-3 rounded-full border border-[#e2e8f0] p-2 text-[#8a9a96] transition-colors hover:bg-[#f5f7fa] disabled:opacity-30"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4"><polyline points="15 18 9 12 15 6" /></svg>
+          </button>
+
+          {showDots ? (
+            flatAllItems.map((it, idx) => (
+              <button
+                key={it.id}
+                type="button"
+                onClick={() => moveToItem(it.id)}
+                className={`rounded-full transition-all duration-200 ${
+                  idx === flatCurrentIndex
+                    ? "size-3 bg-[#175e63] scale-125"
+                    : answers[it.id]
+                      ? "size-2.5 bg-[#175e63]/40 hover:bg-[#175e63]/60"
+                      : "size-2.5 bg-[#dfe5e3] hover:bg-[#b0bab7]"
+                }`}
+              />
+            ))
+          ) : (
+            <span className="text-xs text-[#8a9a96]">
+              <span className="font-bold text-[#161d1b]">{flatCurrentIndex + 1}</span> / {total}
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={handleNext}
+            disabled={isLastPage && isLastPart}
+            className="ml-3 rounded-full border border-[#e2e8f0] p-2 text-[#8a9a96] transition-colors hover:bg-[#f5f7fa] disabled:opacity-30"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4"><polyline points="9 18 15 12 9 6" /></svg>
+          </button>
+        </footer>
+      </div>
+    )
+  }
+
+  // ── 카드형 (cards) ────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-[#f0f2f5]">
+      {/* Compact sticky header */}
+      <header className="sticky top-0 z-30 border-b border-[#e8ebee] bg-white/95 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
+          {/* Left: logo + test info */}
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#175e63] text-sm font-bold text-white">
+              {testName.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-[#161d1b]">{testName}</p>
+              {userSummary && <p className="text-[11px] text-[#8a9a96]">{userSummary} · {activePart?.title}</p>}
+            </div>
+          </div>
+
+          {/* Right: stepper */}
+          <nav className="ml-auto hidden items-center gap-1 sm:flex" aria-label="검사 단계">
+            {(["인적사항", "검사 실시", "제출 완료"] as const).map((label, i) => {
+              const past = i === 0
+              const current = i === 1
+              return (
+                <React.Fragment key={label}>
+                  <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
+                    current ? "bg-[#175e63]/10 font-semibold text-[#175e63]"
+                    : past ? "text-[#8a9a96]" : "text-[#c5ccc9]"
+                  }`}>
+                    <div className={`flex size-4 items-center justify-center rounded-full text-[9px] font-bold ${
+                      current ? "bg-[#175e63] text-white"
+                      : past ? "bg-[#c5ccc9] text-white"
+                      : "border border-[#dfe5e3] text-[#c5ccc9]"
+                    }`}>
+                      {past ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="size-2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                      ) : String(i + 1)}
+                    </div>
+                    {label}
+                  </div>
+                  {i < 2 && <div className={`h-px w-5 ${past ? "bg-[#c5ccc9]" : "bg-[#e8ebee]"}`} />}
+                </React.Fragment>
+              )
+            })}
+          </nav>
         </div>
-      </aside>
+        {/* Progress bar */}
+        <div className="h-0.5 bg-[#edf0ef]">
+          <div
+            className="h-full bg-[#175e63] transition-all duration-500"
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+      </header>
+
+      {/* Main content */}
+      <div className="mx-auto max-w-6xl px-4 py-6">
+        <div className="grid items-start gap-5 lg:grid-cols-[1fr_220px]">
+
+          {/* Question cards */}
+          <div className="flex flex-col gap-4">
+            {/* Page indicator row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-semibold text-[#175e63]">
+                  {activePart?.title || "파트"}
+                </span>
+                <span className="text-xs text-[#b0bab7]">
+                  페이지 {page + 1} / {totalPages}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-[#8a9a96]">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5">
+                  <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
+                </svg>
+                가장 가까운 응답을 선택하세요
+              </div>
+            </div>
+
+            {/* Cards */}
+            <div ref={questionAreaRef} className="flex flex-col gap-4">
+              {currentItems.map((item, cardIdx) => {
+                if (isMatrixItem(item)) {
+                  if (cardIdx === 0) {
+                    const hasMissingMatrix = showMissingHighlight && currentItems.some(m => !answered(m.id))
+                    return (
+                      <div
+                        key={item.id}
+                        className={`rounded-2xl border-2 bg-white transition-all ${hasMissingMatrix ? "border-red-300 ring-2 ring-red-100" : "border-transparent shadow-sm"}`}
+                      >
+                        <MatrixCard groupItems={currentItems} options={options} answerState={answers} onAnswer={handleAnswer} startGlobalIndex={item.global_order_index ?? currentBundle.startIndex + 1} />
+                      </div>
+                    )
+                  }
+                  return null
+                }
+                const isMissing = showMissingHighlight && !answered(item.id)
+                const isAnswered = answered(item.id)
+                return (
+                  <div
+                    key={item.id}
+                    id={`question-card-${item.id}`}
+                    data-item-id={item.id}
+                    tabIndex={-1}
+                    className={`rounded-2xl border-2 bg-white p-6 transition-all ${
+                      isMissing
+                        ? "border-red-300 ring-2 ring-red-100"
+                        : isAnswered
+                          ? "border-[#175e63]/15 shadow-sm"
+                          : "border-transparent shadow-sm hover:shadow-md"
+                    }`}
+                    style={{ animationDelay: `${cardIdx * 60}ms` }}
+                  >
+                    <div className="flex items-start gap-4">
+                      {/* Number badge */}
+                      <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold transition-colors ${
+                        isAnswered ? "bg-[#175e63] text-white" : "bg-[#f0f2f5] text-[#8a9a96]"
+                      }`}>
+                        {item.global_order_index ?? currentBundle.startIndex + cardIdx + 1}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <QuestionCard
+                          item={item}
+                          options={options}
+                          answerState={answers}
+                          onAnswer={handleAnswer}
+                          globalIndex={item.global_order_index ?? currentBundle.startIndex + cardIdx + 1}
+                          hideHeader
+                        />
+                      </div>
+                    </div>
+                    {isAnswered && (
+                      <div className="mt-3 flex items-center gap-2 pl-14">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#175e63" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-3.5"><polyline points="20 6 9 17 4 12" /></svg>
+                        <span className="text-[11px] font-medium text-[#175e63]">응답 완료</span>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {(error || (showMissingHighlight && !allAnswered())) && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-600">
+                {error || "모든 문항에 응답해주세요."}
+              </div>
+            )}
+          </div>
+
+          {/* Compact sidebar */}
+          <aside className="hidden lg:block">
+            {/* Sidebar label — static (not sticky) */}
+            <div className="mb-4 flex items-center">
+              <span className="text-sm font-semibold text-[#175e63]">진행 현황</span>
+            </div>
+
+            <div className="rounded-2xl bg-white p-4 shadow-sm lg:sticky lg:top-16">
+              {/* Circular donut progress */}
+              <div className="flex flex-col items-center py-2">
+                <div className="relative size-20">
+                  <svg viewBox="0 0 36 36" className="size-20 -rotate-90">
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#edf0ef" strokeWidth="2.5" />
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#175e63" strokeWidth="2.5"
+                      strokeDasharray={`${percent} ${100 - percent}`} strokeLinecap="round"
+                      className="transition-all duration-500" />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-lg font-bold text-[#161d1b]">{percent}%</span>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-[#8a9a96]">{done}/{total} 문항 완료</p>
+                <span className={`mt-2 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+                  allAnswered() ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"
+                }`}>
+                  {allAnswered() ? "응답 완료" : `미응답 ${total - done}개`}
+                </span>
+              </div>
+
+              {/* 문항 이동 */}
+              <div className="mt-3 border-t border-[#f0f2f5] pt-3">
+                <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[#b0bab7]">문항 이동</p>
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={handlePrev} disabled={isFirstPage}
+                    className="flex size-8 items-center justify-center rounded-lg border border-[#e8ebee] bg-[#fafbfc] text-[#8a9a96] transition-colors hover:bg-[#f0f2f5] hover:text-[#175e63] disabled:opacity-30">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5"><polyline points="15 18 9 12 15 6" /></svg>
+                  </button>
+                  <div className="flex-1 text-center">
+                    <span className="text-xs text-[#8a9a96]">페이지 </span>
+                    <span className="text-sm font-bold text-[#161d1b]">{page + 1}</span>
+                    <span className="text-[11px] text-[#b0bab7]"> / {totalPages}</span>
+                  </div>
+                  <button type="button" onClick={handleNext} disabled={isLastPage && isLastPart}
+                    className="flex size-8 items-center justify-center rounded-lg border border-[#e8ebee] bg-[#fafbfc] text-[#8a9a96] transition-colors hover:bg-[#f0f2f5] hover:text-[#175e63] disabled:opacity-30">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5"><polyline points="9 18 15 12 9 6" /></svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* 빠른 이동 */}
+              <div className="mt-3 border-t border-[#f0f2f5] pt-3">
+                <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[#b0bab7]">빠른 이동</p>
+                <div className="max-h-[88px] overflow-y-auto rounded-lg">
+                  <div className="grid grid-cols-5 gap-1">
+                    {parts.flatMap((part, pi) =>
+                      (part.items ?? []).map((item, idx) => {
+                        const globalIdx = part.items ? part.items.slice(0, idx).reduce((acc, _) => acc + 1, 0) : idx
+                        const bundleIdx = (partBundles[pi] ?? []).findIndex(b => b.items.some(i => i.id === item.id))
+                        const isOnCurrentPage = pi === partIndex && bundleIdx === page
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              if (pi !== partIndex) { setPartIndex(pi); setPage(bundleIdx >= 0 ? bundleIdx : 0) }
+                              else if (bundleIdx !== page) setPage(bundleIdx >= 0 ? bundleIdx : 0)
+                            }}
+                            className={`h-6 rounded text-[10px] font-semibold transition-all ${
+                              answered(item.id)
+                                ? "bg-[#175e63] text-white"
+                                : isOnCurrentPage
+                                  ? "bg-[#175e63]/10 text-[#175e63] ring-1 ring-[#175e63]/20"
+                                  : "bg-[#f5f7fa] text-[#8a9a96] hover:bg-[#edf0ef]"
+                            }`}
+                          >
+                            {(item.global_order_index ?? globalIdx + 1)}
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 파트 이동 (멀티파트만) */}
+              {parts.length > 1 && (
+                <div className="mt-3 border-t border-[#f0f2f5] pt-3">
+                  <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[#b0bab7]">파트 이동</p>
+                  <div className="flex flex-wrap gap-1">
+                    {parts.map((part, pi) => (
+                      <button key={pi} type="button"
+                        onClick={() => { setPartIndex(pi); setPage(0); setShowMissingHighlight(false) }}
+                        className={`rounded-md px-2 py-1 text-[10px] font-semibold transition-colors ${
+                          pi === partIndex ? "bg-[#175e63] text-white"
+                          : partAllAnswered(pi) ? "bg-green-50 text-green-600"
+                          : "bg-[#f5f7fa] text-[#8a9a96] hover:bg-[#edf0ef]"
+                        }`}
+                      >
+                        {part.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 응답 방식 */}
+              <div className="mt-3 border-t border-[#f0f2f5] pt-3">
+                <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[#b0bab7]">응답 방식</p>
+                <div className="flex gap-1">
+                  {([
+                    { key: "cards" as ViewMode, label: "카드형" },
+                    { key: "step" as ViewMode, label: "집중형" },
+                  ]).map((d) => (
+                    <button key={d.key} type="button" onClick={() => handleViewModeChange(d.key)}
+                      className={`flex-1 rounded-lg py-2 text-[11px] font-semibold transition-all ${
+                        viewMode === d.key ? "bg-[#175e63] text-white" : "bg-[#f5f7fa] text-[#8a9a96] hover:bg-[#edf0ef] hover:text-[#5f6f73]"
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 제출 */}
+              <div className="mt-3 border-t border-[#f0f2f5] pt-3">
+                <button type="button" onClick={handleSubmitClick}
+                  disabled={submitting || !allAnswered()}
+                  className="h-10 w-full rounded-xl bg-[#175e63] text-sm font-semibold text-white transition-all hover:bg-[#124b4f] disabled:opacity-30"
+                >
+                  {submitting ? "제출 중..." : "제출하기"}
+                </button>
+                {!allAnswered() && (
+                  <p className="mt-1.5 text-center text-[10px] text-[#b0bab7]">모든 문항 응답 후 제출</p>
+                )}
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
     </div>
   )
 }

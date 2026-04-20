@@ -48,6 +48,7 @@ interface Props {
   onNext: (profile: Profile) => void
   loading: boolean
   error: string
+  initialProfile?: Profile | null
   requiresConsent?: boolean
   consentText?: string
   scrollToHistory?: boolean
@@ -57,11 +58,11 @@ interface Props {
   onViewExistingResult?: () => void
 }
 
-export function ProfileStep({ payload, onNext, loading, error, requiresConsent = false, consentText, scrollToHistory, retakeInfo, retakeProfile, onRetakeConfirm, onViewExistingResult }: Props) {
+export function ProfileStep({ payload, onNext, loading, error, initialProfile, requiresConsent = false, consentText, scrollToHistory, retakeInfo, retakeProfile, onRetakeConfirm, onViewExistingResult }: Props) {
   const required = payload.required_profile_fields ?? []
   const testName = payload.custom_test_name || payload.display_name || "검사"
-  const [identityOpen, setIdentityOpen] = React.useState(false)
-  const [privacyAgreed, setPrivacyAgreed] = React.useState(false)
+  const [identityOpen, setIdentityOpen] = React.useState(() => Boolean(initialProfile))
+  const [privacyAgreed, setPrivacyAgreed] = React.useState(() => Boolean(initialProfile) && requiresConsent)
   const [privacyModalOpen, setPrivacyModalOpen] = React.useState(false)
   const [retakeConfirmOpen, setRetakeConfirmOpen] = React.useState(false)
   const historyRef = React.useRef<HTMLDivElement>(null)
@@ -91,11 +92,18 @@ export function ProfileStep({ payload, onNext, loading, error, requiresConsent =
     [payload.additional_profile_fields]
   )
 
-  const [name, setName] = React.useState("")
-  const [gender, setGender] = React.useState("")
-  const [birthDay, setBirthDay] = React.useState("")
-  const [schoolAge, setSchoolAge] = React.useState("")
-  const [extras, setExtras] = React.useState<Record<string, string | string[]>>({})
+  const [name, setName] = React.useState(() => initialProfile?.name ?? "")
+  const [gender, setGender] = React.useState(() => String(initialProfile?.gender ?? ""))
+  const [birthDay, setBirthDay] = React.useState(() => String(initialProfile?.birth_day ?? ""))
+  const [schoolAge, setSchoolAge] = React.useState(() => String(initialProfile?.school_age ?? ""))
+  const [extras, setExtras] = React.useState<Record<string, string | string[]>>(() => {
+    if (!initialProfile) return {}
+    return additional.reduce<Record<string, string | string[]>>((acc, field) => {
+      const value = initialProfile[field.label]
+      if (value !== undefined) acc[field.label] = value
+      return acc
+    }, {})
+  })
   const [validationError, setValidationError] = React.useState("")
 
   function setExtra(label: string, value: string | string[]) {
