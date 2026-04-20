@@ -16,9 +16,9 @@
 
 ## Reference Assets
 
-- 레퍼런스 구현: [admin-login-session-flow.html](/mnt/c/Users/user/workspace/2.0-modular/artifacts/interactive-flows/admin-login-session-flow.html)
-- 재사용용 템플릿 소스: [interactive-flow-template.html](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/templates/interactive-flow-template.html)
-- 원칙 문서: [interactive-flow-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/interactive-flow-spec.md)
+- 레퍼런스 구현: [admin-login-session-flow.html](../../artifacts/interactive-flows/admin-login-session-flow.html)
+- 재사용용 템플릿 소스: [interactive-flow-template.html](templates/interactive-flow-template.html)
+- 원칙 문서: [interactive-flow-spec.md](../interactive-flow-spec.md)
 
 의미는 이렇게 나눈다.
 
@@ -31,9 +31,9 @@
 
 ## Role Boundary
 
-- 원칙과 시각/구조 기준은 [interactive-flow-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/interactive-flow-spec.md)에서 본다.
+- 원칙과 시각/구조 기준은 [interactive-flow-spec.md](../interactive-flow-spec.md)에서 본다.
 - 이 문서는 실제 작업 순서, 실패 조건, 최종 점검 항목을 운영 관점에서 관리한다.
-- 템플릿 자체의 구조는 [interactive-flow-template.html](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/templates/interactive-flow-template.html)에서 직접 확인한다.
+- 템플릿 자체의 구조는 [interactive-flow-template.html](templates/interactive-flow-template.html)에서 직접 확인한다.
 
 ## When To Use
 
@@ -106,7 +106,8 @@
 
 ## Mandatory Quality Bar
 
-아래 기준은 권장이 아니라 기본 요구사항이다.
+상세 품질 기준은 [interactive-flow-spec.md](../interactive-flow-spec.md)를 source of truth로 본다.
+이 문서는 작업 중 반드시 확인할 운영 체크포인트만 둔다.
 
 - 템플릿 placeholder 문구가 남아 있으면 안 된다.
 - 그래프 노드는 최소한 단계 제목, 짧은 설명, 계층 성격을 보여야 한다.
@@ -115,21 +116,13 @@
 - 데이터 예시는 접힘 구조로 제공해야 하며, 요청/응답/내부 상태 3종이 모두 있어야 한다.
 - 예시 데이터는 단문이 아니라 실제 HTTP/JSON 또는 내부 상태 형태에 가까워야 한다.
 - 예시 데이터는 실제 현재 DB/코드 기준값과 가상 설명용 분기를 섞어 쓰지 말고, 섞일 경우 카드 안에서 `실제 예시` / `가상 예시`를 명시적으로 구분해야 한다.
-- 레퍼런스 구현보다 정보 밀도가 너무 낮으면 안 된다.
 - 기능 흐름이 실제 코드와 다르면 안 된다.
 - 단계가 과도하게 넓어서 정규화, 대조, 누적, 예외가 한 카드에 섞여 있으면 안 된다.
 - 소스 기준점 표시는 브라우저에서 읽는 상대 경로 형식이어야 한다. `/mnt/c/...` 같은 절대 경로를 그대로 노출하면 안 된다.
 - 시나리오 선택 chip은 성공/실패/보정/기존 세션 등 모드별로 시각 구분이 되어야 한다.
 - 활성 엣지는 현재 시나리오와 연결된 색으로 보여야 하며, 방향 화살표가 있어야 한다.
-- 그래프 확대/축소 컨트롤이 있으면 `- / 현재 배율 / +`처럼 단순한 한 줄 배치를 유지해야 한다.
-- 그래프 확대/축소 컨트롤은 줄바꿈으로 흩어지면 안 되며, 별도 `리셋` 버튼은 기본 요구사항이 아니다.
 - 상세 패널은 sticky일 경우 긴 콘텐츠에서도 읽을 수 있도록 `max-height`와 `overflow-y`를 포함해야 한다.
 - 상세 패널 내부의 긴 코드/JSON 예시는 카드 폭을 밀어내지 않게 `min-width: 0`, 줄바꿈 또는 내부 스크롤 처리를 함께 설계해야 한다.
-- lane 색 의미가 바로 드러나지 않는 그래프는 범례를 포함해야 한다.
-- 접힘 데이터 카드에는 `펼치기/접기` 같은 affordance 표시가 있어야 한다.
-- 접힘 데이터 카드의 펼쳐진 본문은 헤더와 시각적으로 분리되고, 텍스트가 카드 경계에 붙지 않게 별도 패딩을 가져야 한다.
-- 상세 패널에 등장하는 핵심 상태명과 변수명은 초심자도 바로 이해할 수 있게 tooltip 또는 동등한 glossary 장치를 제공하는 편을 기본값으로 본다.
-- glossary tooltip은 패널 내부 overflow에 잘리지 않도록 전역 overlay 수준에서 렌더링하는 방식을 우선한다.
 - hero copy는 “이번 버전은…” 같은 제작 메모가 아니라 기능 흐름 요약이어야 한다.
 
 ## Failure Conditions
@@ -182,10 +175,10 @@
 
 새 기능 흐름을 만들 때는 보통 아래 순서로 시작한다.
 
-1. [interactive-flow-template.html](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/templates/interactive-flow-template.html) 복제
+1. [interactive-flow-template.html](templates/interactive-flow-template.html) 복제
 2. 제목, 시나리오, 핵심 단계 정의
 3. 실제 코드 추적으로 단계와 예시 데이터 채우기
-4. 레퍼런스 구현([admin-login-session-flow.html](/mnt/c/Users/user/workspace/2.0-modular/artifacts/interactive-flows/admin-login-session-flow.html))과 비교하며 밀도 조정
+4. 레퍼런스 구현([admin-login-session-flow.html](../../artifacts/interactive-flows/admin-login-session-flow.html))과 비교하며 밀도 조정
 5. 최종 산출물 저장 및 캡처
 
 ## Reference-Derived Guardrails
@@ -228,9 +221,9 @@
 
 ## Related Documents
 
-- [AGENTS.md](/mnt/c/Users/user/workspace/2.0-modular/AGENTS.md)
-- [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
-- [interactive-flow-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/interactive-flow-spec.md)
-- [code-cleanup/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/README.md)
-- [interactive-flow-template.html](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/templates/interactive-flow-template.html)
-- [explanation-rule.md](/mnt/c/Users/user/workspace/2.0-modular/docs/debug/explanation-rule.md)
+- [AGENTS.md](../../AGENTS.md)
+- [Documentation Hub](../README.md)
+- [interactive-flow-spec.md](../interactive-flow-spec.md)
+- [code-cleanup/README.md](README.md)
+- [interactive-flow-template.html](templates/interactive-flow-template.html)
+- [explanation-rule.md](../debug/explanation-rule.md)

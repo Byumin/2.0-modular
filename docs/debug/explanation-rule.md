@@ -4,7 +4,7 @@
 
 ## Purpose
 사용자가 특정 기능, 흐름, 생성/수정/조회 과정의 설명을 요청하면 반드시 현재 코드베이스를 기준으로 실제 호출 흐름을 추적해서 설명한다.
-사용자가 단순 설명을 넘어서 `코드 정리`나 `인터랙션으로 보여줘` 같은 요청을 하면, 설명만으로 끝내지 말고 [docs/interactive-flow-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/interactive-flow-spec.md)를 기준으로 인터랙션 웹 산출물 생성을 우선 검토한다.
+사용자가 단순 설명을 넘어서 `코드 정리`나 `인터랙션으로 보여줘` 같은 요청을 하면, 설명만으로 끝내지 말고 [docs/interactive-flow-spec.md](../interactive-flow-spec.md)를 기준으로 인터랙션 웹 산출물 생성을 우선 검토한다.
 
 ## Default Explanation Order
 설명 순서는 아래를 기본으로 한다.
@@ -33,7 +33,7 @@
 - `정규화`라고만 쓰지 말고 공백 제거, 중복 제거, 허용 타입 보정, 빈 옵션 제거, canonical JSON 변환처럼 실제 변환 내용을 적는다.
 - `검증` 또는 `대조`라고만 쓰지 말고 무엇과 무엇을 비교하는지 적는다.
 
-이 규칙은 텍스트 설명 응답 기준이다. 인터랙션 웹 산출물의 단계 분해 기준은 [docs/interactive-flow-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/interactive-flow-spec.md)의 `Step Granularity Rule`을 따른다. 원칙은 같으나 적용 대상(텍스트 vs 웹 UI)이 다르다.
+이 규칙은 텍스트 설명 응답 기준이다. 인터랙션 웹 산출물의 단계 분해 기준은 [docs/interactive-flow-spec.md](../interactive-flow-spec.md)의 `Step Granularity Rule`을 따른다. 원칙은 같으나 적용 대상(텍스트 vs 웹 UI)이 다르다.
 
 ## Example Coverage Rule
 step 설명에는 해당 책임에 맞는 예시를 빠뜨리지 않는다.
@@ -44,7 +44,7 @@ step 설명에는 해당 책임에 맞는 예시를 빠뜨리지 않는다.
 - 예외 발생 step에는 어떤 입력에서 어떤 조건 때문에 실패하는지 예시를 적는다.
 - step마다 가능하면 `입력 데이터 -> 수행 작업 -> 결과 또는 다음 호출` 형식을 유지한다.
 
-인터랙션 웹 산출물의 예시 데이터 기준은 [docs/interactive-flow-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/interactive-flow-spec.md)의 `Example Coverage Rule`을 따른다.
+인터랙션 웹 산출물의 예시 데이터 기준은 [docs/interactive-flow-spec.md](../interactive-flow-spec.md)의 `Example Coverage Rule`을 따른다.
 
 ## Additional Rules
 - 가능하면 실제 파일 경로와 함수명을 함께 적는다.
@@ -64,12 +64,12 @@ step 설명에는 해당 책임에 맞는 예시를 빠뜨리지 않는다.
 - 줄 번호를 언급할 때는 가능한 한 매번 링크 형식을 유지하고, 사용자가 바로 해당 줄로 이동할 수 없게 만드는 축약 표기는 피한다.
 
 ## Related Documents
-- [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
-- [AGENTS.md](/mnt/c/Users/user/workspace/2.0-modular/AGENTS.md)
-- [docs/interactive-flow-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/interactive-flow-spec.md)
-- [docs/code-cleanup/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/README.md)
-- [docs/code-cleanup/playbook.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/playbook.md)
-- [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)
-- [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
-- [docs/diagrams/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/diagrams/README.md)
-- [docs/database/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/README.md)
+- [Documentation Hub](../README.md)
+- [AGENTS.md](../../AGENTS.md)
+- [docs/interactive-flow-spec.md](../interactive-flow-spec.md)
+- [docs/code-cleanup/README.md](../code-cleanup/README.md)
+- [docs/code-cleanup/playbook.md](../code-cleanup/playbook.md)
+- [ARCHITECTURE.md](../../ARCHITECTURE.md)
+- [docs/features/README.md](../features/README.md)
+- [docs/diagrams/README.md](../diagrams/README.md)
+- [docs/database/README.md](../database/README.md)

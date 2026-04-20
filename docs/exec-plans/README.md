@@ -10,6 +10,13 @@
 
 이 둘은 원인이 다르기 때문에, 매 작업마다 실행 계획 문서를 남겨야 이후 회고와 개선이 가능하다.
 
+## Interpretation Rule
+이 폴더의 개별 날짜별 문서는 작업 당시의 계획과 회고 기록이다.
+현재 운영 기준이나 source-of-truth로 읽지 않는다.
+
+현재 기준은 항상 `AGENTS.md`, `ARCHITECTURE.md`, 기능별 source 문서, DB 문서, 실제 소스 코드를 먼저 본다.
+날짜별 실행 계획은 "왜 그런 변경이 있었는지"를 추적하는 보조 자료로 사용한다.
+
 ## Rule
 - 실제 수정이 들어가는 작업은 가능한 한 먼저 실행 계획 문서를 만든다.
 - 문서는 작업 시작 시 1차 작성하고, 작업 중간에 반드시 갱신한다.
@@ -64,8 +71,8 @@
 새 문서를 만들 때는 `_template.md`를 기준으로 복사해서 사용한다.
 
 ## Related Documents
-- [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
-- [AGENTS.md](/mnt/c/Users/user/workspace/2.0-modular/AGENTS.md)
-- [QUALIT_SCORE.md](/mnt/c/Users/user/workspace/2.0-modular/QUALIT_SCORE.md)
-- [docs/exec-plans/_template.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/_template.md)
-- [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)
+- [Documentation Hub](../README.md)
+- [AGENTS.md](../../AGENTS.md)
+- [QUALIT_SCORE.md](../../QUALIT_SCORE.md)
+- [docs/exec-plans/_template.md](_template.md)
+- [ARCHITECTURE.md](../../ARCHITECTURE.md)

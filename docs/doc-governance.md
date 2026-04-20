@@ -90,21 +90,21 @@
 
 ## Current Practical Mapping
 
-- 저장소 공통 작업 규칙: [AGENTS.md](/mnt/c/Users/user/workspace/2.0-modular/AGENTS.md)
-- 문서 허브: [docs/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
-- 설명/디버깅 원칙: [docs/debug/explanation-rule.md](/mnt/c/Users/user/workspace/2.0-modular/docs/debug/explanation-rule.md)
-- 코드 정리 원칙: [docs/interactive-flow-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/interactive-flow-spec.md)
-- 코드 정리 운영: [docs/code-cleanup/playbook.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/playbook.md)
-- 코드 정리 허브: [docs/code-cleanup/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/README.md)
-- DB 운영 기준: [docs/database/runtime-db.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/runtime-db.md)
-- Claude 자동화 진입점: [claude/README.md](/mnt/c/Users/user/workspace/2.0-modular/claude/README.md)
+- 저장소 공통 작업 규칙: [AGENTS.md](../AGENTS.md)
+- 문서 허브: [docs/README.md](README.md)
+- 설명/디버깅 원칙: [docs/debug/explanation-rule.md](debug/explanation-rule.md)
+- 코드 정리 원칙: [docs/interactive-flow-spec.md](interactive-flow-spec.md)
+- 코드 정리 운영: [docs/code-cleanup/playbook.md](code-cleanup/playbook.md)
+- 코드 정리 허브: [docs/code-cleanup/README.md](code-cleanup/README.md)
+- DB 운영 기준: [docs/database/runtime-db.md](database/runtime-db.md)
+- Claude 자동화 진입점: [claude/README.md](../claude/README.md)
 
 ## Related Documents
 
-- [AGENTS.md](/mnt/c/Users/user/workspace/2.0-modular/AGENTS.md)
-- [Documentation Hub](/mnt/c/Users/user/workspace/2.0-modular/docs/README.md)
-- [docs/debug/explanation-rule.md](/mnt/c/Users/user/workspace/2.0-modular/docs/debug/explanation-rule.md)
-- [docs/interactive-flow-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/interactive-flow-spec.md)
-- [docs/code-cleanup/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/README.md)
-- [docs/code-cleanup/playbook.md](/mnt/c/Users/user/workspace/2.0-modular/docs/code-cleanup/playbook.md)
-- [docs/database/runtime-db.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/runtime-db.md)
+- [AGENTS.md](../AGENTS.md)
+- [Documentation Hub](README.md)
+- [docs/debug/explanation-rule.md](debug/explanation-rule.md)
+- [docs/interactive-flow-spec.md](interactive-flow-spec.md)
+- [docs/code-cleanup/README.md](code-cleanup/README.md)
+- [docs/code-cleanup/playbook.md](code-cleanup/playbook.md)
+- [docs/database/runtime-db.md](database/runtime-db.md)
