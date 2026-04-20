@@ -1,4 +1,4 @@
-from app.schemas.assessment_links import SubmitCustomAssessmentIn, ValidateAssessmentProfileIn
+from app.schemas.assessment_links import SaveAssessmentDraftIn, SubmitCustomAssessmentIn, ValidateAssessmentProfileIn
 from app.schemas.auth import AdminLoginIn
 from app.schemas.clients import AdminAssessmentLogIn, AdminClientIn, CreateClientAssignmentIn
 from app.schemas.custom_tests import (
@@ -24,5 +24,6 @@ __all__ = [
     "BulkDeleteCustomTestsIn",
     "CreateClientAssignmentIn",
     "SubmitCustomAssessmentIn",
+    "SaveAssessmentDraftIn",
     "ValidateAssessmentProfileIn",
 ]

@@ -4,13 +4,16 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.assessment_links import (
     RegisterAssessmentClientIn,
+    SaveAssessmentDraftIn,
     SubmitCustomAssessmentIn,
     ValidateAssessmentProfileIn,
 )
 from app.services.admin.assessment_links import (
     get_consent_info_by_token,
+    get_assessment_draft_by_access_link,
     get_custom_test_by_access_link,
     register_client_for_custom_test_by_access_link,
+    save_assessment_draft_by_access_link,
     submit_consent_by_token,
     submit_custom_test_by_access_link,
     validate_custom_test_profile_by_access_link,
@@ -63,6 +66,35 @@ def submit_assessment(
         payload.profile,
         payload.answers,
         client_id=payload.client_id,
+        is_ambiguous_match=payload.is_ambiguous_match,
+        responder_choice=payload.responder_choice,
+        candidate_client_ids=payload.candidate_client_ids,
+    )
+
+
+@router.get("/api/assessment-links/{access_token}/draft")
+def get_assessment_draft(
+    access_token: str,
+    client_id: int,
+    db: Session = Depends(get_db),
+) -> dict:
+    return get_assessment_draft_by_access_link(db, access_token, client_id)
+
+
+@router.put("/api/assessment-links/{access_token}/draft")
+def save_assessment_draft(
+    access_token: str,
+    payload: SaveAssessmentDraftIn,
+    db: Session = Depends(get_db),
+) -> dict:
+    return save_assessment_draft_by_access_link(
+        db,
+        access_token,
+        profile=payload.profile,
+        answers=payload.answers,
+        client_id=payload.client_id,
+        current_part_index=payload.current_part_index,
+        current_page=payload.current_page,
         is_ambiguous_match=payload.is_ambiguous_match,
         responder_choice=payload.responder_choice,
         candidate_client_ids=payload.candidate_client_ids,

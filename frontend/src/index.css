@@ -190,10 +190,73 @@
   filter: blur(6px);
 }
 
+/* ── assessment intro deep teal blobs: figma-instructions ProfileStepTeal 기준 ── */
+@keyframes assessment-intro-blob-teal-1 {
+  0%   { transform: translate(-80px, -40px) rotate(-90deg); border-radius: 24% 76% 35% 65% / 27% 36% 64% 73%; }
+  33%  { transform: translate(200px, 60px) rotate(-30deg); border-radius: 50% 50% 40% 60% / 60% 40% 60% 40%; }
+  66%  { transform: translate(350px, -30px) rotate(20deg); border-radius: 60% 40% 55% 45% / 35% 65% 35% 65%; }
+  100% { transform: translate(-80px, -40px) rotate(-90deg); border-radius: 24% 76% 35% 65% / 27% 36% 64% 73%; }
+}
+@keyframes assessment-intro-blob-teal-2 {
+  0%   { transform: translate(80px, 40px) rotate(30deg); border-radius: 60% 40% 55% 45% / 50% 60% 40% 50%; }
+  33%  { transform: translate(-200px, -80px) rotate(-40deg); border-radius: 35% 65% 70% 30% / 45% 30% 70% 55%; }
+  66%  { transform: translate(-100px, 100px) rotate(60deg); border-radius: 45% 55% 40% 60% / 55% 45% 55% 45%; }
+  100% { transform: translate(80px, 40px) rotate(30deg); border-radius: 60% 40% 55% 45% / 50% 60% 40% 50%; }
+}
+@keyframes assessment-intro-blob-teal-3 {
+  0%   { transform: translate(0px, 80px) rotate(0deg); border-radius: 40% 60% 50% 50% / 55% 45% 55% 45%; }
+  33%  { transform: translate(180px, -100px) rotate(45deg); border-radius: 55% 45% 35% 65% / 40% 65% 35% 60%; }
+  66%  { transform: translate(-150px, -50px) rotate(-30deg); border-radius: 70% 30% 50% 50% / 30% 70% 30% 70%; }
+  100% { transform: translate(0px, 80px) rotate(0deg); border-radius: 40% 60% 50% 50% / 55% 45% 55% 45%; }
+}
+.assessment-intro-blob {
+  position: absolute;
+  pointer-events: none;
+  will-change: transform, border-radius;
+}
+.assessment-intro-blob-1 {
+  width: 500px;
+  height: 500px;
+  left: 5%;
+  top: 0%;
+  background: radial-gradient(circle, rgba(92,225,230,0.50) 0%, rgba(56,189,248,0.25) 50%, transparent 80%);
+  animation: assessment-intro-blob-teal-1 22s infinite alternate cubic-bezier(0.07,0.8,0.16,1);
+  filter: blur(60px);
+}
+.assessment-intro-blob-2 {
+  width: 400px;
+  height: 400px;
+  right: 0%;
+  bottom: 5%;
+  background: radial-gradient(circle, rgba(245,158,11,0.40) 0%, rgba(251,191,36,0.18) 50%, transparent 80%);
+  animation: assessment-intro-blob-teal-2 28s infinite alternate cubic-bezier(0.07,0.8,0.16,1);
+  filter: blur(50px);
+}
+.assessment-intro-blob-3 {
+  width: 350px;
+  height: 350px;
+  left: 40%;
+  top: 50%;
+  background: radial-gradient(circle, rgba(244,163,149,0.42) 0%, rgba(248,113,113,0.18) 50%, transparent 80%);
+  animation: assessment-intro-blob-teal-3 30s infinite alternate cubic-bezier(0.07,0.8,0.16,1);
+  filter: blur(70px);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .assessment-step-frame {
+    transition: none !important;
+  }
+  .assessment-step-idle,
+  .assessment-step-out,
+  .assessment-step-in {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
   [data-hero-motion],
   .hero-blob,
-  .hero-glass-wrap {
+  .hero-glass-wrap,
+  .assessment-intro-blob {
     animation: none !important;
   }
 }
@@ -224,6 +287,44 @@
   box-shadow:
     0 1px 2px rgba(23, 94, 99, 0.04),
     0 8px 24px -12px rgba(23, 94, 99, 0.18);
+}
+
+/* ── assessment modal width: content-aware with mobile bounds ───── */
+.assessment-modal-fit {
+  width: fit-content;
+  min-width: min(20rem, calc(100vw - 2rem));
+  max-width: min(36rem, calc(100vw - 2rem));
+}
+.assessment-modal-fit-wide {
+  width: fit-content;
+  min-width: min(20rem, calc(100vw - 2rem));
+  max-width: min(46rem, calc(100vw - 2rem));
+}
+
+/* ── assessment step transition: 인적사항 → 안내 → 문항 전환 ───── */
+.assessment-step-frame {
+  will-change: opacity, transform, filter;
+  transition:
+    opacity 180ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 180ms ease;
+}
+.assessment-step-idle {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+}
+.assessment-step-out {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-10px) scale(0.99);
+  filter: blur(3px);
+}
+.assessment-step-in {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(12px) scale(0.99);
+  filter: blur(3px);
 }
 
 /* ── editorial 집중형: 문항 전환 페이드슬라이드 ─────────────────── */

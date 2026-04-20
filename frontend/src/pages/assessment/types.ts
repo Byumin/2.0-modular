@@ -63,6 +63,18 @@ export type AnswerState = Record<string, string>
 
 export type AssessmentStep = 'consent' | 'profile' | 'intro' | 'question' | 'complete'
 
+export interface AssessmentDraft {
+  client_id: number
+  profile: Profile
+  answers: AnswerState
+  current_part_index: number
+  current_page: number
+  is_ambiguous_match: boolean
+  responder_choice: 'existing' | 'new' | null
+  candidate_client_ids: number[]
+  updated_at?: string | null
+}
+
 export const QUESTION_PAGE_SIZE = 5
 export const AUTO_CREATE_CONFIRM_REQUIRED_CODE = 'AUTO_CREATE_CONFIRM_REQUIRED'
 export const AMBIGUOUS_CLIENT_CODE = 'AMBIGUOUS_CLIENT'
