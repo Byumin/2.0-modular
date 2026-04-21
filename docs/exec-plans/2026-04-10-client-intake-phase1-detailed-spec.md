@@ -280,7 +280,7 @@ Phase 1 기준:
 
 상세 설계는 아래 문서를 본다.
 
-- [docs/features/client-intake-phase2-ambiguous-match-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase2-ambiguous-match-spec.md)
+- [docs/exec-plans/2026-04-13-client-intake-phase2-ambiguous-match-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-13-client-intake-phase2-ambiguous-match-spec.md)
 
 ## Implementation Order
 실제 구현은 아래 순서로 반영되었다.
@@ -310,4 +310,4 @@ Phase 1 기준:
 - [docs/features/custom-test-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/custom-test-management.md)
 - [docs/features/assessment-link-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/assessment-link-flow.md)
 - [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
-- [docs/features/client-intake-phase2-ambiguous-match-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase2-ambiguous-match-spec.md)
+- [docs/exec-plans/2026-04-13-client-intake-phase2-ambiguous-match-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-13-client-intake-phase2-ambiguous-match-spec.md)

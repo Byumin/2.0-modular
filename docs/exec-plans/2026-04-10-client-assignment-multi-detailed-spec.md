@@ -6,7 +6,7 @@
 현재 source of truth는 다음 두 문서와 연결된다.
 
 - 정책 기준: [client-intake-policy.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-policy.md)
-- 자동 생성 Phase 1 상세: [client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase1-spec.md)
+- 자동 생성 Phase 1 상세: [client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-10-client-intake-phase1-detailed-spec.md)
 
 ## Background
 현재 구조에서는 같은 내담자를 여러 검사에 동시에 배정하는 요구가 자연스럽게 생긴다.
@@ -199,6 +199,6 @@ repository는 목록/존재 확인 중심으로 전환되어 있다.
 ## Related Documents
 - [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
 - [docs/features/client-intake-policy.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-policy.md)
-- [docs/features/client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase1-spec.md)
+- [docs/exec-plans/2026-04-10-client-intake-phase1-detailed-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-10-client-intake-phase1-detailed-spec.md)
 - [docs/features/assessment-link-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/assessment-link-flow.md)
 - [docs/database/schema-overview.md](/mnt/c/Users/user/workspace/2.0-modular/docs/database/schema-overview.md)

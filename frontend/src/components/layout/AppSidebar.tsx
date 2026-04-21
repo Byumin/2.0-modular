@@ -26,7 +26,7 @@ import {
 
 const navMain = [
   { title: "대시보드", url: "/admin/workspace", icon: IconDashboard },
-  { title: "검사 관리", url: "/admin/create", icon: IconClipboardList },
+  { title: "검사 운영", url: "/admin/create", icon: IconClipboardList },
   { title: "내담자 관리", url: "/admin/clients", icon: IconUsers },
   { title: "동일인 검토", url: "/admin/identity-reviews", icon: IconUserSearch, badgeKey: "identity_reviews" },
 ]

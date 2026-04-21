@@ -287,8 +287,9 @@ function AssignmentSection({ clientId, assigned, allTests, onRefresh }: {
               <span className="text-sm font-medium">{a.custom_test_name}</span>
               <div className="flex gap-1">
                 <Button variant="outline" size="sm" className="h-7 text-xs"
+                  title={`${a.custom_test_name} 실시 링크 복사`}
                   onClick={() => handleCopyUrl(a.id)} disabled={generatingId === a.id}>
-                  {generatingId === a.id ? "생성 중..." : copiedId === a.id ? "복사됨!" : "URL 복사"}
+                  {generatingId === a.id ? "생성 중..." : copiedId === a.id ? "복사됨!" : "실시 링크 복사"}
                 </Button>
                 <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-destructive"
                   onClick={() => handleRemove(a.id)}>삭제</Button>

@@ -217,7 +217,7 @@ AMBIGUOUS 응답 (첫 요청):
 
 ## Related Documents
 - [docs/features/client-intake-policy.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-policy.md)
-- [docs/features/client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase1-spec.md)
+- [docs/exec-plans/2026-04-10-client-intake-phase1-detailed-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-10-client-intake-phase1-detailed-spec.md)
 - [docs/features/assessment-link-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/assessment-link-flow.md)
 - [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
 - [docs/exec-plans/2026-04-13-client-intake-ambiguous-review-impl.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-13-client-intake-ambiguous-review-impl.md)
