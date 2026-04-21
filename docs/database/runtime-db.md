@@ -42,7 +42,8 @@
 12. `child_test.requires_consent` 컬럼 보정
 13. 관리자 설정 테이블(`admin_settings`) 보정
 14. 개인정보동의 기록 테이블(`client_consent_record`) 보정
-15. 제출별 보고서 접근 토큰 회전(`rotate_shared_submission_access_tokens`)
+15. 검사 실시 임시저장 테이블(`admin_assessment_draft`) 보정
+16. 제출별 보고서 접근 토큰 회전(`rotate_shared_submission_access_tokens`)
 
 즉, DB 구조는 모델 정의만 보는 것으로 끝나지 않고 startup 보정 코드까지 함께 봐야 한다.
 정확한 최신 실행 순서는 `app/main.py`의 `on_startup()` 함수와 `app/db/schema_migrations.py`를 최종 기준으로 본다.

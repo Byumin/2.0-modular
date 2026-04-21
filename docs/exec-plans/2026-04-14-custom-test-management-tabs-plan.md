@@ -81,10 +81,10 @@
 ## Non Goals
 - 검사 생성 모달의 세부 생성 로직은 이번 탭 구조 변경의 직접 범위가 아니다.
 - 채점 로직과 리포트 생성 로직은 변경하지 않는다.
-- 내담자 중심 검색/탐색 방향은 [client-search-navigation-plan.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-search-navigation-plan.md)를 따른다.
+- 내담자 중심 검색/탐색 방향은 [client-search-navigation-plan.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-14-client-search-navigation-plan.md)를 따른다.
 
 ## Related Documents
 - [docs/features/custom-test-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/custom-test-management.md)
 - [docs/features/custom-test-management-tabs-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/custom-test-management-tabs-spec.md)
-- [docs/features/client-search-navigation-plan.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-search-navigation-plan.md)
+- [docs/exec-plans/2026-04-14-client-search-navigation-plan.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-14-client-search-navigation-plan.md)
 - [docs/features/scoring-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/scoring-flow.md)

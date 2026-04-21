@@ -4,7 +4,7 @@
 - 역할: 상세 스펙 문서
 - 독자: 검사 관리 API와 React SPA 화면 구현자
 - Source of truth: 검사 관리 탭 구조의 API, 상태, UI 구현 기준
-- 연결 문서: 제품 방향은 [custom-test-management-tabs-plan.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/custom-test-management-tabs-plan.md)를 따른다.
+- 연결 문서: 제품 방향은 [custom-test-management-tabs-plan.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-14-custom-test-management-tabs-plan.md)를 따른다.
 
 ## Scope
 1차 구현 범위:
@@ -119,7 +119,7 @@ Response:
 - `npm run lint`
 
 ## Related Documents
-- [docs/features/custom-test-management-tabs-plan.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/custom-test-management-tabs-plan.md)
+- [docs/exec-plans/2026-04-14-custom-test-management-tabs-plan.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-14-custom-test-management-tabs-plan.md)
 - [docs/features/custom-test-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/custom-test-management.md)
 - [docs/features/client-search-navigation-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-search-navigation-spec.md)
 - [docs/features/scoring-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/scoring-flow.md)

@@ -4,7 +4,7 @@
 - 역할: 상세 스펙 문서
 - 독자: API와 React SPA 내담자 관리 화면 구현자
 - Source of truth: 내담자 검색/탐색 개선의 API, 상태, UI 구현 기준
-- 연결 문서: 제품 방향은 [client-search-navigation-plan.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-search-navigation-plan.md)를 따른다.
+- 연결 문서: 제품 방향은 [client-search-navigation-plan.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-14-client-search-navigation-plan.md)를 따른다.
 
 ## Scope
 이 문서는 내담자 관리 화면의 검색/탐색 개선을 다룬다.
@@ -168,7 +168,7 @@ Status rules:
 - 검사별 화면 스크린샷
 
 ## Related Documents
-- [docs/features/client-search-navigation-plan.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-search-navigation-plan.md)
+- [docs/exec-plans/2026-04-14-client-search-navigation-plan.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-14-client-search-navigation-plan.md)
 - [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
 - [docs/features/custom-test-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/custom-test-management.md)
-- [docs/features/client-assignment-multi-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-assignment-multi-spec.md)
+- [docs/exec-plans/2026-04-10-client-assignment-multi-detailed-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-10-client-assignment-multi-detailed-spec.md)

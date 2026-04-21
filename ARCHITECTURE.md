@@ -68,12 +68,25 @@ SQLAlchemy 모델, 세션, 엔진, 초기화 및 보정 코드를 제공한다.
 - 토큰으로 수검 페이지 진입
 - 프로필 유효성 검증
 - 응답 제출
+- 검사 실시 중 중간 답변 임시저장/복원 (`admin_assessment_draft`)
+- 상세: [docs/exec-plans/2026-04-20-assessment-server-draft.md](docs/exec-plans/2026-04-20-assessment-server-draft.md)
 
 ### 4. Client Management
 - 클라이언트 생성/조회/수정/삭제
 - 검사 배정
 - 평가 로그 생성
 - 결과/리포트 문맥 조회
+- 내담자 그룹(`admin_client_group`, `admin_client_group_member`) 관리
+
+### 4-1. Client Identity Review
+- 사전 등록 없이 자동 생성 기준에 걸린 내담자 후보를 관리자가 승인/반려
+- 데이터: `admin_client_identity_review`
+- 상세: [docs/exec-plans/2026-04-13-client-intake-phase2-ambiguous-match-spec.md](docs/exec-plans/2026-04-13-client-intake-phase2-ambiguous-match-spec.md)
+
+### 4-2. Privacy Consent
+- 검사별 `requires_consent` 플래그에 따라 수검자 동의 수집
+- 동의 기록: `client_consent_record`
+- 상세: [docs/features/privacy-consent-spec.md](docs/features/privacy-consent-spec.md)
 
 ### 5. Dashboard
 - 관리자 대시보드 데이터 조회
@@ -89,6 +102,10 @@ SQLAlchemy 모델, 세션, 엔진, 초기화 및 보정 코드를 제공한다.
 - 제출 ID와 토큰 query 기반 공개 접근 (`/report/{submissionId}?token={accessToken}`) 및 관리자 세션 기반 접근 (`/admin/report/{submissionId}`)
 - 척도 계층(종합척도 → 하위척도) 트리 네비게이션
 - 상세 내용: [docs/features/report-dashboard.md](docs/features/report-dashboard.md)
+
+### 8. Admin Settings
+- 관리자별 운영 설정 저장소(`admin_settings`)
+- `settings_router`로 조회/갱신 API 제공
 
 ## Runtime Flow
 대표적인 운영 시나리오는 아래와 같다.
@@ -116,11 +133,13 @@ HTTP 엔드포인트를 기능별로 분리한다.
 - `auth_router.py`: 관리자 인증
 - `page_router.py`: React SPA browser route 진입점
 - `custom_test_router.py`: 커스텀 검사 관리
-- `assessment_link_router.py`: 수검 링크 기반 API
+- `assessment_link_router.py`: 수검 링크 기반 API, 실시 중 임시저장 API 포함
 - `client_router.py`: 클라이언트 관리
 - `dashboard_router.py`: 대시보드/통계
+- `identity_review_router.py`: 동일인 검토 대기열 조회/승인/반려
 - `scoring_router.py`: 제출 채점 트리거
 - `report_router.py`: 결과 보고서 조회 (토큰 기반 / 관리자 기반)
+- `settings_router.py`: 관리자 설정 조회/갱신
 
 ### `app/schemas/`
 Pydantic 요청/응답 구조를 관리한다.
@@ -186,7 +205,8 @@ Claude 리뷰 JSON 결과는 `artifacts/`가 아니라 `claude/reviews/runs/`에
    - `child_test`의 내담자 수집/동의 관련 컬럼 보정
    - `admin_client`의 생성 출처, 생년월일, 확장 필드 보정
    - 내담자 배정 unique index, 그룹, 리포트, 동일인 검토 테이블 보정
-   - 제출 `client_id`, 채점 결과, 설정, 동의 기록, 제출별 보고서 토큰 보정
+   - 제출 `client_id`, 채점 결과, 설정, 동의 기록, 검사 실시 임시저장, 제출별 보고서 토큰 보정
+   - 실제 호출 순서는 [docs/database/runtime-db.md](docs/database/runtime-db.md)의 Startup Behavior를 기준으로 본다.
 3. 기본 관리자 계정 시드
 
 즉, 이 프로젝트는 완전 분리된 별도 마이그레이션 런타임만 의존하기보다, 앱 시작 시 필요한 최소 보정 작업도 함께 수행하는 구조다.

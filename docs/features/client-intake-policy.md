@@ -208,7 +208,7 @@
 ### 5. 다중 동시 배정 지원
 기존 내담자를 재사용해 새 검사에 연결할 때는, 다른 검사 배정을 깨지 않고 추가 연결이 가능해야 한다.
 
-이 구조 상세는 [docs/features/client-assignment-multi-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-assignment-multi-spec.md)를 본다.
+이 구조 상세는 [docs/exec-plans/2026-04-10-client-assignment-multi-detailed-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-10-client-assignment-multi-detailed-spec.md)를 본다.
 
 ## Recommended Rollout
 
@@ -273,17 +273,17 @@
 
 Phase 1 상세 변경안은 아래 문서를 본다.
 
-- [docs/features/client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase1-spec.md)
+- [docs/exec-plans/2026-04-10-client-intake-phase1-detailed-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-10-client-intake-phase1-detailed-spec.md)
 
 생년월일 없는 유사 매칭의 승인 대기 흐름은 아래 문서를 본다.
 
-- [docs/features/client-intake-phase2-ambiguous-match-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase2-ambiguous-match-spec.md)
+- [docs/exec-plans/2026-04-13-client-intake-phase2-ambiguous-match-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-13-client-intake-phase2-ambiguous-match-spec.md)
 
 ## Related Documents
 - [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
 - [docs/features/assessment-link-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/assessment-link-flow.md)
-- [docs/features/client-intake-phase1-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase1-spec.md)
-- [docs/features/client-intake-phase2-ambiguous-match-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-intake-phase2-ambiguous-match-spec.md)
+- [docs/exec-plans/2026-04-10-client-intake-phase1-detailed-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-10-client-intake-phase1-detailed-spec.md)
+- [docs/exec-plans/2026-04-13-client-intake-phase2-ambiguous-match-spec.md](/mnt/c/Users/user/workspace/2.0-modular/docs/exec-plans/2026-04-13-client-intake-phase2-ambiguous-match-spec.md)
 - [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
 - [ARCHITECTURE.md](/mnt/c/Users/user/workspace/2.0-modular/ARCHITECTURE.md)
 - [docs/doc-governance.md](/mnt/c/Users/user/workspace/2.0-modular/docs/doc-governance.md)
