@@ -41,6 +41,11 @@ def admin_login_page() -> FileResponse:
     return _react_index()
 
 
+@router.get("/admin/")
+def admin_login_page_with_trailing_slash() -> FileResponse:
+    return _react_index()
+
+
 @router.get("/admin/{path:path}")
 def admin_spa_page(path: str) -> FileResponse:
     return _react_index()
