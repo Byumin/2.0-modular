@@ -23,6 +23,80 @@ def _parse_json_object(raw_value: Any, default: Any) -> Any:
         return default
 
 
+def _range_tuple(value: Any, fallback: tuple[int, int, int]) -> tuple[int, int, int]:
+    if not isinstance(value, list) or not value:
+        return fallback
+    parts: list[int] = []
+    for index in range(3):
+        raw_part = value[index] if index < len(value) else 0
+        parts.append(raw_part if isinstance(raw_part, int) else 0)
+    return (parts[0], parts[1], parts[2])
+
+
+def _range_overlaps(conditions: list[dict[str, Any]], key: str) -> bool:
+    starts: list[tuple[int, int, int]] = []
+    ends: list[tuple[int, int, int]] = []
+    for condition in conditions:
+        raw_range = condition.get(key)
+        if not isinstance(raw_range, dict):
+            continue
+        starts.append(_range_tuple(raw_range.get("start_inclusive"), (0, 0, 0)))
+        ends.append(_range_tuple(raw_range.get("end_exclusive"), (999, 0, 0)))
+    if not starts or not ends:
+        return True
+    return max(starts) < min(ends)
+
+
+def _condition_values(raw_value: Any) -> set[str] | None:
+    if raw_value in (None, ""):
+        return None
+    if isinstance(raw_value, list):
+        values = {str(item).strip() for item in raw_value if str(item).strip()}
+        return values or None
+    text = str(raw_value).strip()
+    return {text} if text else None
+
+
+def _conditions_overlap(raw_conditions: list[Any]) -> bool:
+    conditions = [
+        condition
+        for condition in (_parse_json_object(raw, {}) for raw in raw_conditions)
+        if isinstance(condition, dict)
+    ]
+    if len(conditions) != len(raw_conditions):
+        return False
+
+    for range_key in ("age_range", "school_age_range"):
+        if not _range_overlaps(conditions, range_key):
+            return False
+
+    categorical_keys = {
+        key
+        for condition in conditions
+        for key in condition.keys()
+        if key not in {"age_range", "school_age_range"}
+    }
+    for key in categorical_keys:
+        constrained_values = [
+            values
+            for values in (_condition_values(condition.get(key)) for condition in conditions)
+            if values is not None
+        ]
+        if constrained_values and not set.intersection(*constrained_values):
+            return False
+    return True
+
+
+def _merge_scale_structs(rows: list[dict[str, Any]]) -> str:
+    merged: dict[str, Any] = {}
+    for row in rows:
+        parsed = _parse_json_object(row.get("scale_struct"), {})
+        if not isinstance(parsed, dict):
+            continue
+        merged.update(parsed)
+    return json.dumps(merged, ensure_ascii=False)
+
+
 def _sort_item_no(value: str) -> tuple[int, Any]:
     text = str(value or "").strip()
     return (0, int(text)) if text.isdigit() else (1, text)
@@ -167,6 +241,28 @@ def _load_variant_rows(test_id: str, db: Session | None = None) -> list[dict[str
     return [dict(row._mapping) for row in result]
 
 
+def _load_item_condition_rows(test_id: str, db: Session | None = None) -> list[dict[str, Any]]:
+    normalized = _normalize_test_id(test_id)
+    if not normalized:
+        return []
+
+    result = _execute_sql(
+            """
+            SELECT
+                ic."test.id" AS test_id,
+                ic.id AS condition_id,
+                ic.name AS condition_name,
+                ic.condition AS condition_json
+            FROM itemcondition ic
+            WHERE ic."test.id" = :test_id
+            ORDER BY ic.id
+            """,
+            {"test_id": normalized},
+            db,
+        )
+    return [dict(row._mapping) for row in result]
+
+
 def _load_items_by_variant(test_id: str, db: Session | None = None) -> dict[str, list[dict[str, Any]]]:
     normalized = _normalize_test_id(test_id)
     if not normalized:
@@ -204,6 +300,31 @@ def _load_items_by_variant(test_id: str, db: Session | None = None) -> dict[str,
     return grouped
 
 
+def _load_norm_condition_rows(test_id: str, db: Session | None = None) -> list[dict[str, Any]]:
+    normalized = _normalize_test_id(test_id)
+    if not normalized:
+        return []
+
+    result = _execute_sql(
+            """
+            SELECT DISTINCT
+                n."test.id" AS test_id,
+                n."condition.id" AS condition_id,
+                nc.name AS condition_name,
+                nc.condition AS condition_json
+            FROM norm n
+            LEFT JOIN normcondition nc
+              ON nc.id = n."condition.id"
+             AND nc."test.id" = n."test.id"
+            WHERE n."test.id" = :test_id
+            ORDER BY n."condition.id"
+            """,
+            {"test_id": normalized},
+            db,
+        )
+    return [dict(row._mapping) for row in result]
+
+
 def _build_variant_record(
     *,
     test_id: str,
@@ -225,25 +346,50 @@ def _build_variant_record(
 
 
 def _build_records_for_test(test_id: str, *, grouped_item_json: bool, db: Session | None = None) -> list[SimpleNamespace]:
-    variant_rows = _load_variant_rows(test_id, db)
+    scale_rows = _load_variant_rows(test_id, db)
+    item_condition_rows = _load_item_condition_rows(test_id, db)
     items_by_variant = _load_items_by_variant(test_id, db)
+    norm_condition_rows = _load_norm_condition_rows(test_id, db)
     records: list[SimpleNamespace] = []
 
-    for variant in variant_rows:
-        condition_id = str(variant.get("condition_id", "")).strip()
-        sub_test_json = str(variant.get("sub_test_json") or "").strip()
-        scale_struct = str(variant.get("scale_struct") or "").strip()
-        if not condition_id or not sub_test_json or not scale_struct:
+    if not scale_rows or not norm_condition_rows:
+        return records
+
+    for item_condition in item_condition_rows:
+        condition_id = str(item_condition.get("condition_id", "")).strip()
+        sub_test_json = str(item_condition.get("condition_json") or "").strip()
+        if not condition_id or not sub_test_json:
             continue
         items = items_by_variant.get(condition_id, [])
         if not items:
             continue
+        matching_scale_rows = []
+        for scale_row in scale_rows:
+            scale_condition = str(scale_row.get("sub_test_json") or "").strip()
+            scale_struct = str(scale_row.get("scale_struct") or "").strip()
+            if not scale_condition or not scale_struct:
+                continue
+            has_norm_overlap = any(
+                _conditions_overlap(
+                    [
+                        sub_test_json,
+                        scale_condition,
+                        str(norm_row.get("condition_json") or "").strip(),
+                    ]
+                )
+                for norm_row in norm_condition_rows
+            )
+            if has_norm_overlap:
+                matching_scale_rows.append(scale_row)
+        scale_struct = _merge_scale_structs(matching_scale_rows)
+        if not scale_struct or scale_struct == "{}":
+            continue
         records.append(
             _build_variant_record(
-                test_id=str(variant.get("test_id") or "").strip(),
+                test_id=str(item_condition.get("test_id") or "").strip(),
                 sub_test_json=sub_test_json,
                 scale_struct=scale_struct,
-                condition_name=str(variant.get("condition_name") or "").strip(),
+                condition_name=str(item_condition.get("condition_name") or "").strip(),
                 items=items,
                 grouped_item_json=grouped_item_json,
             )
@@ -253,25 +399,25 @@ def _build_records_for_test(test_id: str, *, grouped_item_json: bool, db: Sessio
 
 
 def fetch_parent_scale_rows_by_test(test_id: str, db: Session | None = None):
-    rows = _load_variant_rows(test_id, db)
+    rows = _build_records_for_test(test_id, grouped_item_json=False, db=db)
     return [
         SimpleNamespace(
-            test_id=str(row.get("test_id") or "").strip(),
-            sub_test_json=str(row.get("sub_test_json") or "").strip(),
-            scale_struct=str(row.get("scale_struct") or "").strip(),
+            test_id=str(row.test_id or "").strip(),
+            sub_test_json=str(row.sub_test_json or "").strip(),
+            scale_struct=str(row.scale_struct or "").strip(),
         )
         for row in rows
-        if row.get("sub_test_json") and row.get("scale_struct")
+        if row.sub_test_json and row.scale_struct
     ]
 
 
 def fetch_parent_scale_struct(test_id: str, sub_test_json: str, db: Session | None = None):
     normalized = _normalize_test_id(test_id)
     target_json = str(sub_test_json or "").strip()
-    for row in _load_variant_rows(normalized, db):
-        if str(row.get("sub_test_json") or "").strip() != target_json:
+    for row in _build_records_for_test(normalized, grouped_item_json=False, db=db):
+        if str(row.sub_test_json or "").strip() != target_json:
             continue
-        return SimpleNamespace(scale_struct=str(row.get("scale_struct") or "").strip())
+        return SimpleNamespace(scale_struct=str(row.scale_struct or "").strip())
     return None
 
 

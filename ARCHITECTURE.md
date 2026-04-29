@@ -33,6 +33,37 @@
 
 루트 `main.py`도 존재하지만 현재 모듈형 구조의 기준점은 `app/main.py`로 본다.
 
+## Local Development Runtime
+이 저장소의 로컬 개발 포트는 다른 프로젝트와의 충돌을 줄이기 위해 고정한다.
+
+- FastAPI 통합 앱: `http://127.0.0.1:8120`
+- Vite 개발 서버: `http://localhost:5120`
+- Vite proxy 대상: `http://127.0.0.1:8120`
+
+루트에서 백엔드 통합 앱을 실행할 때는 다음 명령을 사용한다.
+
+```bash
+npm run dev
+```
+
+이 명령은 내부적으로 `app.main:app`을 `127.0.0.1:8120`에서 실행한다. React 빌드 산출물(`frontend/dist`)이 있으면 FastAPI가 `/`, `/admin/*`, `/assessment/custom/{token}`, `/report/{submissionId}`, `/admin/report/{submissionId}` 같은 browser route를 직접 서빙한다.
+
+프런트엔드 개발 서버가 필요할 때는 별도 터미널에서 다음 명령을 사용한다.
+
+```bash
+npm run dev:frontend
+```
+
+이 명령은 Vite를 `localhost:5120`에서 실행한다. 개발 중 `/api`, `/static`, `/artifacts` 요청은 `frontend/vite.config.ts`의 proxy 설정을 통해 FastAPI `127.0.0.1:8120`으로 전달된다.
+
+프런트 빌드는 루트에서 다음 명령으로 실행한다.
+
+```bash
+npm run build:frontend
+```
+
+`8000` 포트는 이 저장소의 기본 실행 포트로 사용하지 않는다. `8000`에서 `address already in use`가 발생하더라도 이 앱은 `8120` 기준으로 실행하면 된다.
+
 ## Layered Structure
 프로젝트는 대체로 아래 계층 규칙을 따른다.
 

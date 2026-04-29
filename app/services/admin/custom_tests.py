@@ -158,6 +158,38 @@ def get_admin_test_catalog(db: Session, admin_session: str | None) -> dict:
             return school_text
         return "연령/학령 정보 없음"
 
+    def build_scale_tree(scale_struct: dict) -> list[dict]:
+        def item_ids_from_scale(raw_scale: dict) -> list[str]:
+            choice_score = raw_scale.get("choice_score", {})
+            if not isinstance(choice_score, dict):
+                return []
+            return sorted(
+                [str(item_id) for item_id in choice_score.keys()],
+                key=lambda x: (0, int(x)) if x.isdigit() else (1, x),
+            )
+
+        def build_node(code: str, raw_scale: object, path: list[str]) -> dict:
+            scale = raw_scale if isinstance(raw_scale, dict) else {}
+            facet_scale = scale.get("facet_scale")
+            children = []
+            if isinstance(facet_scale, dict):
+                children = [
+                    build_node(str(child_code), child_value, [*path, str(child_code)])
+                    for child_code, child_value in facet_scale.items()
+                ]
+            return {
+                "code": code,
+                "name": scale.get("name", code),
+                "path": path,
+                "item_ids": item_ids_from_scale(scale),
+                "children": children,
+            }
+
+        return [
+            build_node(str(code), value, [str(code)])
+            for code, value in scale_struct.items()
+        ]
+
     tests: dict[str, list[dict]] = {}
     for row in rows:
         try:
@@ -186,6 +218,7 @@ def get_admin_test_catalog(db: Session, admin_session: str | None) -> dict:
             "item_map": item_map,
             "response_options": response_options,
             "response_scale_label": response_scale_label,
+            "scale_tree": build_scale_tree(scale_struct),
             "scales": [
                 {
                     "code": code,
@@ -361,6 +394,28 @@ def _canonicalize_sub_test_json(raw: str) -> str:
     return json.dumps(parsed, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def _collect_scale_codes(scale_struct: dict) -> list[str]:
+    codes: set[str] = set()
+
+    def visit(raw: object) -> None:
+        if not isinstance(raw, dict):
+            return
+        facet_scale = raw.get("facet_scale")
+        if isinstance(facet_scale, dict):
+            for child_code, child_value in facet_scale.items():
+                code_text = str(child_code).strip()
+                if code_text:
+                    codes.add(code_text)
+                visit(child_value)
+
+    for code, value in scale_struct.items():
+        code_text = str(code).strip()
+        if code_text:
+            codes.add(code_text)
+        visit(value)
+    return sorted(codes)
+
+
 def _resolve_sub_test_variant_configs(
     admin_selected_test_id: str,
     admin_selected_scale_codes: list[str],
@@ -405,7 +460,7 @@ def _resolve_sub_test_variant_configs(
             continue
         seen.add(candidate_key)
 
-        available_codes = sorted({str(code) for code in scale_struct.keys()}) # 이걸 왜 정렬하는거지..?
+        available_codes = _collect_scale_codes(scale_struct)
         selected_for_variant = sorted(selected_codes.intersection(available_codes))  # intersection : 호출 주체와 인자간의 공통된 요소를 새로운 집합으로 반환
         if not selected_for_variant:
             if candidate_key in excluded_variants:

@@ -4,6 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "dev": "npm run dev:api",
+    "dev:api": ".venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8120",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:frontend": "npm --prefix frontend run build",
     "test": "echo \"Error: no test specified\" && exit 1",
     "diagram:render:sequence": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/assessment-profile-runtime-sequence.mmd -o docs/diagrams/assessment-profile-runtime-sequence.svg -b transparent",
     "diagram:render:flow": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/assessment-profile-validate-flow.mmd -o docs/diagrams/assessment-profile-validate-flow.svg -b transparent",

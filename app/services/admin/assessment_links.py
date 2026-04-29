@@ -497,18 +497,32 @@ def _collect_choice_score_item_ids(raw: Any) -> set[str]:
     return item_ids
 
 
-def _resolve_scale_item_ids(scale_struct: dict, selected_codes: set[str]) -> dict[str, list[str]]:
-    resolved: dict[str, list[str]] = {}
-    for code, raw_scale in scale_struct.items():
+def _resolve_scale_item_ids(scale_struct: dict, selected_codes: set[str]) -> dict[str, dict[str, Any]]:
+    resolved: dict[str, dict[str, Any]] = {}
+
+    def visit(code: str, raw_scale: Any, inherited_selected: bool = False) -> None:
+        if not isinstance(raw_scale, dict):
+            return
         code_text = str(code)
-        if selected_codes and code_text not in selected_codes:
-            continue
+        is_selected = inherited_selected or not selected_codes or code_text in selected_codes
+        facet_scale = raw_scale.get("facet_scale")
+        if isinstance(facet_scale, dict):
+            for child_code, child_scale in facet_scale.items():
+                visit(str(child_code), child_scale, is_selected)
+        if not is_selected:
+            return
         item_ids = sorted(
             _collect_choice_score_item_ids(raw_scale),
             key=lambda x: (0, int(x)) if x.isdigit() else (1, x),
         )
         if item_ids:
-            resolved[code_text] = item_ids
+            resolved[code_text] = {
+                "name": str(raw_scale.get("name", code_text)),
+                "item_ids": item_ids,
+            }
+
+    for code, raw_scale in scale_struct.items():
+        visit(str(code), raw_scale)
     return resolved
 
 
@@ -595,15 +609,15 @@ def _build_variant_items_and_scales(
     resolved_scale_item_ids = _resolve_scale_item_ids(scale_struct, selected_codes)
     selected_item_ids: set[str] = set()
     selected_scales: list[dict] = []
-    for code, item_ids in resolved_scale_item_ids.items():
-        raw_scale = scale_struct.get(code, {}) if isinstance(scale_struct, dict) else {}
+    for code, scale_info in resolved_scale_item_ids.items():
+        item_ids = scale_info["item_ids"]
         selected_item_ids.update(item_ids)
         selected_scales.append(
             {
                 "test_id": test_id,
                 "sub_test_json": sub_test_json,
                 "code": code,
-                "name": str(raw_scale.get("name", code)) if isinstance(raw_scale, dict) else code,
+                "name": scale_info["name"],
                 "item_ids": [f"{test_id}::{sub_test_json}::{item_id}" for item_id in item_ids],
             }
         )

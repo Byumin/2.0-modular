@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright";
 
-const baseUrl = process.argv[2] || "http://127.0.0.1:8000";
+const baseUrl = process.argv[2] || "http://127.0.0.1:8120";
 const clientId = process.argv[3] || "1";
 const outArg = process.argv[4] || "artifacts/screenshots/client-detail-after-login.png";
 const outPath = path.resolve(process.cwd(), outArg);

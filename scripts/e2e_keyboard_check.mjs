@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-const url = process.argv[2] || 'http://127.0.0.1:8000/assessment/custom/1Wubl4rkw8LYzdFNTSPm-bEXjwHYVeZB';
+const url = process.argv[2] || 'http://127.0.0.1:8120/assessment/custom/1Wubl4rkw8LYzdFNTSPm-bEXjwHYVeZB';
 const keyPressCount = Number(process.argv[3] || '8');
 
 function parseAnswered(text) {
