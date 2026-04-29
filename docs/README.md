@@ -19,6 +19,7 @@
 
 ## Read By Task
 - 기능 이해: `ARCHITECTURE.md` -> `docs/features/README.md` -> 필요한 기능 문서
+- 로컬 실행/포트 확인: `ARCHITECTURE.md`의 `Local Development Runtime`
 - DB 확인: `docs/database/README.md` -> `runtime-db.md` -> `schema-overview.md`
 - UI 작업: `docs/design/design-system.md` -> `QUALIT_SCORE.md` -> `scripts/README_CAPTURE.md`
 - 코드 흐름 설명: `docs/debug/explanation-rule.md`
@@ -27,6 +28,7 @@
 - 실행 계획 작성: `docs/exec-plans/README.md`
 
 ## Tooling
+- 로컬 실행: `npm run dev`(FastAPI `8120`), `npm run dev:frontend`(Vite `5120`)
 - Claude 자동화: [claude/README.md](../claude/README.md)
 - Claude 하네스: [claude/HARNESS.md](../claude/HARNESS.md)
 - 화면 캡처: [scripts/README_CAPTURE.md](../scripts/README_CAPTURE.md)

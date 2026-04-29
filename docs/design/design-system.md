@@ -338,7 +338,7 @@ frontend/
 ```
 
 ### FastAPI 연동 방식
-- 개발 중: Vite dev server(`localhost:5173`)에서 FastAPI(`localhost:8000`)로 proxy
+- 개발 중: Vite dev server(`localhost:5120`)에서 FastAPI(`localhost:8120`)로 proxy
 - 운영: `frontend/dist/index.html`을 FastAPI page router가 `/`, `/admin`, `/admin/*`, `/assessment/custom/{token}`에서 서빙하고, `frontend/dist/assets`를 `/assets`로 mount한다.
 - 기존 `/api/...` 엔드포인트는 변경 없이 그대로 사용
 

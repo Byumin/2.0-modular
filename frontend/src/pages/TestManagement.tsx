@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
-import { IconLink, IconPlus, IconSearch, IconTrash } from "@tabler/icons-react"
+import { IconChevronDown, IconChevronRight, IconLink, IconPlus, IconSearch, IconTrash } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -34,6 +34,15 @@ type ManagementTab = "custom-tests" | "status"
 interface CatalogScale {
   code: string
   name?: string
+  item_ids?: string[]
+}
+
+interface CatalogScaleNode {
+  code: string
+  name?: string
+  path?: string[]
+  item_ids?: string[]
+  children?: CatalogScaleNode[]
 }
 
 interface CatalogSubTest {
@@ -42,6 +51,7 @@ interface CatalogSubTest {
   item_count?: number
   age_label?: string
   scales?: CatalogScale[]
+  scale_tree?: CatalogScaleNode[]
 }
 
 interface CatalogTest {
@@ -64,16 +74,37 @@ interface ProfileField {
   options: string[]
 }
 
+interface ScaleTreeItem {
+  key: string
+  test_id: string
+  sub_test_json: string
+  sub_test_jsons: string[]
+  code: string
+  name: string
+  label: string
+  path: string[]
+  condition_label: string
+  item_count: number
+  source_keys: string[]
+  children: ScaleTreeItem[]
+}
+
 interface ScaleGroupItem {
   key: string
   test_id: string
+  sub_test_json: string
   code: string
+  name: string
   label: string
+  path: string[]
+  condition_label: string
+  item_count: number
 }
 
 interface ScaleGroup {
   test_id: string
   scales: ScaleGroupItem[]
+  tree: ScaleTreeItem[]
 }
 
 interface MissingVariant {
@@ -121,8 +152,8 @@ function isOptionType(type: FieldType) {
   return type === "select" || type === "multi_select"
 }
 
-function scaleKey(testId: string, code: string) {
-  return `${testId}::${code}`
+function scaleKey(testId: string, subTestJson: string, path: string[]) {
+  return `${testId}::${subTestJson}::${path.join("/")}`
 }
 
 function describeSubTest(subTest: CatalogSubTest) {
@@ -134,35 +165,164 @@ function describeSubTest(subTest: CatalogSubTest) {
   return parts.join(" | ")
 }
 
+function ageStartFromSubTest(subTest: CatalogSubTest) {
+  try {
+    const parsed = JSON.parse(subTest.sub_test_json || "{}")
+    const age = parsed?.age
+    if (Array.isArray(age) && Number.isFinite(Number(age[0]))) return Number(age[0])
+    if (Number.isFinite(Number(age))) return Number(age)
+  } catch {
+    // Fall back to the display label below.
+  }
+  const label = subTest.age_label || ""
+  const match = label.match(/-?\d+/)
+  return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER
+}
+
+function normalizeScaleNodes(nodes: CatalogScaleNode[]): CatalogScaleNode[] {
+  return nodes.map((node) => ({
+    ...node,
+    code: String(node.code || "").trim(),
+    name: String(node.name || node.code || "").trim(),
+    path: node.path?.map(String),
+    children: normalizeScaleNodes(node.children ?? []),
+  }))
+}
+
+function scaleTreeSignature(nodes: CatalogScaleNode[]): string {
+  return JSON.stringify(normalizeScaleNodes(nodes).map((node) => ({
+    code: node.code,
+    name: node.name,
+    children: node.children,
+  })))
+}
+
+function combineConditionLabels(labels: string[]) {
+  const unique = [...new Set(labels.filter(Boolean))]
+  if (unique.length <= 1) return unique[0] || "연령/학령 정보 없음"
+  return unique.join(", ")
+}
+
 function collectScaleGroups(catalog: CatalogTest[], testIds: string[]): ScaleGroup[] {
+  const flattenTree = (items: ScaleTreeItem[]): ScaleGroupItem[] => {
+    const flattened: ScaleGroupItem[] = []
+    items.forEach((item) => {
+      if (item.children.length > 0) {
+        flattened.push(...flattenTree(item.children))
+        return
+      }
+      const sourceKeys = item.source_keys.length ? item.source_keys : [item.key]
+      sourceKeys.forEach((key, index) => {
+        flattened.push({
+          key,
+          test_id: item.test_id,
+          sub_test_json: item.sub_test_jsons[index] ?? item.sub_test_json,
+          code: item.code,
+          name: item.name,
+          label: item.label,
+          path: item.path,
+          condition_label: item.condition_label,
+          item_count: item.item_count,
+        })
+      })
+    })
+    return flattened
+  }
+
+  const buildTreeItems = (
+    testId: string,
+    subTests: CatalogSubTest[],
+    nodes: CatalogScaleNode[],
+    parentPath: string[] = []
+  ): ScaleTreeItem[] => {
+    const conditionLabel = combineConditionLabels(subTests.map((subTest) => subTest.age_label || describeSubTest(subTest)))
+    return nodes
+      .map((node) => {
+        const code = String(node.code || "").trim()
+        if (!code) return null
+        const path = node.path?.length ? node.path.map(String) : [...parentPath, code]
+        const children = buildTreeItems(testId, subTests, node.children ?? [], path)
+        const name = node.name || code
+        const itemCount = Array.isArray(node.item_ids) ? node.item_ids.length : 0
+        const sourceKeys = subTests.map((subTest) => scaleKey(testId, subTest.sub_test_json, path))
+        return {
+          key: `${testId}::${subTests.map((subTest) => subTest.sub_test_json).join("||")}::${path.join("/")}`,
+          test_id: testId,
+          sub_test_json: subTests[0]?.sub_test_json ?? "",
+          sub_test_jsons: subTests.map((subTest) => subTest.sub_test_json),
+          code,
+          name,
+          label: `${name} (${code})`,
+          path,
+          condition_label: conditionLabel,
+          item_count: itemCount,
+          source_keys: children.length > 0 ? [] : sourceKeys,
+          children,
+        }
+      })
+      .filter((item): item is ScaleTreeItem => Boolean(item))
+  }
+
   return testIds
     .map((testId) => {
       const test = catalog.find((item) => item.test_id === testId)
       if (!test?.sub_tests?.length) return null
 
-      const grouped = new Map<string, { code: string; name: string; ageLabels: Set<string> }>()
-      test.sub_tests.forEach((subTest) => {
-        const ageLabel = subTest.age_label || "연령/학령 정보 없음"
-        ;(subTest.scales ?? []).forEach((scale) => {
-          const code = String(scale.code || "").trim()
-          if (!code) return
-          const current = grouped.get(code) ?? { code, name: scale.name || code, ageLabels: new Set<string>() }
-          current.name = current.name || scale.name || code
-          current.ageLabels.add(ageLabel)
-          grouped.set(code, current)
+      const tree: ScaleTreeItem[] = []
+      const groupedSubTests = new Map<string, { subTests: CatalogSubTest[]; nodes: CatalogScaleNode[] }>()
+      ;[...test.sub_tests]
+        .sort((a, b) => {
+          const ageOrder = ageStartFromSubTest(a) - ageStartFromSubTest(b)
+          if (ageOrder !== 0) return ageOrder
+          return a.sub_test_json.localeCompare(b.sub_test_json)
+        })
+        .forEach((subTest) => {
+          const nodes = subTest.scale_tree?.length
+            ? subTest.scale_tree
+            : (subTest.scales ?? []).map((scale) => ({
+                code: scale.code,
+                name: scale.name,
+                item_ids: scale.item_ids,
+                children: [],
+              }))
+          const signature = scaleTreeSignature(nodes)
+          const current = groupedSubTests.get(signature) ?? { subTests: [] as CatalogSubTest[], nodes }
+          current.subTests.push(subTest)
+          groupedSubTests.set(signature, current)
+        })
+
+      ;[...groupedSubTests.values()].forEach(({ subTests, nodes }) => {
+        const sortedSubTests = [...subTests].sort((a, b) => {
+          const ageOrder = ageStartFromSubTest(a) - ageStartFromSubTest(b)
+          if (ageOrder !== 0) return ageOrder
+          return a.sub_test_json.localeCompare(b.sub_test_json)
+        })
+        const conditionLabel = combineConditionLabels(sortedSubTests.map((subTest) => subTest.age_label || describeSubTest(subTest)))
+        const itemCount = [...new Set(sortedSubTests.map((subTest) => Number.isFinite(subTest.item_count) ? Number(subTest.item_count) : 0))]
+          .reduce((sum, count) => sum + count, 0)
+        tree.push({
+          key: `${testId}::${sortedSubTests.map((subTest) => subTest.sub_test_json).join("||")}`,
+          test_id: testId,
+          sub_test_json: sortedSubTests[0]?.sub_test_json ?? "",
+          sub_test_jsons: sortedSubTests.map((subTest) => subTest.sub_test_json),
+          code: sortedSubTests[0]?.sub_test_json ?? "",
+          name: conditionLabel,
+          label: conditionLabel,
+          path: [],
+          condition_label: conditionLabel,
+          item_count: itemCount,
+          source_keys: [],
+          children: buildTreeItems(testId, sortedSubTests, nodes),
         })
       })
 
-      const scales = [...grouped.values()]
-        .sort((a, b) => a.code.localeCompare(b.code))
-        .map((item) => ({
-          key: scaleKey(testId, item.code),
-          test_id: testId,
-          code: item.code,
-          label: `${item.name} (${item.code}) - ${[...item.ageLabels].join(", ")}`,
-        }))
+      const scales = flattenTree(tree).sort((a, b) => {
+        const conditionOrder = a.condition_label.localeCompare(b.condition_label)
+        if (conditionOrder !== 0) return conditionOrder
+        return a.path.join("/").localeCompare(b.path.join("/"))
+      })
 
-      return { test_id: testId, scales }
+      return { test_id: testId, scales, tree }
     })
     .filter((item): item is ScaleGroup => Boolean(item))
 }
@@ -190,6 +350,7 @@ export function TestManagement() {
   const [creating, setCreating] = React.useState(false)
   const [selectedTestIds, setSelectedTestIds] = React.useState<string[]>([])
   const [expandedTestIds, setExpandedTestIds] = React.useState<Set<string>>(new Set())
+  const [expandedScaleNodeKeys, setExpandedScaleNodeKeys] = React.useState<Set<string>>(new Set())
   const [allScaleTestIds, setAllScaleTestIds] = React.useState<Set<string>>(new Set())
   const [selectedScaleKeys, setSelectedScaleKeys] = React.useState<Set<string>>(new Set())
   const [profileFields, setProfileFields] = React.useState<ProfileField[]>([])
@@ -211,15 +372,13 @@ export function TestManagement() {
 
     selectedTestIds.forEach((testId) => {
       const test = catalog.find((item) => item.test_id === testId)
-      const selectedCodes = new Set(
+      const selectedScales = (
         (scaleGroups.find((group) => group.test_id === testId)?.scales ?? [])
           .filter((scale) => selectedScaleKeys.has(scale.key))
-          .map((scale) => scale.code)
       )
 
       ;(test?.sub_tests ?? []).forEach((subTest) => {
-        const availableCodes = new Set((subTest.scales ?? []).map((scale) => String(scale.code || "").trim()).filter(Boolean))
-        const hasSelectedScale = [...selectedCodes].some((code) => availableCodes.has(code))
+        const hasSelectedScale = selectedScales.some((scale) => scale.sub_test_json === subTest.sub_test_json)
         if (hasSelectedScale) {
           includedVariantCount += 1
           if (Number.isFinite(subTest.item_count)) {
@@ -287,6 +446,7 @@ export function TestManagement() {
     setCreateMessage(null)
     setSelectedTestIds([])
     setExpandedTestIds(new Set())
+    setExpandedScaleNodeKeys(new Set())
     setAllScaleTestIds(new Set())
     setSelectedScaleKeys(new Set())
     setProfileFields([])
@@ -361,12 +521,16 @@ export function TestManagement() {
     })
     setSelectedScaleKeys((prev) => {
       const next = new Set(prev)
-      keys.forEach((key) => next.add(key))
+      keys.forEach((key) => {
+        if (checked) next.add(key)
+        else next.delete(key)
+      })
       return next
     })
   }
 
-  const setScaleSelected = (testId: string, key: string, checked: boolean) => {
+  const setScaleSelected = (testId: string, keys: string | string[], checked: boolean) => {
+    const targetKeys = Array.isArray(keys) ? keys : [keys]
     setAllScaleTestIds((prev) => {
       const next = new Set(prev)
       next.delete(testId)
@@ -374,8 +538,19 @@ export function TestManagement() {
     })
     setSelectedScaleKeys((prev) => {
       const next = new Set(prev)
-      if (checked) next.add(key)
-      else next.delete(key)
+      targetKeys.forEach((key) => {
+        if (checked) next.add(key)
+        else next.delete(key)
+      })
+      return next
+    })
+  }
+
+  const toggleScaleNode = (key: string) => {
+    setExpandedScaleNodeKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
@@ -396,13 +571,15 @@ export function TestManagement() {
     if (!selectedTestIds.length) throw new Error("최소 1개 이상의 검사를 선택해주세요.")
     if (!selectedScaleKeys.size) throw new Error("최소 1개 이상의 척도를 선택해주세요.")
 
-    const selectedByTest = new Map<string, Set<string>>()
+    const selectedByTest = new Map<string, Map<string, Set<string>>>()
     scaleGroups.forEach((group) => {
       group.scales.forEach((scale) => {
         if (!selectedScaleKeys.has(scale.key)) return
-        const codes = selectedByTest.get(group.test_id) ?? new Set<string>()
+        const bySubTest = selectedByTest.get(group.test_id) ?? new Map<string, Set<string>>()
+        const codes = bySubTest.get(scale.sub_test_json) ?? new Set<string>()
         codes.add(scale.code)
-        selectedByTest.set(group.test_id, codes)
+        bySubTest.set(scale.sub_test_json, codes)
+        selectedByTest.set(group.test_id, bySubTest)
       })
     })
 
@@ -410,12 +587,18 @@ export function TestManagement() {
     const test_configs = selectedTestIds
       .map((testId) => {
         const test = catalog.find((item) => item.test_id === testId)
-        const selectedCodes = [...(selectedByTest.get(testId) ?? new Set<string>())]
+        const selectedBySubTest = selectedByTest.get(testId) ?? new Map<string, Set<string>>()
+        const selectedCodes = [...new Set([...selectedBySubTest.values()].flatMap((codes) => [...codes]))]
         const excluded_sub_test_jsons: string[] = []
 
         ;(test?.sub_tests ?? []).forEach((subTest) => {
-          const availableCodes = [...new Set((subTest.scales ?? []).map((scale) => String(scale.code || "").trim()).filter(Boolean))]
-          const matchedCodes = selectedCodes.filter((code) => availableCodes.includes(code))
+          const availableCodes = [...new Set(
+            (scaleGroups.find((group) => group.test_id === testId)?.scales ?? [])
+              .filter((scale) => scale.sub_test_json === subTest.sub_test_json)
+              .map((scale) => String(scale.code || "").trim())
+              .filter(Boolean)
+          )]
+          const matchedCodes = [...(selectedBySubTest.get(subTest.sub_test_json) ?? new Set<string>())]
           if (matchedCodes.length === 0) {
             excluded_sub_test_jsons.push(subTest.sub_test_json)
             missing.push({
@@ -532,6 +715,68 @@ export function TestManagement() {
     { value: "custom-tests", label: "커스텀 검사" },
     { value: "status", label: "실시 현황" },
   ]
+
+  const renderScaleNodes = (group: ScaleGroup, nodes: ScaleTreeItem[], depth = 0): React.ReactNode => {
+    return nodes.map((node) => {
+      const hasChildren = node.children.length > 0
+      const isExpanded = expandedScaleNodeKeys.has(node.key)
+      const selectableKeys = node.source_keys.length ? node.source_keys : [node.key]
+      const isSelected = selectableKeys.every((key) => selectedScaleKeys.has(key))
+      const itemCountLabel = node.item_count > 0 ? `${node.item_count}문항` : ""
+      return (
+        <div key={node.key} className="space-y-0.5">
+          <div
+            className="flex min-h-7 items-center gap-1.5 rounded px-1.5 py-1 text-xs hover:bg-muted/50"
+            style={{ paddingLeft: `${4 + depth * 14}px` }}
+          >
+            {hasChildren ? (
+              <button
+                type="button"
+                className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-background hover:text-foreground"
+                onClick={() => toggleScaleNode(node.key)}
+                aria-label={isExpanded ? `${node.label} 접기` : `${node.label} 펼치기`}
+              >
+                {isExpanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+              </button>
+            ) : (
+              <span className="size-5 shrink-0" />
+            )}
+
+            {hasChildren ? (
+              <button
+                type="button"
+                className="min-w-0 flex-1 text-left font-medium"
+                onClick={() => toggleScaleNode(node.key)}
+              >
+                <span className="block truncate">{node.label}</span>
+              </button>
+            ) : (
+              <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-3.5"
+                  checked={isSelected}
+                  disabled={allScaleTestIds.has(group.test_id)}
+                  onChange={(e) => setScaleSelected(group.test_id, selectableKeys, e.target.checked)}
+                />
+                <span className="min-w-0">
+                  <span className="block break-words">{node.label}</span>
+                  {itemCountLabel && (
+                    <span className="block text-[11px] leading-4 text-muted-foreground">{itemCountLabel}</span>
+                  )}
+                </span>
+              </label>
+            )}
+          </div>
+          {hasChildren && isExpanded && (
+            <div className="space-y-0.5">
+              {renderScaleNodes(group, node.children, depth + 1)}
+            </div>
+          )}
+        </div>
+      )
+    })
+  }
 
   return (
     <div className="flex flex-col gap-6 overflow-auto p-6">
@@ -823,7 +1068,7 @@ export function TestManagement() {
                   <div className="rounded-lg border p-4">
                     <h4 className="text-sm font-semibold">2. 척도 선택</h4>
                     <p className="text-xs text-muted-foreground">검사 선택 후 펼쳐지는 트리에서 사용할 척도를 고릅니다.</p>
-                    <div className="mt-4 flex max-h-80 flex-col gap-3 overflow-auto">
+                    <div className="mt-3 flex max-h-80 flex-col gap-2 overflow-auto">
                       {scaleGroups.length === 0 ? (
                         <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">먼저 검사 선택에서 검사 항목을 체크해주세요.</p>
                       ) : scaleGroups.map((group) => {
@@ -831,18 +1076,19 @@ export function TestManagement() {
                         const isExpanded = expandedTestIds.has(group.test_id)
                         return (
                           <div key={group.test_id} className="rounded-md border">
-                            <div className="flex items-center justify-between gap-3 px-3 py-2">
-                              <label className="flex items-center gap-2 text-sm font-medium">
+                            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
+                              <label className="flex items-center gap-2 text-xs font-medium">
                                 <input
                                   type="checkbox"
+                                  className="size-3.5"
                                   checked={isAllSelected}
                                   onChange={(e) => setAllScalesForTest(group.test_id, e.target.checked)}
                                 />
-                                <span>{group.test_id} 전체 척도 선택</span>
+                                <span>{group.test_id}</span>
                               </label>
                               <button
                                 type="button"
-                                className="text-xs text-muted-foreground hover:text-foreground"
+                                className="text-[11px] text-muted-foreground hover:text-foreground"
                                 onClick={() => setExpandedTestIds((prev) => {
                                   const next = new Set(prev)
                                   if (next.has(group.test_id)) next.delete(group.test_id)
@@ -854,18 +1100,19 @@ export function TestManagement() {
                               </button>
                             </div>
                             {isExpanded && (
-                              <div className="flex flex-col gap-1 border-t p-3">
-                                {group.scales.map((scale) => (
-                                  <label key={scale.key} className="flex items-start gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50">
-                                    <input
-                                      type="checkbox"
-                                      className="mt-0.5"
-                                      checked={selectedScaleKeys.has(scale.key)}
-                                      disabled={isAllSelected}
-                                      onChange={(e) => setScaleSelected(group.test_id, scale.key, e.target.checked)}
-                                    />
-                                    <span>{scale.label}</span>
-                                  </label>
+                              <div className="flex flex-col gap-2 border-t px-2 py-2">
+                                {group.tree.map((conditionNode) => (
+                                  <div key={conditionNode.key} className="rounded border bg-muted/10">
+                                    <div className="flex items-center justify-between gap-2 border-b px-2 py-1.5">
+                                      <p className="min-w-0 truncate text-xs font-medium">{conditionNode.label}</p>
+                                      <span className="shrink-0 text-[11px] leading-4 text-muted-foreground">
+                                        {conditionNode.item_count ? `${conditionNode.item_count}문항` : "문항 정보 없음"}
+                                      </span>
+                                    </div>
+                                    <div className="px-1 py-1">
+                                      {renderScaleNodes(group, conditionNode.children)}
+                                    </div>
+                                  </div>
                                 ))}
                               </div>
                             )}
