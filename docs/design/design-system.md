@@ -1,5 +1,8 @@
 # Frontend Design System
 
+> 현재 디자인 기준의 source-of-truth는 루트 [DESIGN.md](../../DESIGN.md)다.
+> 이 문서는 기존 디자인 시스템 보조 문서로 유지한다.
+
 ## Purpose
 이 문서는 관리자 화면과 수검자 화면 전반에서 디자인 통일성을 유지하기 위한 기준 문서다.
 

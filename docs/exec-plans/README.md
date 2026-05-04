@@ -23,6 +23,7 @@
 - 작업 도중 계획이 바뀌면 바뀐 사실과 이유를 기록한다.
 - 최종적으로 결과가 기대와 다르면 원인을 반드시 분류한다.
 - DB 경로를 건드리는 작업이면 운영 기준 DB가 루트 `modular.db` 하나라는 원칙을 깨지 않는지 먼저 확인한다.
+- 새 실행계획은 `_template.md`의 `Preflight Checklist`를 기준으로 `AGENTS.md`와 작업 종류별 source-of-truth 확인 여부를 먼저 남긴다.
 
 ## Retrospective Classification
 회고 시 아래처럼 분류한다.

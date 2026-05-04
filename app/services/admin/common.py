@@ -364,7 +364,29 @@ def parse_custom_test_configs(
     selected_configs = _normalize_selected_scale_test_configs(selected_raw) # 실시구간 정보와 선택된 척도 코드들을 정규화해서 리스트(딕셔너리)로 반환
     if selected_configs:
         return selected_configs
-    # selected_scales_json 구조가 이상한 경우 아래와 같이 처리됨
+    # selected_scales_json 구조가 이상한 경우 sub_test_json fallback
+    fallback_sub_test_json_raw = _safe_json_loads(sub_test_json)
+    # 새 구조: {test_id: [condition, ...]}
+    if isinstance(fallback_sub_test_json_raw, dict) and all(
+        isinstance(v, list) for v in fallback_sub_test_json_raw.values()
+    ):
+        result = []
+        for tid, conditions in fallback_sub_test_json_raw.items():
+            variants = [
+                {
+                    "sub_test_json": json.dumps(cond, ensure_ascii=False),
+                    "available_scale_codes": [],
+                    "selected_scale_codes": [],
+                }
+                for cond in conditions
+                if isinstance(cond, dict)
+            ]
+            if variants:
+                result.append({"test_id": tid, "sub_test_variants": variants})
+        if result:
+            return result
+
+    # 구형 단일 구간 fallback
     fallback_test_id = str(test_id or "").strip()
     fallback_sub_test_json = str(sub_test_json or "").strip()
     fallback_selected_codes = _normalize_scale_codes(selected_raw)

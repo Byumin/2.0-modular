@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "predev": ".venv/bin/python scripts/dev_preflight.py",
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:frontend\"",
     "dev:api": ".venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8120",
     "dev:frontend": "npm --prefix frontend run dev",

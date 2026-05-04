@@ -1,10 +1,6 @@
 import json
 from datetime import date
 
-# 로거 불러오기
-import app.logger_config as logger_config
-logger = logger_config.get_logger()
-
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -442,11 +438,9 @@ def _resolve_sub_test_variant_configs(
 
     candidates: list[dict] = []
     seen: set[str] = set()
-    missing_variants: list[dict] = []
     invalid_exclusions: list[str] = []
     for row in rows: # rows : db에서 가져온 각 행에 대해 반복, 각 행은 특정 sub_test_json과 scale_struct를 포함
         try:
-            logger.info(f"Processing row: {row}")
             scale_struct = json.loads(row.scale_struct) # scale_struct를 딕셔너리로 변환, 변환 실패 시 예외 처리하여 다음 행으로 넘어감
         except json.JSONDecodeError:
             continue
@@ -465,12 +459,6 @@ def _resolve_sub_test_variant_configs(
         if not selected_for_variant:
             if candidate_key in excluded_variants:
                 continue
-            missing_variants.append(
-                {
-                    "label": _describe_sub_test_variant(candidate_json),
-                    "available_scale_codes": available_codes,
-                }
-            )
             continue
         if candidate_key in excluded_variants:
             invalid_exclusions.append(_describe_sub_test_variant(candidate_json))
@@ -485,17 +473,6 @@ def _resolve_sub_test_variant_configs(
             }
         )
 
-    if missing_variants:
-        details = ", ".join(
-            [
-                f"{item['label']}(가능 척도: {', '.join(item['available_scale_codes'])})"
-                for item in missing_variants
-            ]
-        )
-        raise HTTPException(
-            status_code=400,
-            detail=f"{admin_selected_test_id}: 선택한 척도가 없는 실시구간이 있습니다. {details}",
-        )
     if invalid_exclusions:
         raise HTTPException(
             status_code=400,
@@ -508,41 +485,24 @@ def _resolve_sub_test_variant_configs(
     return candidates
 
 
-def _merge_sub_test_dict(target: dict, incoming: dict) -> None:
-    for key, value in incoming.items():
-        if key not in target:
-            target[key] = value
+def _build_structured_sub_test_json(resolved_test_configs: list[dict]) -> str:
+    result: dict[str, list] = {}
+    for config in resolved_test_configs:
+        test_id = str(config.get("test_id", "")).strip()
+        if not test_id:
             continue
-
-        existing = target[key]
-        if isinstance(existing, dict) and isinstance(value, dict):
-            _merge_sub_test_dict(existing, value)
-            continue
-
-        if isinstance(existing, list) and isinstance(value, list):
-            for item in value:
-                if item not in existing:
-                    existing.append(item)
-            continue
-
-        if existing != value:
-            if isinstance(existing, list):
-                if value not in existing:
-                    existing.append(value)
-            else:
-                target[key] = [existing, value] if existing != value else existing
-
-
-def _build_merged_sub_test_json(variants: list[dict]) -> str:
-    merged: dict = {}
-    for variant in variants:
-        try:
-            parsed = json.loads(variant["sub_test_json"])
-        except (KeyError, TypeError, json.JSONDecodeError):
-            continue
-        if isinstance(parsed, dict):
-            _merge_sub_test_dict(merged, parsed)
-    return json.dumps(merged, ensure_ascii=False)
+        seen: list[dict] = []
+        for variant in config.get("sub_test_variants", []):
+            raw = variant.get("sub_test_json", "")
+            try:
+                parsed = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if isinstance(parsed, dict) and parsed not in seen:
+                seen.append(parsed)
+        if seen:
+            result[test_id] = seen
+    return json.dumps(result, ensure_ascii=False)
 
 # 커스텀 검사 생성 배치 처리 함수 (여러 개의 검사 설정을 한 번에 생성)
 def create_admin_custom_test_batch(
@@ -567,22 +527,18 @@ def create_admin_custom_test_batch(
     row: AdminCustomTest | None = None
     resolved_test_configs: list[dict] = []
     flattened_variants: list[dict] = []
-    logger.info(payload.test_configs)
     for config in payload.test_configs: # 검사별로 반복 (검사별 test_id와 선택한 척도코드-리스트)
-        logger.info(config)
         resolved_variant_configs = _resolve_sub_test_variant_configs(
             config.test_id,
             config.selected_scale_codes,
             excluded_sub_test_jsons=config.excluded_sub_test_jsons,
             db=db,
         ) # resolved_variant_configs : 정규화 처리된 test_id와 척도코드 - 리스트[딕셔너리]
-        logger.info(resolved_variant_configs)
         resolved_test_configs.append(
             {"test_id": config.test_id, "sub_test_variants": resolved_variant_configs}
         )
         flattened_variants.extend(resolved_variant_configs)
 
-    logger.info(f'create_admin_custom_test_batch:\n{flattened_variants}')
     sys_test_ids : set[str] = set() # 실시 가능한 모든 test_id를 집합에 저장하여 중복 제거
 
     for config in flattened_variants:
@@ -604,12 +560,10 @@ def create_admin_custom_test_batch(
         ]
         for config in resolved_test_configs
     }
-    logger.info(f'selected_scales_struct_json:\n{selected_scales_struct_json}')
-
     row = AdminCustomTest( # AdminCustomTest 관리자가 만든 커스텀 검사 1건을 나타내는 sqlalchemy 모델, 각 검사별로 하나의 행이 생성됨
         admin_user_id=admin.id,
         test_id=json.dumps(sorted(sys_test_ids), ensure_ascii=False), # 실시 가능한 모든 test_id를 JSON 배열 형태로 저장
-        sub_test_json=_build_merged_sub_test_json(flattened_variants), # 실시 가능한 모든 sub_test_json 키/값 병합 결과 저장
+        sub_test_json=_build_structured_sub_test_json(resolved_test_configs),
         custom_test_name=trimmed_name,
         client_intake_mode=client_intake_mode,
         selected_scales_json=json.dumps(selected_scales_struct_json, ensure_ascii=False),
@@ -649,11 +603,22 @@ def get_admin_custom_test(db: Session, admin_session: str | None, custom_test_id
     raw_additional_payload = json.loads(getattr(row, "additional_profile_fields_json", "[]") or "[]")
     additional_profile_fields = normalize_additional_profile_fields(raw_additional_payload)
     variant_configs = flatten_custom_test_variant_configs(test_configs)
-    sub_test_variants = (
-        [item["sub_test_json"] for item in variant_configs]
-        if variant_configs
-        else [row.sub_test_json]
-    )
+    if variant_configs:
+        sub_test_variants = [item["sub_test_json"] for item in variant_configs]
+    else:
+        try:
+            structured = json.loads(row.sub_test_json or "{}")
+            if isinstance(structured, dict) and all(isinstance(v, list) for v in structured.values()):
+                sub_test_variants = [
+                    json.dumps(cond, ensure_ascii=False)
+                    for conditions in structured.values()
+                    for cond in conditions
+                    if isinstance(cond, dict)
+                ]
+            else:
+                sub_test_variants = [row.sub_test_json] if row.sub_test_json else []
+        except (TypeError, json.JSONDecodeError):
+            sub_test_variants = []
     return {
         "id": row.id,
         "custom_test_name": row.custom_test_name,

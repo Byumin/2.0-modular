@@ -9,6 +9,18 @@
 ## Goal
 - 
 
+## Preflight Checklist
+- [ ] `AGENTS.md` 확인
+- [ ] 작업 종류별 source-of-truth 확인:
+  - 코드/구조: `ARCHITECTURE.md`
+  - DB: `docs/database/runtime-db.md`, `docs/database/schema-overview.md`
+  - UI/디자인: `DESIGN.md`, `QUALIT_SCORE.md`
+  - 문서 체계: `docs/doc-governance.md`
+  - 설명/디버깅: `docs/debug/explanation-rule.md`
+  - 코드 정리 산출물: `docs/code-cleanup/README.md`
+- [ ] 운영 DB가 필요한 작업이면 루트 `modular.db` 기준 확인
+- [ ] 검증 방법과 미검증 가능 항목 정의
+
 ## Initial Hypothesis
 - 
 

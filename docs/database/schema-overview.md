@@ -19,14 +19,56 @@
 - 주요 필드:
   - `id`
   - `admin_user_id`
-  - `test_id`
-  - `sub_test_json`
+  - `test_id` — 포함된 원본 검사 ID 목록 JSON 배열 (예: `["K-PSI-4-SF","PAT-2","PCT"]`)
+  - `sub_test_json` — 검사별 유효 실시구간 목록. 구조 아래 참고.
   - `custom_test_name`
   - `client_intake_mode`
-  - `selected_scales_json`
+  - `selected_scales_json` — 검사별 실시구간 + 선택 척도 코드 매핑. 구조 아래 참고.
   - `additional_profile_fields_json`
   - `requires_consent`
   - `created_at`
+
+#### `child_test.sub_test_json` 구조
+
+검사별(test_id)로 유효한 실시구간 목록을 담는다. 각 구간은 item/scale/norm condition 세 테이블의 **수학적 교집합**으로 산출된다.
+
+```json
+{
+  "GOLDEN": [
+    {"school_age_range": {"as_of_time": "00:00:00", "start_inclusive": [4,0,0], "end_exclusive": [15,0,0]}, "gender": ["female","male"]},
+    {"age_range": {"as_of_time": "00:00:00", "start_inclusive": [18,0,0], "end_exclusive": [100,0,0]}, "gender": ["female","male"]}
+  ],
+  "PAT-2": [
+    {"age_range": {"as_of_time": "00:00:00", "start_inclusive": [0,0,0], "end_exclusive": [3,0,0]}, "gender": ["female","male"], "informant": ["etc","father","mother"]},
+    {"age_range": {"as_of_time": "00:00:00", "start_inclusive": [3,0,0], "end_exclusive": [7,0,0]}, "gender": ["female","male"], "informant": ["etc","father","mother"]}
+  ]
+}
+```
+
+- `age_range` / `school_age_range`: 연령 범위. `start_inclusive`(포함), `end_exclusive`(미포함). 단위는 `[년, 월, 일]`.
+- `age_range`와 `school_age_range`는 같은 연령 축의 다른 표현으로, 한 구간에 둘 다 존재하지 않는다.
+- `informant`: 보고자 구분이 있는 검사(PAT-2 등)에서 유효한 보고자 값 목록.
+- 구간 산출 알고리즘 상세: [docs/features/custom-test-management.md](../features/custom-test-management.md) — **실시구간 산출 알고리즘** 섹션 참고.
+
+#### `child_test.selected_scales_json` 구조
+
+실시구간별로 선택된 척도 코드를 담는다. `sub_test_json`과 동일한 구간 기준으로 산출된다.
+
+```json
+{
+  "PAT-2": [
+    {
+      "sub_test_json": {"age_range": {...0~3...}, "informant": ["etc","father","mother"]},
+      "variable": {
+        "available_scale_codes": ["A01","A02","A03","A04","A05","A06","A07","A08"],
+        "selected_scale_codes": ["A01","A02","A03"]
+      }
+    }
+  ]
+}
+```
+
+런타임에서 프로필 매칭과 문항 번들 조회 모두 이 필드의 `sub_test_json` 키를 기준으로 동작한다.
 
 ### `admin_client`
 - 내담자 정보

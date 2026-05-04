@@ -47,6 +47,40 @@ def _range_overlaps(conditions: list[dict[str, Any]], key: str) -> bool:
     return max(starts) < min(ends)
 
 
+def _range_intersection(conditions: list[dict[str, Any]], key: str) -> dict[str, Any] | None:
+    ranges = [
+        condition.get(key)
+        for condition in conditions
+        if isinstance(condition.get(key), dict)
+    ]
+    if not ranges:
+        return {}
+
+    starts = [_range_tuple(raw_range.get("start_inclusive"), (0, 0, 0)) for raw_range in ranges]
+    ends = [_range_tuple(raw_range.get("end_exclusive"), (999, 0, 0)) for raw_range in ranges]
+    start = max(starts)
+    end = min(ends)
+    if start >= end:
+        return None
+
+    result: dict[str, Any] = {
+        "start_inclusive": list(start),
+        "end_exclusive": list(end),
+    }
+    for raw_range in ranges:
+        as_of_time = raw_range.get("as_of_time")
+        if as_of_time:
+            result["as_of_time"] = as_of_time
+            break
+    if "as_of_time" in result:
+        return {
+            "as_of_time": result["as_of_time"],
+            "start_inclusive": result["start_inclusive"],
+            "end_exclusive": result["end_exclusive"],
+        }
+    return result
+
+
 def _condition_values(raw_value: Any) -> set[str] | None:
     if raw_value in (None, ""):
         return None
@@ -55,6 +89,103 @@ def _condition_values(raw_value: Any) -> set[str] | None:
         return values or None
     text = str(raw_value).strip()
     return {text} if text else None
+
+
+def _condition_intersection(raw_conditions: list[Any]) -> dict[str, Any] | None:
+    conditions = [
+        condition
+        for condition in (_parse_json_object(raw, {}) for raw in raw_conditions)
+        if isinstance(condition, dict)
+    ]
+    if len(conditions) != len(raw_conditions):
+        return None
+
+    active_range_keys = {
+        range_key
+        for condition in conditions
+        for range_key in ("age_range", "school_age_range")
+        if isinstance(condition.get(range_key), dict)
+    }
+    if len(active_range_keys) > 1:
+        return None
+
+    result: dict[str, Any] = {}
+    for range_key in ("age_range", "school_age_range"):
+        range_result = _range_intersection(conditions, range_key)
+        if range_result is None:
+            return None
+        if range_result:
+            result[range_key] = range_result
+
+    categorical_keys = {
+        key
+        for condition in conditions
+        for key in condition.keys()
+        if key not in {"age_range", "school_age_range"}
+    }
+    for key in sorted(categorical_keys):
+        constrained_values = [
+            values
+            for values in (_condition_values(condition.get(key)) for condition in conditions)
+            if values is not None
+        ]
+        if not constrained_values:
+            continue
+        values = set.intersection(*constrained_values)
+        if not values:
+            return None
+        result[key] = sorted(values)
+    return result
+
+
+def _condition_group_key(condition: dict[str, Any]) -> str:
+    range_only = {
+        key: condition[key]
+        for key in ("age_range", "school_age_range")
+        if key in condition
+    }
+    if range_only:
+        return json.dumps(range_only, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return json.dumps(condition, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _merge_condition_variants(conditions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for condition in conditions:
+        key = _condition_group_key(condition)
+        target = grouped.setdefault(
+            key,
+            {
+                range_key: condition[range_key]
+                for range_key in ("age_range", "school_age_range")
+                if range_key in condition
+            },
+        )
+        for condition_key, raw_value in condition.items():
+            if condition_key in {"age_range", "school_age_range"}:
+                continue
+            values = _condition_values(raw_value)
+            if values is None:
+                continue
+            existing = _condition_values(target.get(condition_key)) or set()
+            target[condition_key] = sorted(existing.union(values))
+    return list(grouped.values())
+
+
+def _condition_sort_key(condition: dict[str, Any]) -> tuple[Any, ...]:
+    age_range = condition.get("age_range")
+    school_age_range = condition.get("school_age_range")
+    age_start = (999, 0, 0)
+    school_start = (999, 0, 0)
+    if isinstance(age_range, dict):
+        age_start = _range_tuple(age_range.get("start_inclusive"), (999, 0, 0))
+    if isinstance(school_age_range, dict):
+        school_start = _range_tuple(school_age_range.get("start_inclusive"), (999, 0, 0))
+    return (
+        age_start,
+        school_start,
+        json.dumps(condition, ensure_ascii=False, sort_keys=True),
+    )
 
 
 def _conditions_overlap(raw_conditions: list[Any]) -> bool:
@@ -307,17 +438,13 @@ def _load_norm_condition_rows(test_id: str, db: Session | None = None) -> list[d
 
     result = _execute_sql(
             """
-            SELECT DISTINCT
-                n."test.id" AS test_id,
-                n."condition.id" AS condition_id,
-                nc.name AS condition_name,
-                nc.condition AS condition_json
-            FROM norm n
-            LEFT JOIN normcondition nc
-              ON nc.id = n."condition.id"
-             AND nc."test.id" = n."test.id"
-            WHERE n."test.id" = :test_id
-            ORDER BY n."condition.id"
+            SELECT
+                id AS condition_id,
+                name AS condition_name,
+                condition AS condition_json
+            FROM normcondition
+            WHERE "test.id" = :test_id
+            ORDER BY id
             """,
             {"test_id": normalized},
             db,
@@ -357,44 +484,62 @@ def _build_records_for_test(test_id: str, *, grouped_item_json: bool, db: Sessio
 
     for item_condition in item_condition_rows:
         condition_id = str(item_condition.get("condition_id", "")).strip()
-        sub_test_json = str(item_condition.get("condition_json") or "").strip()
-        if not condition_id or not sub_test_json:
+        item_condition_json = str(item_condition.get("condition_json") or "").strip()
+        if not condition_id or not item_condition_json:
             continue
         items = items_by_variant.get(condition_id, [])
         if not items:
             continue
-        matching_scale_rows = []
+        buckets: dict[str, dict[str, Any]] = {}
         for scale_row in scale_rows:
             scale_condition = str(scale_row.get("sub_test_json") or "").strip()
             scale_struct = str(scale_row.get("scale_struct") or "").strip()
             if not scale_condition or not scale_struct:
                 continue
-            has_norm_overlap = any(
-                _conditions_overlap(
-                    [
-                        sub_test_json,
-                        scale_condition,
-                        str(norm_row.get("condition_json") or "").strip(),
+            intersections = _merge_condition_variants(
+                [
+                    intersection
+                    for norm_row in norm_condition_rows
+                    for intersection in [
+                        _condition_intersection(
+                            [
+                                item_condition_json,
+                                scale_condition,
+                                str(norm_row.get("condition_json") or "").strip(),
+                            ]
+                        )
                     ]
+                    if intersection
+                ]
+            )
+            for intersection in intersections:
+                bucket_key = json.dumps(intersection, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                bucket = buckets.setdefault(bucket_key, {"condition": intersection, "scale_rows": []})
+                bucket["scale_rows"].append(scale_row)
+
+        for bucket in sorted(
+            buckets.values(),
+            key=lambda item: _condition_sort_key(item["condition"]),
+        ):
+            scale_struct = _merge_scale_structs(bucket["scale_rows"])
+            if not scale_struct or scale_struct == "{}":
+                continue
+            records.append(
+                _build_variant_record(
+                    test_id=str(item_condition.get("test_id") or "").strip(),
+                    sub_test_json=json.dumps(bucket["condition"], ensure_ascii=False),
+                    scale_struct=scale_struct,
+                    condition_name=str(item_condition.get("condition_name") or "").strip(),
+                    items=items,
+                    grouped_item_json=grouped_item_json,
                 )
-                for norm_row in norm_condition_rows
-            )
-            if has_norm_overlap:
-                matching_scale_rows.append(scale_row)
-        scale_struct = _merge_scale_structs(matching_scale_rows)
-        if not scale_struct or scale_struct == "{}":
-            continue
-        records.append(
-            _build_variant_record(
-                test_id=str(item_condition.get("test_id") or "").strip(),
-                sub_test_json=sub_test_json,
-                scale_struct=scale_struct,
-                condition_name=str(item_condition.get("condition_name") or "").strip(),
-                items=items,
-                grouped_item_json=grouped_item_json,
-            )
         )
 
+    records.sort(
+        key=lambda record: _condition_sort_key(
+            _parse_json_object(getattr(record, "sub_test_json", ""), {})
+        )
+    )
     return records
 
 
