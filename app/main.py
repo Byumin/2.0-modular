@@ -17,6 +17,7 @@ from app.db.schema_migrations import (
     ensure_child_test_client_intake_mode_column,
     ensure_child_test_requires_consent_column,
     ensure_client_consent_record_table,
+    migrate_child_test_sub_test_json_to_structured,
     rotate_shared_submission_access_tokens,
     ensure_submission_client_id_column,
     ensure_submission_scoring_result_table,
@@ -104,5 +105,6 @@ def on_startup() -> None:
     ensure_admin_settings_table()
     ensure_client_consent_record_table()
     ensure_admin_assessment_draft_table()
+    migrate_child_test_sub_test_json_to_structured()
     rotate_shared_submission_access_tokens()
     seed_default_admin()

@@ -92,6 +92,10 @@
 
 - 저장소 공통 작업 규칙: [AGENTS.md](../AGENTS.md)
 - 문서 허브: [docs/README.md](README.md)
+- 시스템 구조/계층/엔트리포인트: [ARCHITECTURE.md](../ARCHITECTURE.md)
+- 디자인/폰트/UI/UX/테마: [DESIGN.md](../DESIGN.md)
+- UI 검증/스크린샷 기준: [QUALIT_SCORE.md](../QUALIT_SCORE.md)
+- 실행 계획/회고 운영: [docs/exec-plans/README.md](exec-plans/README.md)
 - 설명/디버깅 원칙: [docs/debug/explanation-rule.md](debug/explanation-rule.md)
 - 코드 정리 원칙: [docs/interactive-flow-spec.md](interactive-flow-spec.md)
 - 코드 정리 운영: [docs/code-cleanup/playbook.md](code-cleanup/playbook.md)
@@ -99,10 +103,30 @@
 - DB 운영 기준: [docs/database/runtime-db.md](database/runtime-db.md)
 - Claude 자동화 진입점: [claude/README.md](../claude/README.md)
 
+## Task Routing
+
+새 규칙을 만들지 않고 기존 source-of-truth로 연결할 때는 아래 라우팅을 따른다.
+
+| 요청/작업 | 연결할 source-of-truth | 비고 |
+| --- | --- | --- |
+| 작업 전 공통 규칙 | `AGENTS.md` | 상세 규칙 대신 시작 순서와 지도만 둔다. |
+| 문서 체계/삭제/추가 | `docs/doc-governance.md` | 새 문서보다 기존 문서 흡수를 먼저 검토한다. |
+| 코드 수정/리팩토링/DB 변경 | `docs/exec-plans/README.md` | 실행계획 문서에 검증과 미검증 항목을 남긴다. |
+| 구조/계층/운영 엔트리포인트 | `ARCHITECTURE.md` | 운영 엔트리포인트와 런타임 기준은 여기에 둔다. |
+| DB 파일/스키마 기준 | `docs/database/runtime-db.md`, `schema-overview.md` | 운영 DB는 루트 `modular.db` 기준이다. |
+| UI/디자인 기준 | `DESIGN.md` | `docs/design/design-system.md`는 보조 문서다. |
+| UI 검증/스크린샷 | `QUALIT_SCORE.md` | UI 작업 검증 기준만 둔다. |
+| 설명/디버깅 답변 | `docs/debug/explanation-rule.md` | 설명 방식과 흐름 추적 기준을 둔다. |
+| 코드 정리 산출물 | `docs/code-cleanup/README.md` | 인터랙션 웹 산출물의 운영 기준이다. |
+
 ## Related Documents
 
 - [AGENTS.md](../AGENTS.md)
 - [Documentation Hub](README.md)
+- [ARCHITECTURE.md](../ARCHITECTURE.md)
+- [DESIGN.md](../DESIGN.md)
+- [QUALIT_SCORE.md](../QUALIT_SCORE.md)
+- [docs/exec-plans/README.md](exec-plans/README.md)
 - [docs/debug/explanation-rule.md](debug/explanation-rule.md)
 - [docs/interactive-flow-spec.md](interactive-flow-spec.md)
 - [docs/code-cleanup/README.md](code-cleanup/README.md)

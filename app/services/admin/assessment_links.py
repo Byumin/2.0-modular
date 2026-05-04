@@ -768,7 +768,18 @@ def build_custom_assessment_question_payload(custom_test_row: AdminCustomTest, p
         raise HTTPException(status_code=400, detail="표시할 문항이 없습니다.")
 
     parts = _assemble_parts(parts_buffer)
-    primary_sub_test_json = selected_sub_tests[0]["sub_test_json"] if selected_sub_tests else custom_test_row.sub_test_json
+    if selected_sub_tests:
+        primary_sub_test_json = selected_sub_tests[0]["sub_test_json"]
+    else:
+        try:
+            structured = json.loads(custom_test_row.sub_test_json or "{}")
+            if isinstance(structured, dict) and all(isinstance(v, list) for v in structured.values()):
+                first_conditions = next(iter(structured.values()), [])
+                primary_sub_test_json = json.dumps(first_conditions[0], ensure_ascii=False) if first_conditions else custom_test_row.sub_test_json
+            else:
+                primary_sub_test_json = custom_test_row.sub_test_json
+        except (TypeError, json.JSONDecodeError):
+            primary_sub_test_json = custom_test_row.sub_test_json
     return {
         **base_payload,
         "sub_test_json": primary_sub_test_json,

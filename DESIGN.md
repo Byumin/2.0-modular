@@ -14,7 +14,7 @@
   - `frontend/src/pages/assessment/*`
 - 기존 보조 문서: `docs/design/design-system.md`
 
-주의: 파일명은 요청에 맞춰 `DISIGN.md`로 둔다.
+루트 `DESIGN.md`가 디자인, 폰트, UI, UX, 테마, 스타일 기준의 source-of-truth다.
 
 ## 2. Product Tone
 
@@ -549,4 +549,3 @@ Primary files:
 - 관리자 화면은 theme token 중심으로 유지한다.
 - 수검자 화면 teal palette는 별도 assessment token으로 승격하는 것을 검토한다.
 - 새 hard-coded 색상 추가는 피한다.
-

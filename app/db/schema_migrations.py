@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import secrets
 
 from sqlalchemy import inspect
@@ -428,4 +429,110 @@ def rotate_shared_submission_access_tokens() -> None:
             conn.exec_driver_sql(
                 "UPDATE admin_custom_test_submission SET access_token = ? WHERE id = ?",
                 (new_token, submission_id),
+            )
+
+
+def migrate_child_test_sub_test_json_to_structured() -> None:
+    """child_test.sub_test_json을 {test_id: [condition, ...]} 구조로 마이그레이션."""
+    from app.repositories.parent_test_repository import fetch_parent_scale_rows_by_test
+
+    def collect_scale_codes(scale_struct: object) -> set[str]:
+        if isinstance(scale_struct, str):
+            try:
+                scale_struct = json.loads(scale_struct)
+            except (TypeError, json.JSONDecodeError):
+                return set()
+        if not isinstance(scale_struct, dict):
+            return set()
+
+        codes: set[str] = set()
+
+        def visit(raw: object) -> None:
+            if not isinstance(raw, dict):
+                return
+            facet_scale = raw.get("facet_scale")
+            if isinstance(facet_scale, dict):
+                for child_code, child_value in facet_scale.items():
+                    code_text = str(child_code).strip()
+                    if code_text:
+                        codes.add(code_text)
+                    visit(child_value)
+
+        for code, value in scale_struct.items():
+            code_text = str(code).strip()
+            if code_text:
+                codes.add(code_text)
+            visit(value)
+        return codes
+
+    def selected_codes_from_variants(variants: object) -> set[str]:
+        codes: set[str] = set()
+        if not isinstance(variants, list):
+            return codes
+        for variant in variants:
+            if not isinstance(variant, dict):
+                continue
+            variable = variant.get("variable")
+            if isinstance(variable, dict):
+                raw_codes = variable.get("selected_scale_codes")
+            else:
+                raw_codes = variant.get("selected_scale_codes")
+            if not isinstance(raw_codes, list):
+                continue
+            codes.update(str(code).strip() for code in raw_codes if str(code).strip())
+        return codes
+
+    with engine.begin() as conn:
+        rows = conn.exec_driver_sql(
+            "SELECT id, selected_scales_json FROM child_test"
+        ).fetchall()
+        for row_id, selected_scales_json in rows:
+            try:
+                selected = json.loads(selected_scales_json or "{}")
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(selected, dict):
+                continue
+            structured: dict[str, list] = {}
+            selected_structured: dict[str, list] = {}
+            for test_id, variants in selected.items():
+                test_id_text = str(test_id or "").strip()
+                if not test_id_text:
+                    continue
+                seen: list[dict] = []
+                selected_variants: list[dict] = []
+                selected_codes = selected_codes_from_variants(variants)
+                for row in fetch_parent_scale_rows_by_test(test_id_text):
+                    available_codes = collect_scale_codes(getattr(row, "scale_struct", ""))
+                    selected_for_variant = sorted(selected_codes.intersection(available_codes))
+                    if selected_codes and not selected_for_variant:
+                        continue
+                    raw = getattr(row, "sub_test_json", "")
+                    try:
+                        cond = json.loads(raw)
+                    except (TypeError, json.JSONDecodeError):
+                        continue
+                    if isinstance(cond, dict) and cond not in seen:
+                        seen.append(cond)
+                        selected_variants.append(
+                            {
+                                "sub_test_json": cond,
+                                "variable": {
+                                    "available_scale_codes": sorted(available_codes),
+                                    "selected_scale_codes": selected_for_variant,
+                                },
+                            }
+                        )
+                if seen:
+                    structured[test_id_text] = seen
+                    selected_structured[test_id_text] = selected_variants
+            if not structured:
+                continue
+            conn.exec_driver_sql(
+                "UPDATE child_test SET sub_test_json = ?, selected_scales_json = ? WHERE id = ?",
+                (
+                    json.dumps(structured, ensure_ascii=False),
+                    json.dumps(selected_structured, ensure_ascii=False),
+                    row_id,
+                ),
             )

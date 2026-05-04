@@ -41,6 +41,75 @@
 - 연령/학령 구간이 여러 개인 경우 variant를 나눠 저장한다.
 - 추가 인적사항 필드도 함께 정규화해 저장한다.
 
+## 실시구간 산출 알고리즘
+
+커스텀 검사를 생성하거나 카탈로그를 조회할 때, 각 원본 검사(test_id)의 유효 실시구간은 다음 알고리즘으로 결정된다.
+
+### 원칙
+
+**item/scale/norm 세 테이블 condition의 교집합만 유효한 구간으로 인정한다.**
+
+어느 한 테이블을 기준으로 다른 테이블의 overlap 여부만 확인하면, 테이블 간 경계가 다를 때 잘못된 구간이 생긴다. 따라서 세 테이블 모두에서 실제로 데이터가 있는 구간의 교집합을 계산한다.
+
+### 동작 흐름
+
+```
+1. item/scale/norm 세 테이블에서 condition JSON을 모두 수집
+2. 각 (item condition × scale condition × norm condition) 조합의 수학적 교집합 계산
+   - age_range: max(start_inclusives) ~ min(end_exclusives)
+   - categorical(informant, gender): 교집합(intersection)
+   - 교집합이 빈 구간이면 제외
+3. 같은 연령 범위 안에서 categorical 값만 다른 조건은 하나의 구간으로 병합
+   (예: [0-3, mother] + [0-3, father] + [0-3, etc] → [0-3, informant=[mother,father,etc]])
+4. 결과 구간 목록을 연령 오름차순으로 정렬
+```
+
+### PAT-2 실제 예시
+
+| 테이블 | 조건 수 | 구간 내용 |
+|--------|---------|-----------|
+| itemcondition | 2 | 유아 0-7, 아동/성인 7-100 (각각 informant 통합) |
+| scalecondition | 1 | 0-100 전체 (informant 통합) |
+| normcondition | 18 | 6 연령 구간 × 3 보고자(mother/father/etc) |
+
+교집합 산출 결과: **6구간** (normcondition의 연령 경계가 가장 세밀하므로 이 경계가 최종 구간을 결정)
+
+```
+[0,0,0]~[3,0,0]   informant=[etc,father,mother]
+[3,0,0]~[7,0,0]   informant=[etc,father,mother]
+[7,0,0]~[10,0,0]  informant=[etc,father,mother]
+[10,0,0]~[13,0,0] informant=[etc,father,mother]
+[13,0,0]~[16,0,0] informant=[etc,father,mother]
+[16,0,0]~[100,0,0] informant=[etc,father,mother]
+```
+
+informant별 norm 조건 3개가 같은 연령 범위에서 병합되어 하나의 구간으로 합쳐진다.
+
+### age_range와 school_age_range
+
+GOLDEN처럼 아동 구간은 `school_age_range`, 성인 구간은 `age_range`를 쓰는 검사는 두 키가 섞이지 않는다. 같은 교집합 계산에서 서로 다른 range key를 쓰는 조건이 만나면 교집합 없음으로 처리한다.
+
+```
+GOLDEN 결과:
+  {"school_age_range": {4,0,0 ~ 15,0,0}, "gender": ["female","male"]}  ← 아동
+  {"age_range": {18,0,0 ~ 100,0,0}, "gender": ["female","male"]}       ← 성인
+```
+
+### 저장 위치
+
+산출된 구간은 두 곳에 저장된다.
+
+- `child_test.sub_test_json` — `{test_id: [condition, ...]}` 형태. 프로필 매칭 기준.
+- `child_test.selected_scales_json` — 같은 구간 + 해당 구간의 선택 척도 코드.
+
+런타임에서 수검자 프로필이 들어오면 `selected_scales_json`의 각 구간과 프로필을 비교해 매칭 구간을 찾고, 그 구간의 sub_test_json 키로 문항 번들을 조회한다.
+
+### 관련 코드
+
+- 구간 산출 핵심: `app/repositories/parent_test_repository.py` — `_build_records_for_test`, `_condition_intersection`, `_merge_condition_variants`
+- 검사 생성 저장: `app/services/admin/custom_tests.py` — `create_admin_custom_test_batch`, `_build_structured_sub_test_json`
+- 런타임 프로필 매칭: `app/services/admin/assessment_links.py` — `_resolve_active_variants`, `_profile_matches_sub_test`
+
 ## Management Flow Summary
 1. 관리자가 검사 생성 화면에서 검사와 척도를 고른다.
 2. 서버는 parent 검사 원본에서 가능한 sub-test variant를 계산한다.

@@ -168,6 +168,12 @@ function describeSubTest(subTest: CatalogSubTest) {
 function ageStartFromSubTest(subTest: CatalogSubTest) {
   try {
     const parsed = JSON.parse(subTest.sub_test_json || "{}")
+    const ageRange = parsed?.age_range
+    const ageRangeStart = ageRange?.start_inclusive
+    if (Array.isArray(ageRangeStart) && Number.isFinite(Number(ageRangeStart[0]))) return Number(ageRangeStart[0])
+    const schoolAgeRange = parsed?.school_age_range
+    const schoolAgeRangeStart = schoolAgeRange?.start_inclusive
+    if (Array.isArray(schoolAgeRangeStart) && Number.isFinite(Number(schoolAgeRangeStart[0]))) return Number(schoolAgeRangeStart[0])
     const age = parsed?.age
     if (Array.isArray(age) && Number.isFinite(Number(age[0]))) return Number(age[0])
     if (Number.isFinite(Number(age))) return Number(age)
@@ -177,24 +183,6 @@ function ageStartFromSubTest(subTest: CatalogSubTest) {
   const label = subTest.age_label || ""
   const match = label.match(/-?\d+/)
   return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER
-}
-
-function normalizeScaleNodes(nodes: CatalogScaleNode[]): CatalogScaleNode[] {
-  return nodes.map((node) => ({
-    ...node,
-    code: String(node.code || "").trim(),
-    name: String(node.name || node.code || "").trim(),
-    path: node.path?.map(String),
-    children: normalizeScaleNodes(node.children ?? []),
-  }))
-}
-
-function scaleTreeSignature(nodes: CatalogScaleNode[]): string {
-  return JSON.stringify(normalizeScaleNodes(nodes).map((node) => ({
-    code: node.code,
-    name: node.name,
-    children: node.children,
-  })))
 }
 
 function combineConditionLabels(labels: string[]) {
@@ -269,14 +257,13 @@ function collectScaleGroups(catalog: CatalogTest[], testIds: string[]): ScaleGro
       if (!test?.sub_tests?.length) return null
 
       const tree: ScaleTreeItem[] = []
-      const groupedSubTests = new Map<string, { subTests: CatalogSubTest[]; nodes: CatalogScaleNode[] }>()
       ;[...test.sub_tests]
         .sort((a, b) => {
           const ageOrder = ageStartFromSubTest(a) - ageStartFromSubTest(b)
           if (ageOrder !== 0) return ageOrder
           return a.sub_test_json.localeCompare(b.sub_test_json)
         })
-        .forEach((subTest) => {
+        .forEach((subTest): void => {
           const nodes = subTest.scale_tree?.length
             ? subTest.scale_tree
             : (subTest.scales ?? []).map((scale) => ({
@@ -285,36 +272,22 @@ function collectScaleGroups(catalog: CatalogTest[], testIds: string[]): ScaleGro
                 item_ids: scale.item_ids,
                 children: [],
               }))
-          const signature = scaleTreeSignature(nodes)
-          const current = groupedSubTests.get(signature) ?? { subTests: [] as CatalogSubTest[], nodes }
-          current.subTests.push(subTest)
-          groupedSubTests.set(signature, current)
+          const conditionLabel = subTest.age_label || describeSubTest(subTest)
+          tree.push({
+            key: `${testId}::${subTest.sub_test_json}`,
+            test_id: testId,
+            sub_test_json: subTest.sub_test_json,
+            sub_test_jsons: [subTest.sub_test_json],
+            code: subTest.sub_test_json,
+            name: conditionLabel,
+            label: conditionLabel,
+            path: [],
+            condition_label: conditionLabel,
+            item_count: Number.isFinite(subTest.item_count) ? Number(subTest.item_count) : 0,
+            source_keys: [],
+            children: buildTreeItems(testId, [subTest], nodes),
+          })
         })
-
-      ;[...groupedSubTests.values()].forEach(({ subTests, nodes }) => {
-        const sortedSubTests = [...subTests].sort((a, b) => {
-          const ageOrder = ageStartFromSubTest(a) - ageStartFromSubTest(b)
-          if (ageOrder !== 0) return ageOrder
-          return a.sub_test_json.localeCompare(b.sub_test_json)
-        })
-        const conditionLabel = combineConditionLabels(sortedSubTests.map((subTest) => subTest.age_label || describeSubTest(subTest)))
-        const itemCount = [...new Set(sortedSubTests.map((subTest) => Number.isFinite(subTest.item_count) ? Number(subTest.item_count) : 0))]
-          .reduce((sum, count) => sum + count, 0)
-        tree.push({
-          key: `${testId}::${sortedSubTests.map((subTest) => subTest.sub_test_json).join("||")}`,
-          test_id: testId,
-          sub_test_json: sortedSubTests[0]?.sub_test_json ?? "",
-          sub_test_jsons: sortedSubTests.map((subTest) => subTest.sub_test_json),
-          code: sortedSubTests[0]?.sub_test_json ?? "",
-          name: conditionLabel,
-          label: conditionLabel,
-          path: [],
-          condition_label: conditionLabel,
-          item_count: itemCount,
-          source_keys: [],
-          children: buildTreeItems(testId, sortedSubTests, nodes),
-        })
-      })
 
       const scales = flattenTree(tree).sort((a, b) => {
         const conditionOrder = a.condition_label.localeCompare(b.condition_label)
