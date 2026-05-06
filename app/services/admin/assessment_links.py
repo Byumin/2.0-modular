@@ -36,6 +36,7 @@ from app.services.admin.common import (
     _parse_response_options,
     flatten_custom_test_variant_configs,
     load_custom_test_configs,
+    load_custom_test_session_configs,
     normalize_client_intake_mode,
     normalize_additional_profile_fields,
     summarize_custom_test_ids,
@@ -700,6 +701,10 @@ def _assemble_parts(parts_buffer: list[dict]) -> list[dict]:
                 "response_options": part["response_options"],
                 "response_scale_label": part["response_scale_label"],
                 "render_type": part["render_type"],
+                "session_id": part.get("session_id", "session_1"),
+                "session_index": int(part.get("session_index", 0)),
+                "session_title": part.get("session_title", "세션 1"),
+                "session_description": part.get("session_description", ""),
                 "items": part["items"],
                 "item_count": len(part["items"]),
                 "selected_sub_tests": part["selected_sub_tests"],
@@ -714,6 +719,7 @@ def _append_items_as_render_parts(
     items: list[dict],
     response_options: list[dict],
     selected_sub_test: dict,
+    session: dict,
 ) -> None:
     if not items:
         return
@@ -729,6 +735,7 @@ def _append_items_as_render_parts(
             bool(parts_buffer)
             and parts_buffer[-1]["response_key"] == response_key
             and parts_buffer[-1]["render_type"] == render_type
+            and parts_buffer[-1].get("session_id") == session.get("session_id")
         )
         if can_merge:
             parts_buffer[-1]["items"].extend(segment_items)
@@ -740,6 +747,10 @@ def _append_items_as_render_parts(
                 "response_options": response_options,
                 "response_scale_label": f"{len(response_options)}점 척도" if response_options else "응답형식 정보 없음",
                 "render_type": render_type,
+                "session_id": session.get("session_id", "session_1"),
+                "session_index": int(session.get("session_index", 0)),
+                "session_title": session.get("title", "세션 1"),
+                "session_description": session.get("description", ""),
                 "items": list(segment_items),
                 "selected_sub_tests": [selected_sub_test],
             }
@@ -762,6 +773,18 @@ def build_custom_assessment_question_payload(custom_test_row: AdminCustomTest, p
 
     base_payload = _build_custom_assessment_profile_meta(custom_test_row, test_configs)
     resolved_variants = _resolve_active_variants(test_configs, profile or {})
+    session_configs = load_custom_test_session_configs(custom_test_row)
+    session_by_test_id: dict[str, dict] = {}
+    for session in session_configs:
+        for test_id in session.get("test_ids", []):
+            session_by_test_id[str(test_id)] = session
+    default_session = session_configs[0] if session_configs else {
+        "session_id": "session_1",
+        "session_index": 0,
+        "title": "세션 1",
+        "description": "",
+        "test_ids": [],
+    }
 
     parts_buffer: list[dict] = []
     selected_scales: list[dict] = []
@@ -786,6 +809,7 @@ def build_custom_assessment_question_payload(custom_test_row: AdminCustomTest, p
             items=part_items,
             response_options=response_options,
             selected_sub_test=selected_sub_test,
+            session=session_by_test_id.get(test_id, default_session),
         )
         all_items.extend(part_items)
         selected_scales.extend(variant_scales)
@@ -816,6 +840,7 @@ def build_custom_assessment_question_payload(custom_test_row: AdminCustomTest, p
         "item_count": len(all_items),
         "response_options": parts[0]["response_options"] if parts else [],
         "selected_sub_tests": selected_sub_tests,
+        "sessions": session_configs,
         "parts": parts,
         "part_count": len(parts),
     }
