@@ -1,8 +1,9 @@
-import type { InitialPayload, AssessmentPart, Profile } from "../types"
+import type { InitialPayload, AssessmentPart, AssessmentSession, Profile } from "../types"
 
 interface Props {
   payload: InitialPayload
   parts: AssessmentPart[]
+  session?: AssessmentSession | null
   profile: Profile | null
   onStart: () => void
   onBack: () => void
@@ -22,8 +23,10 @@ function responseScaleLabel(parts: AssessmentPart[]) {
   return `${scoredOptions.length}점 척도`
 }
 
-export function IntroStep({ payload, parts, onStart }: Props) {
+export function IntroStep({ payload, parts, session, onStart }: Props) {
   const testName = payload.custom_test_name || payload.display_name || "검사"
+  const sessionTitle = session?.title || "검사 안내"
+  const sessionDescription = session?.description?.trim()
   const totalQuestions = parts.reduce((s, p) => s + (p.item_count ?? p.items?.length ?? 0), 0)
   const estimatedMinutes = payload.estimated_time_minutes ? `약 ${payload.estimated_time_minutes}분` : "약 10-15분"
   const scaleLabel = responseScaleLabel(parts)
@@ -43,6 +46,7 @@ export function IntroStep({ payload, parts, onStart }: Props) {
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#5ce1e6]/85">Inpsyt Assessment</p>
             <p className="truncate text-sm font-semibold text-white/90">{testName}</p>
+            {session?.title && <p className="truncate text-xs text-white/45">{session.title}</p>}
           </div>
         </div>
       </header>
@@ -58,10 +62,10 @@ export function IntroStep({ payload, parts, onStart }: Props) {
             검사 안내
           </div>
           <h1 className="mt-6 text-[26px] font-bold leading-tight tracking-tight text-white">
-            검사 안내
+            {sessionTitle}
           </h1>
           <p className="mt-6 max-w-[500px] text-sm leading-7 text-white/62">
-            본 검사는 심리적 특성과 행동 패턴을 파악하기 위한 표준화된 도구입니다. 솔직하게 응답해주시면 더 정확한 결과를 얻을 수 있습니다.
+            {sessionDescription || "본 검사는 심리적 특성과 행동 패턴을 파악하기 위한 표준화된 도구입니다. 솔직하게 응답해주시면 더 정확한 결과를 얻을 수 있습니다."}
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-white/55">

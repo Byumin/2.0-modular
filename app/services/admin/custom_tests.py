@@ -30,6 +30,7 @@ from app.services.admin.common import (
     load_custom_test_configs,
     normalize_client_intake_mode,
     normalize_additional_profile_fields,
+    normalize_custom_test_session_configs,
     serialize_additional_profile_payload,
     summarize_custom_test_ids,
 )
@@ -517,6 +518,19 @@ def _build_structured_sub_test_json(resolved_test_configs: list[dict]) -> str:
             result[test_id] = list(grouped.values())
     return json.dumps(result, ensure_ascii=False)
 
+
+def _build_session_configs_payload(payload: CreateCustomTestBatchIn, resolved_test_configs: list[dict]) -> list[dict]:
+    raw_sessions = [
+        {
+            "session_id": session.session_id,
+            "title": session.title,
+            "description": session.description,
+            "test_ids": session.test_ids,
+        }
+        for session in payload.session_configs
+    ]
+    return normalize_custom_test_session_configs(raw_sessions, resolved_test_configs)
+
 # 커스텀 검사 생성 배치 처리 함수 (여러 개의 검사 설정을 한 번에 생성)
 def create_admin_custom_test_batch(
     db: Session,
@@ -573,6 +587,7 @@ def create_admin_custom_test_batch(
         ]
         for config in resolved_test_configs
     }
+    selected_scales_struct_json["__sessions"] = _build_session_configs_payload(payload, resolved_test_configs)
     row = AdminCustomTest( # AdminCustomTest 관리자가 만든 커스텀 검사 1건을 나타내는 sqlalchemy 모델, 각 검사별로 하나의 행이 생성됨
         admin_user_id=admin.id,
         test_id=json.dumps(sorted(sys_test_ids), ensure_ascii=False), # 실시 가능한 모든 test_id를 JSON 배열 형태로 저장

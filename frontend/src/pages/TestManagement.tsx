@@ -74,6 +74,12 @@ interface ProfileField {
   options: string[]
 }
 
+interface SessionDraft {
+  local_id: string
+  title: string
+  description: string
+}
+
 interface ScaleTreeItem {
   key: string
   test_id: string
@@ -121,6 +127,12 @@ interface CreatePayload {
     test_id: string
     selected_scale_codes: string[]
     excluded_sub_test_jsons: string[]
+  }>
+  session_configs: Array<{
+    session_id: string
+    title: string
+    description: string
+    test_ids: string[]
   }>
   additional_profile_fields: Array<{
     label: string
@@ -326,6 +338,11 @@ export function TestManagement() {
   const [expandedScaleNodeKeys, setExpandedScaleNodeKeys] = React.useState<Set<string>>(new Set())
   const [allScaleTestIds, setAllScaleTestIds] = React.useState<Set<string>>(new Set())
   const [selectedScaleKeys, setSelectedScaleKeys] = React.useState<Set<string>>(new Set())
+  const [sessionsDraft, setSessionsDraft] = React.useState<SessionDraft[]>([
+    { local_id: "session_1", title: "세션 1", description: "표준화된 검사 안내를 확인한 뒤 응답을 시작합니다." },
+  ])
+  const [testSessionMap, setTestSessionMap] = React.useState<Record<string, string>>({})
+  const [draggingTestId, setDraggingTestId] = React.useState<string | null>(null)
   const [profileFields, setProfileFields] = React.useState<ProfileField[]>([])
   const [pendingPayload, setPendingPayload] = React.useState<CreatePayload | null>(null)
   const [missingVariants, setMissingVariants] = React.useState<MissingVariant[]>([])
@@ -369,9 +386,12 @@ export function TestManagement() {
       includedVariantCount,
       excludedVariantCount,
       estimatedItemCount,
+      sessionCount: sessionsDraft.filter((session) =>
+        selectedTestIds.some((testId) => testSessionMap[testId] === session.local_id)
+      ).length || (selectedTestIds.length ? 1 : 0),
       profileFieldCount: profileFields.length,
     }
-  }, [catalog, profileFields.length, scaleGroups, selectedScaleKeys, selectedTestIds])
+  }, [catalog, profileFields.length, scaleGroups, selectedScaleKeys, selectedTestIds, sessionsDraft, testSessionMap])
 
   const fetchTests = React.useCallback(() => {
     if (activeTab !== "custom-tests") return
@@ -422,6 +442,11 @@ export function TestManagement() {
     setExpandedScaleNodeKeys(new Set())
     setAllScaleTestIds(new Set())
     setSelectedScaleKeys(new Set())
+    setSessionsDraft([
+      { local_id: "session_1", title: "세션 1", description: "표준화된 검사 안내를 확인한 뒤 응답을 시작합니다." },
+    ])
+    setTestSessionMap({})
+    setDraggingTestId(null)
     setProfileFields([])
     setPendingPayload(null)
     setMissingVariants([])
@@ -463,6 +488,12 @@ export function TestManagement() {
     setSelectedTestIds((prev) => {
       if (checked) return prev.includes(testId) ? prev : [...prev, testId]
       return prev.filter((item) => item !== testId)
+    })
+    setTestSessionMap((prev) => {
+      const next = { ...prev }
+      if (checked) next[testId] = next[testId] || sessionsDraft[0]?.local_id || "session_1"
+      else delete next[testId]
+      return next
     })
     setAllScaleTestIds((prev) => {
       const next = new Set(prev)
@@ -517,6 +548,52 @@ export function TestManagement() {
       })
       return next
     })
+  }
+
+  const addSession = () => {
+    setSessionsDraft((prev) => [
+      ...prev,
+      {
+        local_id: `session_${Date.now()}_${prev.length + 1}`,
+        title: `세션 ${prev.length + 1}`,
+        description: "이 세션의 검사 안내를 확인한 뒤 응답을 시작합니다.",
+      },
+    ])
+  }
+
+  const updateSession = (id: string, patch: Partial<SessionDraft>) => {
+    setSessionsDraft((prev) => prev.map((session) => session.local_id === id ? { ...session, ...patch } : session))
+  }
+
+  const removeSession = (id: string) => {
+    if (sessionsDraft.length <= 1) return
+    const fallbackId = sessionsDraft.find((session) => session.local_id !== id)?.local_id || "session_1"
+    setSessionsDraft((prev) => prev.filter((session) => session.local_id !== id))
+    setTestSessionMap((prev) => {
+      const next = { ...prev }
+      Object.keys(next).forEach((testId) => {
+        if (next[testId] === id) next[testId] = fallbackId
+      })
+      return next
+    })
+  }
+
+  const setTestSession = (testId: string, sessionId: string) => {
+    setTestSessionMap((prev) => ({ ...prev, [testId]: sessionId }))
+  }
+
+  const handleTestDragStart = (event: React.DragEvent<HTMLButtonElement>, testId: string) => {
+    setDraggingTestId(testId)
+    event.dataTransfer.effectAllowed = "move"
+    event.dataTransfer.setData("text/plain", testId)
+  }
+
+  const handleSessionDrop = (event: React.DragEvent<HTMLDivElement>, sessionId: string) => {
+    event.preventDefault()
+    const testId = event.dataTransfer.getData("text/plain") || draggingTestId
+    if (!testId || !selectedTestIds.includes(testId)) return
+    setTestSession(testId, sessionId)
+    setDraggingTestId(null)
   }
 
   const toggleScaleNode = (key: string) => {
@@ -596,6 +673,23 @@ export function TestManagement() {
 
     if (!test_configs.length) throw new Error("검사별로 최소 1개 이상의 척도를 선택해주세요.")
 
+    const session_configs = sessionsDraft
+      .map((session, index) => {
+        const title = session.title.trim() || `세션 ${index + 1}`
+        const test_ids = selectedTestIds.filter((testId) => testSessionMap[testId] === session.local_id)
+        return {
+          session_id: `session_${index + 1}`,
+          title,
+          description: session.description.trim(),
+          test_ids,
+        }
+      })
+      .filter((session) => session.test_ids.length > 0)
+
+    if (!session_configs.length) {
+      throw new Error("선택한 검사를 담을 세션이 필요합니다.")
+    }
+
     const seen = new Set<string>()
     const additional_profile_fields = profileFields.map((field) => {
       const label = field.label.trim()
@@ -624,6 +718,7 @@ export function TestManagement() {
         client_intake_mode: normalizeClientIntakeMode(createIntakeMode),
         requires_consent: createRequiresConsent,
         test_configs,
+        session_configs,
         additional_profile_fields,
       },
       missing,
@@ -987,15 +1082,110 @@ export function TestManagement() {
                       {catalog.length === 0 ? (
                         <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">{catalogMessage || "생성 가능한 기반 검사가 없습니다."}</p>
                       ) : catalog.map((test) => (
-                        <label key={test.test_id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={selectedTestIds.includes(test.test_id)}
-                            onChange={(e) => setTestSelected(test.test_id, e.target.checked)}
-                          />
-                          <span>{test.test_id}</span>
+                        <label key={test.test_id} className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={selectedTestIds.includes(test.test_id)}
+                              onChange={(e) => setTestSelected(test.test_id, e.target.checked)}
+                            />
+                            <span className="truncate">{test.test_id}</span>
                         </label>
                       ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-semibold">2. 세션 구성</h4>
+                        <p className="text-xs text-muted-foreground">검사를 묶을 세션과 세션별 안내 문구를 설정합니다.</p>
+                      </div>
+                      <Button type="button" size="sm" variant="outline" onClick={addSession}>
+                        <IconPlus className="size-3.5" />
+                        세션
+                      </Button>
+                    </div>
+                    {selectedTestIds.length > 0 && (
+                      <div className="mt-4 rounded-md border bg-muted/20 p-3">
+                        <p className="text-xs font-medium text-muted-foreground">선택한 검사</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {selectedTestIds.map((testId) => {
+                            const session = sessionsDraft.find((item) => item.local_id === testSessionMap[testId])
+                            return (
+                              <button
+                                key={testId}
+                                type="button"
+                                draggable
+                                data-session-test-chip={testId}
+                                onDragStart={(event) => handleTestDragStart(event, testId)}
+                                onDragEnd={() => setDraggingTestId(null)}
+                                className="cursor-grab rounded-md border bg-white px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors hover:border-primary/40 active:cursor-grabbing"
+                                title={`${session?.title || "세션 1"}에 배정됨`}
+                              >
+                                {testId}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    <div className="mt-4 flex max-h-72 flex-col gap-3 overflow-auto">
+                      {sessionsDraft.map((session, index) => {
+                        const sessionTestIds = selectedTestIds.filter((testId) => testSessionMap[testId] === session.local_id)
+                        return (
+                          <div
+                            key={session.local_id}
+                            data-session-drop-zone={session.local_id}
+                            className={`rounded-md border p-3 transition-colors ${draggingTestId ? "border-primary/40 bg-primary/5" : ""}`}
+                            onDragOver={(event) => {
+                              event.preventDefault()
+                              event.dataTransfer.dropEffect = "move"
+                            }}
+                            onDrop={(event) => handleSessionDrop(event, session.local_id)}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-semibold text-muted-foreground">세션 {index + 1}</span>
+                              {sessionsDraft.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeSession(session.local_id)}
+                                  className="text-xs text-muted-foreground hover:text-destructive"
+                                >
+                                  삭제
+                                </button>
+                              )}
+                            </div>
+                            <div className="mt-2 grid gap-2">
+                              <Input
+                                value={session.title}
+                                onChange={(e) => updateSession(session.local_id, { title: e.target.value })}
+                                placeholder="세션 이름"
+                                maxLength={80}
+                              />
+                              <textarea
+                                value={session.description}
+                                onChange={(e) => updateSession(session.local_id, { description: e.target.value })}
+                                placeholder="세션 시작 전 보여줄 검사 안내 문구"
+                                rows={3}
+                                maxLength={500}
+                                className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              />
+                            </div>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              포함 검사: {sessionTestIds.length ? sessionTestIds.join(", ") : "없음"}
+                            </p>
+                            {sessionTestIds.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {sessionTestIds.map((testId) => (
+                                  <span key={testId} className="rounded-md bg-muted px-2 py-1 text-[11px] font-semibold text-foreground">
+                                    {testId}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
 
@@ -1025,6 +1215,10 @@ export function TestManagement() {
                         <strong>{createSummary.estimatedItemCount || "-"}개</strong>
                       </div>
                       <div className="rounded-md bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground">세션</p>
+                        <strong>{createSummary.sessionCount}개</strong>
+                      </div>
+                      <div className="rounded-md bg-muted/40 p-3">
                         <p className="text-xs text-muted-foreground">추가 인적사항</p>
                         <strong>{createSummary.profileFieldCount}개</strong>
                       </div>
@@ -1039,7 +1233,7 @@ export function TestManagement() {
 
                 <section className="flex flex-col gap-4">
                   <div className="rounded-lg border p-4">
-                    <h4 className="text-sm font-semibold">2. 척도 선택</h4>
+                    <h4 className="text-sm font-semibold">3. 척도 선택</h4>
                     <p className="text-xs text-muted-foreground">검사 선택 후 펼쳐지는 트리에서 사용할 척도를 고릅니다.</p>
                     <div className="mt-3 flex max-h-80 flex-col gap-2 overflow-auto">
                       {scaleGroups.length === 0 ? (
@@ -1098,7 +1292,7 @@ export function TestManagement() {
                   <div className="rounded-lg border p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <h4 className="text-sm font-semibold">3. 추가 인적사항</h4>
+                        <h4 className="text-sm font-semibold">4. 추가 인적사항</h4>
                         <p className="text-xs text-muted-foreground">검사 URL에서 받을 추가 정보 항목을 정의합니다.</p>
                       </div>
                       <Button type="button" size="sm" variant="outline" onClick={addProfileField}>추가</Button>

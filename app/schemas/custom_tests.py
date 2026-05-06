@@ -35,11 +35,19 @@ class CreateCustomTestConfigIn(BaseModel):
     excluded_sub_test_jsons: list[str] = Field(default_factory=list)
 
 
+class CreateCustomTestSessionIn(BaseModel):
+    session_id: str = Field(min_length=1, max_length=40)
+    title: str = Field(min_length=1, max_length=80)
+    description: str = Field(default="", max_length=500)
+    test_ids: list[str] = Field(min_length=1)
+
+
 class CreateCustomTestBatchIn(BaseModel):
     custom_test_name: str = Field(min_length=1, max_length=120)
     client_intake_mode: Literal["pre_registered_only", "auto_create"] = "pre_registered_only"
     requires_consent: bool = False
     test_configs: list[CreateCustomTestConfigIn] = Field(min_length=1)
+    session_configs: list[CreateCustomTestSessionIn] = Field(default_factory=list)
     additional_profile_fields: list[AdditionalProfileFieldIn] = Field(default_factory=list)
 
 

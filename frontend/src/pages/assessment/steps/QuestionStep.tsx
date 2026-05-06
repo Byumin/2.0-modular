@@ -85,6 +85,8 @@ interface Props {
   testName?: string
   userSummary?: string
   saveStatusText?: string
+  submitLabel?: string
+  submittingLabel?: string
   initialAnswers?: AnswerState
   initialPartIndex?: number
   initialPage?: number
@@ -99,6 +101,8 @@ export function QuestionStep({
   testName = "검사 실시",
   userSummary,
   saveStatusText,
+  submitLabel = "제출하기",
+  submittingLabel = "제출 중...",
   initialAnswers,
   initialPartIndex = 0,
   initialPage = 0,
@@ -469,7 +473,7 @@ export function QuestionStep({
               disabled={!allAnswered() || submitting}
               className="rounded-lg bg-[#175e63] px-5 py-1.5 text-sm font-semibold text-white transition-all hover:bg-[#124b4f] disabled:opacity-30"
             >
-              {submitting ? "제출 중..." : "제출하기"}
+              {submitting ? submittingLabel : submitLabel}
             </button>
           </div>
         </header>
@@ -915,7 +919,7 @@ export function QuestionStep({
                   disabled={submitting || !allAnswered()}
                   className="h-10 w-full rounded-xl bg-[#175e63] text-sm font-semibold text-white transition-all hover:bg-[#124b4f] disabled:opacity-30"
                 >
-                  {submitting ? "제출 중..." : "제출하기"}
+                  {submitting ? submittingLabel : submitLabel}
                 </button>
                 {!allAnswered() && (
                   <p className="mt-1.5 text-center text-[10px] text-[#b0bab7]">모든 문항 응답 후 제출</p>

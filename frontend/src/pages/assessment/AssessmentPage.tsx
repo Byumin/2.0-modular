@@ -13,6 +13,7 @@ import {
   type AssessmentDraft,
   type AssessmentPart,
   type AssessmentPayload,
+  type AssessmentSession,
   type AssessmentStep,
   type InitialPayload,
   type Profile,
@@ -97,6 +98,10 @@ function normalizeAssessmentParts(payload: AssessmentPayload): AssessmentPart[] 
     ...part,
     part_index: partIndex,
     title: part.title || `파트 ${partIndex + 1}`,
+    session_id: part.session_id || "session_1",
+    session_index: Number.isFinite(part.session_index) ? Number(part.session_index) : 0,
+    session_title: part.session_title || "세션 1",
+    session_description: part.session_description || "",
     response_options: part.response_options ?? [],
     items: (part.items ?? []).map((item, itemIndex) => ({
       ...item,
@@ -105,6 +110,34 @@ function normalizeAssessmentParts(payload: AssessmentPayload): AssessmentPart[] 
     })),
     item_count: part.items?.length ?? 0,
   }))
+}
+
+function normalizeAssessmentSessions(payload: AssessmentPayload, parts: AssessmentPart[]): AssessmentSession[] {
+  const rawSessions = Array.isArray(payload.sessions) ? payload.sessions : []
+  const sessions = rawSessions
+    .map((session, index) => ({
+      session_id: String(session.session_id || `session_${index + 1}`),
+      session_index: Number.isFinite(session.session_index) ? Number(session.session_index) : index,
+      title: String(session.title || `세션 ${index + 1}`),
+      description: String(session.description || ""),
+      test_ids: Array.isArray(session.test_ids) ? session.test_ids.map(String) : [],
+    }))
+    .filter((session) => parts.some((part) => part.session_id === session.session_id))
+
+  if (sessions.length) {
+    return sessions.sort((a, b) => a.session_index - b.session_index)
+  }
+
+  const firstPart = parts[0]
+  return [
+    {
+      session_id: firstPart?.session_id || "session_1",
+      session_index: 0,
+      title: firstPart?.session_title || "세션 1",
+      description: firstPart?.session_description || "",
+      test_ids: [],
+    },
+  ]
 }
 
 function profileSummary(profile: Profile) {
@@ -124,6 +157,10 @@ export function AssessmentPage() {
 
   const [initialPayload, setInitialPayload] = React.useState<InitialPayload | null>(null)
   const [parts, setParts] = React.useState<AssessmentPart[]>([])
+  const [sessions, setSessions] = React.useState<AssessmentSession[]>([])
+  const [activeSessionIndex, setActiveSessionIndex] = React.useState(0)
+  const [sessionAnswers, setSessionAnswers] = React.useState<AnswerState>({})
+  const sessionAnswersRef = React.useRef<AnswerState>({})
   const [activeProfile, setActiveProfile] = React.useState<Profile | null>(null)
   const [step, setStep] = React.useState<AssessmentStep>("profile")
   const [visibleStep, setVisibleStep] = React.useState<AssessmentStep>("profile")
@@ -285,6 +322,11 @@ export function AssessmentPage() {
         return
       }
       setParts(nextParts)
+      setSessions(result.assessment_payload ? normalizeAssessmentSessions(result.assessment_payload, nextParts) : normalizeAssessmentSessions({ parts: nextParts }, nextParts))
+      setActiveSessionIndex(0)
+      const restoredAnswers = result.draft?.answers ?? {}
+      sessionAnswersRef.current = restoredAnswers
+      setSessionAnswers(restoredAnswers)
       setActiveProfile(profile)
       // Store confirmed client + ambiguous context for submit
       const resolvedClientId = result.client_id ?? null
@@ -480,9 +522,27 @@ export function AssessmentPage() {
     }
   }
 
+  function handleSessionSubmit(answers: AnswerState) {
+    const mergedAnswers = { ...sessionAnswersRef.current, ...answers }
+    sessionAnswersRef.current = mergedAnswers
+    setSessionAnswers(mergedAnswers)
+    if (activeSessionIndex < sessions.length - 1) {
+      setActiveSessionIndex((current) => current + 1)
+      setStep("intro")
+      return
+    }
+    void handleSubmit(mergedAnswers)
+  }
+
+  const activeSession = sessions[activeSessionIndex] ?? sessions[0] ?? null
+  const activeSessionParts = activeSession
+    ? parts.filter((part) => part.session_id === activeSession.session_id)
+    : parts
+
   const handleQuestionProgressChange = React.useCallback(
     (state: { answers: AnswerState; currentPartIndex: number; currentPage: number }) => {
       if (!activeProfile || confirmedClientId === null || submitting) return
+      const mergedAnswers = { ...sessionAnswersRef.current, ...state.answers }
       if (draftSaveTimerRef.current !== null) window.clearTimeout(draftSaveTimerRef.current)
       draftSaveTimerRef.current = window.setTimeout(async () => {
         setDraftStatus("saving")
@@ -491,7 +551,7 @@ export function AssessmentPage() {
             method: "PUT",
             body: JSON.stringify({
               profile: activeProfile,
-              answers: state.answers,
+              answers: mergedAnswers,
               client_id: confirmedClientId,
               current_part_index: state.currentPartIndex,
               current_page: state.currentPage,
@@ -668,7 +728,8 @@ export function AssessmentPage() {
           {activeStep === "intro" && initialPayload && parts.length > 0 && (
             <IntroStep
               payload={initialPayload}
-              parts={parts}
+              parts={activeSessionParts.length ? activeSessionParts : parts}
+              session={activeSession}
               profile={activeProfile}
               onStart={() => setStep("question")}
               onBack={() => setStep("profile")}
@@ -677,16 +738,19 @@ export function AssessmentPage() {
 
           {activeStep === "question" && activeProfile && (
             <QuestionStep
-              parts={parts}
-              onSubmit={handleSubmit}
+              key={activeSession?.session_id || "session_1"}
+              parts={activeSessionParts.length ? activeSessionParts : parts}
+              onSubmit={handleSessionSubmit}
               submitting={submitting}
               error={error}
-              testName={title}
+              testName={activeSession?.title ? `${title} · ${activeSession.title}` : title}
               userSummary={profileSummary(activeProfile)}
               saveStatusText={draftStatusText}
-              initialAnswers={activeDraft?.answers}
-              initialPartIndex={activeDraft?.current_part_index ?? 0}
-              initialPage={activeDraft?.current_page ?? 0}
+              submitLabel={activeSessionIndex < sessions.length - 1 ? "다음 세션 안내" : "제출하기"}
+              submittingLabel={activeSessionIndex < sessions.length - 1 ? "이동 중..." : "제출 중..."}
+              initialAnswers={sessionAnswers}
+              initialPartIndex={activeSessionIndex === 0 ? activeDraft?.current_part_index ?? 0 : 0}
+              initialPage={activeSessionIndex === 0 ? activeDraft?.current_page ?? 0 : 0}
               onProgressChange={handleQuestionProgressChange}
             />
           )}

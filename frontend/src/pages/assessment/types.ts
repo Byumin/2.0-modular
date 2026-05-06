@@ -20,9 +20,21 @@ export interface AssessmentPart {
   part_id: string
   part_index: number
   title: string
+  session_id?: string
+  session_index?: number
+  session_title?: string
+  session_description?: string
   response_options: ResponseOption[]
   items: QuestionItem[]
   item_count: number
+}
+
+export interface AssessmentSession {
+  session_id: string
+  session_index: number
+  title: string
+  description?: string
+  test_ids: string[]
 }
 
 export interface AdditionalProfileField {
@@ -48,6 +60,7 @@ export interface InitialPayload {
 
 export interface AssessmentPayload {
   parts?: AssessmentPart[]
+  sessions?: AssessmentSession[]
   items?: QuestionItem[]
   response_options?: ResponseOption[]
 }

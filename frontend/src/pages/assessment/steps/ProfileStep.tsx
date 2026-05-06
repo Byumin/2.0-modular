@@ -7,6 +7,8 @@ const INFORMANT_LABELS: Record<string, string> = {
   etc: "기타",
 }
 
+const INFORMANT_DISPLAY_ORDER = ["father", "mother", "etc"]
+
 const SCHOOL_AGE_OPTIONS = [
   "미취학",
   "초등 1학년",
@@ -98,7 +100,18 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
     [payload.additional_profile_fields]
   )
 
-  const informantOptions = payload.profile_field_options?.informant ?? []
+  const informantOptions = React.useMemo(() => {
+    const rawOptions = payload.profile_field_options?.informant ?? []
+    const uniqueOptions = Array.from(new Set(rawOptions))
+    return uniqueOptions.sort((a, b) => {
+      const left = INFORMANT_DISPLAY_ORDER.indexOf(a)
+      const right = INFORMANT_DISPLAY_ORDER.indexOf(b)
+      if (left === -1 && right === -1) return 0
+      if (left === -1) return 1
+      if (right === -1) return -1
+      return left - right
+    })
+  }, [payload.profile_field_options?.informant])
 
   const [name, setName] = React.useState(() => initialProfile?.name ?? "")
   const [examDate, setExamDate] = React.useState(() =>

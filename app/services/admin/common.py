@@ -354,6 +354,71 @@ def _normalize_selected_scale_test_configs(raw: Any) -> list[dict]:
     # 이걸 하나의 딕셔너리에 담아서 normalized 변수에 정규화함
     return normalized
 
+
+def normalize_custom_test_session_configs(raw: Any, test_configs: list[dict] | None = None) -> list[dict]:
+    available_test_ids = [
+        str(config.get("test_id", "")).strip()
+        for config in (test_configs or [])
+        if str(config.get("test_id", "")).strip()
+    ]
+    available_set = set(available_test_ids)
+    sessions_raw = raw
+    if isinstance(raw, dict):
+        sessions_raw = raw.get("__sessions", [])
+    if not isinstance(sessions_raw, list):
+        sessions_raw = []
+
+    sessions: list[dict] = []
+    assigned: set[str] = set()
+    seen_session_ids: set[str] = set()
+
+    for index, item in enumerate(sessions_raw):
+        if not isinstance(item, dict):
+            continue
+        session_id = str(item.get("session_id") or f"session_{index + 1}").strip()
+        if not session_id or session_id in seen_session_ids:
+            session_id = f"session_{index + 1}"
+        seen_session_ids.add(session_id)
+        title = str(item.get("title") or f"세션 {len(sessions) + 1}").strip() or f"세션 {len(sessions) + 1}"
+        description = str(item.get("description") or "").strip()
+        raw_test_ids = item.get("test_ids", [])
+        if not isinstance(raw_test_ids, list):
+            raw_test_ids = []
+        test_ids = []
+        for test_id_raw in raw_test_ids:
+            test_id = str(test_id_raw or "").strip()
+            if not test_id or test_id in assigned:
+                continue
+            if available_set and test_id not in available_set:
+                continue
+            assigned.add(test_id)
+            test_ids.append(test_id)
+        if test_ids:
+            sessions.append(
+                {
+                    "session_id": session_id,
+                    "session_index": len(sessions),
+                    "title": title,
+                    "description": description,
+                    "test_ids": test_ids,
+                }
+            )
+
+    remaining = [test_id for test_id in available_test_ids if test_id not in assigned]
+    if remaining or not sessions:
+        sessions.append(
+            {
+                "session_id": f"session_{len(sessions) + 1}",
+                "session_index": len(sessions),
+                "title": f"세션 {len(sessions) + 1}",
+                "description": "",
+                "test_ids": remaining or available_test_ids,
+            }
+        )
+
+    return sessions
+
+
 # selected_scales_json이 JSON 문자열이 아닌 경우에도 최대한 유연하게 처리하여,
 # 검사 구성 정보를 파싱할 때 발생할 수 있는 오류를 최소화한다.
 def parse_custom_test_configs(
@@ -416,6 +481,12 @@ def load_custom_test_configs(row: AdminCustomTest) -> list[dict]:
         sub_test_json=getattr(row, "sub_test_json", ""),
         selected_scales_json=getattr(row, "selected_scales_json", "[]"),
     )
+
+
+def load_custom_test_session_configs(row: AdminCustomTest) -> list[dict]:
+    selected_raw = _safe_json_loads(getattr(row, "selected_scales_json", "[]"))
+    test_configs = load_custom_test_configs(row)
+    return normalize_custom_test_session_configs(selected_raw, test_configs)
 
 # 
 def flatten_custom_test_variant_configs(test_configs: list[dict]) -> list[dict]:
@@ -511,6 +582,7 @@ def build_custom_test_items(db, admin_id: int) -> list[dict]:
                 "test_ids": test_ids,
                 "sub_test_json": row.sub_test_json,
                 "test_configs": test_configs,
+                "session_configs": load_custom_test_session_configs(row),
                 "selected_scale_codes": selected_scale_codes,
                 "additional_profile_fields": additional_profile_fields,
                 "requires_consent": bool(getattr(row, "requires_consent", False)),
