@@ -140,6 +140,8 @@ def _derive_required_profile_fields(sub_test_json: str) -> list[str]:
     )
     if (isinstance(school_raw, dict) and school_raw) or (isinstance(school_raw, str) and school_raw.strip()):
         required.append("school_age")
+    if isinstance(parsed.get("informant"), list) and parsed.get("informant"):
+        required.append("informant")
     return required
 
 # 추가 프로필 필드의 라벨이 문자열이 아닌 경우나, 옵션이 리스트가 아닌 경우 등 다양한 형태의 입력에 대해 최대한 유연하게 처리하여, 관리자 페이지에서 추가 프로필 필드를 설정할 때 발생할 수 있는 오류를 최소화한다.

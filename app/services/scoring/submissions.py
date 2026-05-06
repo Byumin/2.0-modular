@@ -253,6 +253,9 @@ def _load_submission_scoring_bundle(
     if not isinstance(profile, dict):
         profile = {}
 
+    if not profile.get("exam_date") and getattr(submission, "created_at", None):
+        profile = {**profile, "exam_date": submission.created_at.date().isoformat()}
+
     flattened_answers = _flatten_submission_answers(answers_payload.get("answers", {}))
     test_configs = load_custom_test_configs(custom_test)
     test_ids, test_id_text = summarize_custom_test_ids(test_configs, custom_test.test_id)

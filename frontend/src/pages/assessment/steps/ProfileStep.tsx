@@ -1,6 +1,12 @@
 import * as React from "react"
 import type { InitialPayload, AdditionalProfileField, Profile } from "../types"
 
+const INFORMANT_LABELS: Record<string, string> = {
+  mother: "어머니",
+  father: "아버지",
+  etc: "기타",
+}
+
 const SCHOOL_AGE_OPTIONS = [
   "미취학",
   "초등 1학년",
@@ -92,10 +98,16 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
     [payload.additional_profile_fields]
   )
 
+  const informantOptions = payload.profile_field_options?.informant ?? []
+
   const [name, setName] = React.useState(() => initialProfile?.name ?? "")
+  const [examDate, setExamDate] = React.useState(() =>
+    String(initialProfile?.exam_date ?? new Date().toISOString().slice(0, 10))
+  )
   const [gender, setGender] = React.useState(() => String(initialProfile?.gender ?? ""))
   const [birthDay, setBirthDay] = React.useState(() => String(initialProfile?.birth_day ?? ""))
   const [schoolAge, setSchoolAge] = React.useState(() => String(initialProfile?.school_age ?? ""))
+  const [informant, setInformant] = React.useState(() => String(initialProfile?.informant ?? ""))
   const [extras, setExtras] = React.useState<Record<string, string | string[]>>(() => {
     if (!initialProfile) return {}
     return additional.reduce<Record<string, string | string[]>>((acc, field) => {
@@ -122,9 +134,11 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
 
   function validate(): string {
     if (!name.trim()) return "이름"
+    if (!examDate) return "검사 실시일"
     if (required.includes("gender") && !gender) return "성별"
     if (required.includes("birth_day") && !birthDay) return "생년월일"
     if (required.includes("school_age") && !schoolAge) return "학령"
+    if (required.includes("informant") && !informant) return "관찰자"
     for (const f of additional) {
       if (!f.required) continue
       if (f.type === "multi_select") {
@@ -138,10 +152,11 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
   }
 
   function buildProfile(): Profile {
-    const profile: Profile = { name: name.trim() }
+    const profile: Profile = { name: name.trim(), exam_date: examDate }
     if (required.includes("gender")) profile.gender = gender
     if (required.includes("birth_day")) profile.birth_day = birthDay
     if (required.includes("school_age")) profile.school_age = schoolAge
+    if (required.includes("informant")) profile.informant = informant
     additional.forEach((f) => { profile[f.label] = extras[f.label] ?? "" })
     return profile
   }
@@ -415,6 +430,22 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                 </div>
               )}
 
+              {/* 검사 실시일 */}
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="required_exam_date" className="text-sm font-medium">
+                  검사 실시일 <span className="text-destructive">*</span>
+                </label>
+                <input
+                  id="required_exam_date"
+                  type="date"
+                  required
+                  max={new Date().toISOString().slice(0, 10)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30"
+                  value={examDate}
+                  onChange={(e) => setExamDate(e.target.value)}
+                />
+              </div>
+
               {/* 생년월일 */}
               {required.includes("birth_day") && (
                 <div className="flex flex-col gap-1.5">
@@ -448,6 +479,29 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                     <option value="" disabled>학령을 선택하세요</option>
                     {SCHOOL_AGE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                   </select>
+                </div>
+              )}
+
+              {/* 관찰자 */}
+              {required.includes("informant") && informantOptions.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium">관찰자 <span className="text-destructive">*</span></span>
+                  <div className="flex gap-2 flex-wrap" role="radiogroup" aria-label="관찰자">
+                    {informantOptions.map((val) => (
+                      <label key={val} className={`flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors
+                        ${informant === val ? "border-[#175e63] bg-[#e8f3f1] text-[#175e63]" : "border-input bg-background hover:bg-accent"}`}>
+                        <input
+                          type="radio"
+                          name="required_informant"
+                          value={val}
+                          checked={informant === val}
+                          onChange={() => setInformant(val)}
+                          className="sr-only"
+                        />
+                        {INFORMANT_LABELS[val] ?? val}
+                      </label>
+                    ))}
+                  </div>
                 </div>
               )}
 
