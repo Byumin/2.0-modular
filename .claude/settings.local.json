@@ -6,7 +6,10 @@
       "Bash(curl -s http://127.0.0.1:8120/health)",
       "Bash(curl -s http://127.0.0.1:8120/)",
       "Bash(curl *)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(sqlite3 *)",
+      "Bash(python3 *)",
+      "Bash(node -e \"require\\('playwright'\\)\")"
     ]
   }
 }

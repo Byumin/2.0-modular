@@ -205,13 +205,23 @@ def _profile_matches_sub_test(profile: dict[str, Any], sub_test_json: str) -> bo
     genders = parsed.get("gender")
     if isinstance(genders, list) and genders:
         allowed = {str(x).strip().lower() for x in genders if str(x).strip()}
-        if profile_gender and profile_gender not in allowed:
+        if not profile_gender or profile_gender not in allowed:
+            return False
+
+    profile_informant = str(profile.get("informant", "")).strip().lower()
+    informants = parsed.get("informant")
+    if isinstance(informants, list) and informants:
+        allowed_informants = {str(x).strip().lower() for x in informants if str(x).strip()}
+        if not profile_informant or profile_informant not in allowed_informants:
             return False
 
     birth_day = _safe_parse_date(profile.get("birth_day"))
     age_range = parsed.get("age_range")
-    if isinstance(age_range, dict) and birth_day is not None:
-        age_now = _age_detail(birth_day, date.today())
+    if isinstance(age_range, dict):
+        if birth_day is None:
+            return False
+        as_of = _safe_parse_date(profile.get("exam_date")) or date.today()
+        age_now = _age_detail(birth_day, as_of)
         start = _to_age_tuple(age_range.get("start_inclusive"), (0, 0, 0))
         end = _to_age_tuple(age_range.get("end_exclusive"), (999, 0, 0))
         if age_now < start:
@@ -226,31 +236,32 @@ def _profile_matches_sub_test(profile: dict[str, Any], sub_test_json: str) -> bo
         or parsed.get("school_grade")
         or parsed.get("grades")
         or parsed.get("grade")
+        or parsed.get("school_age_range")
     )
     profile_school_age = str(profile.get("school_age", "")).strip()
-    if profile_school_age:
-        if isinstance(school_raw, list) and school_raw:
-            allowed_school = {str(x).strip() for x in school_raw if str(x).strip()}
-            if profile_school_age not in allowed_school:
-                return False
-        elif isinstance(school_raw, str) and school_raw.strip():
-            if profile_school_age != school_raw.strip():
-                return False
+    if isinstance(school_raw, list) and school_raw:
+        allowed_school = {str(x).strip() for x in school_raw if str(x).strip()}
+        if not profile_school_age or profile_school_age not in allowed_school:
+            return False
+    elif isinstance(school_raw, str) and school_raw.strip():
+        if not profile_school_age or profile_school_age != school_raw.strip():
+            return False
+    elif isinstance(school_raw, dict) and school_raw:
+        if not profile_school_age:
+            return False
 
     return True
 
-def _select_sub_test_variant_for_profile(variants: list[dict], profile: dict[str, Any]) -> dict:
+def _select_sub_test_variant_for_profile(variants: list[dict], profile: dict[str, Any], *, test_id: str = "") -> dict:
+    prefix = f"({test_id}) " if test_id else ""
     if not variants:
-        raise HTTPException(status_code=400, detail="실시 가능한 검사 구간이 없습니다.")
+        raise HTTPException(status_code=400, detail=f"{prefix}실시 가능한 검사 구간이 없습니다.")
 
-    # variants가 리스트 안에 딕셔너리들이 있는 형태
-    # 리스트의 딕셔너리 원소들을 sub_test_json을 키로 하고 딕셔너리 원소 전체를 값으로 하는 딕셔너리로 변환
     variant_by_json = {item["sub_test_json"]: item for item in variants if item.get("sub_test_json")}
-    variant_jsons = list(variant_by_json.keys()) # sub_test_json 문자열들의 리스트
-    # sub_test_json 문자열들 중에서 프로필과 일치하는 것들만 뽑아서 리스트로 만듦
+    variant_jsons = list(variant_by_json.keys())
     matches = [sub_test_json for sub_test_json in variant_jsons if _profile_matches_sub_test(profile, sub_test_json)]
     if not matches:
-        raise HTTPException(status_code=400, detail="입력한 인적정보와 일치하는 검사 구간이 없습니다.")
+        raise HTTPException(status_code=400, detail=f"{prefix}입력한 인적정보와 일치하는 검사 구간이 없습니다.")
 
     def age_start_from_json(raw_sub_test_json: str) -> int:
         try:
@@ -276,6 +287,21 @@ def _required_profile_fields_for_variants(test_configs: list[dict]) -> list[str]
                 required.append(key)
     return required
 
+def _collect_profile_field_options(test_configs: list[dict]) -> dict[str, list[str]]:
+    informant_options: set[str] = set()
+    for variant in flatten_custom_test_variant_configs(test_configs):
+        try:
+            parsed = json.loads(variant["sub_test_json"] or "{}")
+        except (TypeError, json.JSONDecodeError):
+            continue
+        informants = parsed.get("informant")
+        if isinstance(informants, list):
+            informant_options.update(str(x) for x in informants if x)
+    result: dict[str, list[str]] = {}
+    if informant_options:
+        result["informant"] = sorted(informant_options)
+    return result
+
 # custom_test_row의 test_configs에서 profile과 일치하는 검사 구간을 찾아서,
 # 해당 검사 구간에 맞는 문항 화면 payload를 반환
 def _build_custom_assessment_profile_meta(custom_test_row: AdminCustomTest, test_configs: list[dict]) -> dict:
@@ -290,6 +316,7 @@ def _build_custom_assessment_profile_meta(custom_test_row: AdminCustomTest, test
         "test_ids": test_ids,
         "display_name": custom_test_row.custom_test_name,
         "required_profile_fields": _required_profile_fields_for_variants(test_configs),
+        "profile_field_options": _collect_profile_field_options(test_configs),
         "additional_profile_fields": additional_profile_fields,
         "sub_test_variant_count": len(flatten_custom_test_variant_configs(test_configs)),
         "test_configs": test_configs,
@@ -309,7 +336,7 @@ def _resolve_active_variants(test_configs: list[dict], profile: dict[str, Any]) 
         variants = config.get("sub_test_variants", [])
         if not test_id or not variants:
             continue
-        active_variant = _select_sub_test_variant_for_profile(variants, profile or {})
+        active_variant = _select_sub_test_variant_for_profile(variants, profile or {}, test_id=test_id)
         selected_sub_test_json = str(active_variant.get("sub_test_json", "")).strip()
         if not selected_sub_test_json:
             continue

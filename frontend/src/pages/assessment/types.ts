@@ -40,6 +40,7 @@ export interface InitialPayload {
   estimated_time_minutes?: number
   client_intake_mode: string
   required_profile_fields: string[]
+  profile_field_options?: Record<string, string[]>
   additional_profile_fields: Array<AdditionalProfileField | string>
   sub_test_json?: string
   access_token: string
@@ -53,9 +54,11 @@ export interface AssessmentPayload {
 
 export interface Profile {
   name: string
+  exam_date?: string
   gender?: string
   birth_day?: string
   school_age?: string
+  informant?: string
   [key: string]: string | string[] | undefined
 }
 

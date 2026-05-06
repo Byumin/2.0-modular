@@ -139,13 +139,14 @@ def _condition_intersection(raw_conditions: list[Any]) -> dict[str, Any] | None:
 
 
 def _condition_group_key(condition: dict[str, Any]) -> str:
-    range_only = {
+    key_fields = ("age_range", "school_age_range", "informant")
+    range_and_informant = {
         key: condition[key]
-        for key in ("age_range", "school_age_range")
+        for key in key_fields
         if key in condition
     }
-    if range_only:
-        return json.dumps(range_only, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    if range_and_informant:
+        return json.dumps(range_and_informant, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return json.dumps(condition, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
@@ -556,11 +557,18 @@ def fetch_parent_scale_rows_by_test(test_id: str, db: Session | None = None):
     ]
 
 
+def _normalize_json_for_match(raw: str) -> str:
+    try:
+        return json.dumps(json.loads(raw), sort_keys=True, ensure_ascii=False)
+    except (TypeError, json.JSONDecodeError):
+        return raw.strip()
+
+
 def fetch_parent_scale_struct(test_id: str, sub_test_json: str, db: Session | None = None):
     normalized = _normalize_test_id(test_id)
-    target_json = str(sub_test_json or "").strip()
+    target_json = _normalize_json_for_match(str(sub_test_json or ""))
     for row in _build_records_for_test(normalized, grouped_item_json=False, db=db):
-        if str(row.sub_test_json or "").strip() != target_json:
+        if _normalize_json_for_match(str(row.sub_test_json or "")) != target_json:
             continue
         return SimpleNamespace(scale_struct=str(row.scale_struct or "").strip())
     return None
@@ -581,8 +589,8 @@ def fetch_parent_catalog_rows(db: Session | None = None):
 
 def fetch_parent_item_bundle(test_id: str, sub_test_json: str, db: Session | None = None):
     normalized = _normalize_test_id(test_id)
-    target_json = str(sub_test_json or "").strip()
+    target_json = _normalize_json_for_match(str(sub_test_json or ""))
     for record in _build_records_for_test(normalized, grouped_item_json=True, db=db):
-        if str(record.sub_test_json).strip() == target_json:
+        if _normalize_json_for_match(str(record.sub_test_json or "")) == target_json:
             return record
     return None

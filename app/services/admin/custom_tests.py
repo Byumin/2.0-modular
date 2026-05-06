@@ -486,22 +486,35 @@ def _resolve_sub_test_variant_configs(
 
 
 def _build_structured_sub_test_json(resolved_test_configs: list[dict]) -> str:
+    # sub_test_json은 인적사항 필드 감지용이므로 informant를 나이구간별로 재병합한다.
+    # selected_scales_json은 informant별로 분리되지만, sub_test_json은 합쳐서 저장.
     result: dict[str, list] = {}
     for config in resolved_test_configs:
         test_id = str(config.get("test_id", "")).strip()
         if not test_id:
             continue
-        seen: list[dict] = []
+        grouped: dict[str, dict] = {}
         for variant in config.get("sub_test_variants", []):
             raw = variant.get("sub_test_json", "")
             try:
                 parsed = json.loads(raw) if isinstance(raw, str) else raw
             except (TypeError, json.JSONDecodeError):
                 continue
-            if isinstance(parsed, dict) and parsed not in seen:
-                seen.append(parsed)
-        if seen:
-            result[test_id] = seen
+            if not isinstance(parsed, dict):
+                continue
+            range_key = json.dumps(
+                {k: parsed[k] for k in ("age_range", "school_age_range") if k in parsed},
+                ensure_ascii=False, sort_keys=True,
+            )
+            target = grouped.setdefault(range_key, {k: parsed[k] for k in ("age_range", "school_age_range") if k in parsed})
+            for field, val in parsed.items():
+                if field in ("age_range", "school_age_range"):
+                    continue
+                existing = set(target.get(field, [])) if isinstance(target.get(field), list) else set()
+                new_vals = set(val) if isinstance(val, list) else {val}
+                target[field] = sorted(existing | new_vals)
+        if grouped:
+            result[test_id] = list(grouped.values())
     return json.dumps(result, ensure_ascii=False)
 
 # 커스텀 검사 생성 배치 처리 함수 (여러 개의 검사 설정을 한 번에 생성)
