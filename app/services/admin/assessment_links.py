@@ -4,6 +4,7 @@ from datetime import date, datetime
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db.models import AdminCustomTest, AdminCustomTestSubmission, AdminSettings, ClientConsentRecord
@@ -22,6 +23,7 @@ from app.repositories.custom_test_repository import (
 from app.repositories.parent_test_repository import fetch_parent_item_bundle
 from app.schemas.values import normalize_gender_value
 from app.services.admin.auth import get_current_admin
+from app.repositories.client_repository import create_client_relation
 from app.services.admin.clients import (
     AMBIGUOUS_CLIENT_CODE,
     ALREADY_SUBMITTED_CONFIRM_REQUIRED_CODE,
@@ -41,6 +43,38 @@ from app.services.admin.common import (
     normalize_additional_profile_fields,
     summarize_custom_test_ids,
 )
+
+
+_SECONDARY_ROLES = {"parent", "teacher", "classmate", "guardian"}
+
+
+def _resolve_subject_profile(profile: dict[str, Any]) -> dict[str, Any]:
+    """mixed profile에서 child_ 접두사 키를 top-level 키로 복사한다 (버그픽스).
+    gender/birth_day/school_age 가 없을 때만 child_ 값을 사용한다.
+    """
+    result = dict(profile)
+    if not str(result.get("gender", "")).strip():
+        result["gender"] = str(result.get("child_gender", "")).strip()
+    if not str(result.get("birth_day", "")).strip():
+        result["birth_day"] = str(result.get("child_birth_day", "")).strip()
+    if not str(result.get("school_age", "")).strip():
+        result["school_age"] = str(result.get("child_school_age", "")).strip()
+    return result
+
+
+def _extract_secondary_subjects(profile: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    """profile에서 보조 대상자(부모, 선생 등)의 이름/성별/생년월일을 추출한다.
+    이름+성별+생년월일 3개 모두 있을 때만 결과에 포함한다.
+    returns: list of (role, {"name": ..., "gender": ..., "birth_day": ...})
+    """
+    result = []
+    for role in _SECONDARY_ROLES:
+        name = str(profile.get(f"{role}_name", "")).strip()
+        gender = str(profile.get(f"{role}_gender", "")).strip()
+        birth_day = str(profile.get(f"{role}_birth_day", "")).strip()
+        if name and gender and birth_day:
+            result.append((role, {"name": name, "gender": gender, "birth_day": birth_day}))
+    return result
 
 
 def _safe_parse_date(value: Any) -> date | None:
@@ -876,22 +910,142 @@ def generate_custom_test_access_link(db: Session, admin_session: str | None, cus
         "assessment_url": f"/assessment/custom/{link.access_token}",
     }
 
-# access token으로 링크 조회, 해당 링크의 custom_test row 조회, 인적사항 화면 payload 반환
+def _derive_required_fields_for_test(test_id: str, test_configs: list[dict]) -> list[str]:
+    """test_id에 해당하는 variants에서 required_fields를 추출한다."""
+    required: set[str] = set()
+    for tc in test_configs:
+        if str(tc.get("test_id", "")).strip() != test_id:
+            continue
+        for variant in tc.get("sub_test_variants", []):
+            for field in _derive_required_profile_fields(variant.get("sub_test_json", "")):
+                required.add(field)
+    return sorted(required)
+
+
+def _build_profile_section(cfg: dict, sub_test_required: set) -> dict:
+    section: dict = {"subject_type": cfg.get("subject_type", "self")}
+    if cfg.get("section_hint"):
+        section["section_hint"] = cfg["section_hint"]
+
+    fields = {k: dict(v) for k, v in cfg.get("fields", {}).items()}
+    # sub_test_json에서 파생된 필수 필드 중 config에 없는 것만 주입
+    for f in sub_test_required:
+        if f not in fields:
+            fields[f] = {"required": True}
+        else:
+            fields[f].setdefault("required", True)
+    if fields:
+        section["fields"] = fields
+    return section
+
+
+def _load_test_profile_config(db: Session, test_ids: list[str], test_configs: list[dict] | None = None) -> dict:
+    if not test_ids:
+        return {}
+    placeholders = ",".join(f":id{i}" for i in range(len(test_ids)))
+    params = {f"id{i}": tid for i, tid in enumerate(test_ids)}
+    rows = db.execute(
+        text(f"SELECT test_id, essential_profile_json, optional_profile_json FROM test_profile_config WHERE test_id IN ({placeholders})"),
+        params,
+    ).fetchall()
+    configs: dict[str, dict] = {}
+    optional_fields: dict[str, dict] = {}
+    for row in rows:
+        try:
+            configs[row[0]] = json.loads(row[1] or "{}")
+        except Exception:
+            configs[row[0]] = {}
+        try:
+            opt = json.loads(row[2] or "{}")
+            optional_fields.update(opt.get("fields", {}))
+        except Exception:
+            pass
+
+    if not configs:
+        return {}
+
+    # subject_type별로 그룹화 (test_ids 순서 기준, 첫 등장 순)
+    seen: list[str] = []
+    groups: dict[str, dict] = {}   # subject_type → section cfg
+    group_required: dict[str, set] = {}
+
+    def _merge_fields_into_group(st: str, src_fields: dict) -> None:
+        """같은 subject_type 섹션의 fields를 기존 그룹에 병합한다."""
+        for fk, fv in src_fields.items():
+            groups[st].setdefault("fields", {})[fk] = fv
+
+    def _explicit_required(fields: dict) -> set:
+        return {k for k, v in fields.items() if v.get("required")}
+
+    for test_id in test_ids:
+        cfg = configs.get(test_id, {})
+        sub_test_required = set(_derive_required_fields_for_test(test_id, test_configs or []))
+
+        if cfg.get("sections"):
+            # config에 명시된 required 필드 수집 (sub_test 파생 제외 대상)
+            explicitly_required = {
+                f for sec in cfg["sections"]
+                for f in _explicit_required(sec.get("fields", {}))
+            }
+            remaining_sub_test = sub_test_required - explicitly_required
+
+            for sec in cfg["sections"]:
+                st = sec.get("subject_type", "self")
+                src_fields = sec.get("fields", {})
+                if st not in groups:
+                    seen.append(st)
+                    groups[st] = dict(sec)
+                    groups[st]["fields"] = {k: dict(v) for k, v in src_fields.items()}
+                    group_required[st] = set()
+                else:
+                    _merge_fields_into_group(st, src_fields)
+                group_required[st].update(_explicit_required(src_fields))
+                if st == "child":
+                    group_required[st].update(remaining_sub_test)
+        else:
+            st = cfg.get("subject_type", "self")
+            src_fields = cfg.get("fields", {})
+            if st not in groups:
+                seen.append(st)
+                groups[st] = dict(cfg)
+                groups[st]["fields"] = {k: dict(v) for k, v in src_fields.items()}
+                group_required[st] = set()
+            else:
+                _merge_fields_into_group(st, src_fields)
+            group_required[st].update(sub_test_required)
+            group_required[st].update(_explicit_required(src_fields))
+
+    sections = [
+        _build_profile_section(groups[st], group_required[st])
+        for st in seen
+    ]
+
+    result = sections[0] if len(sections) == 1 else {"subject_type": "mixed", "sections": sections}
+    if optional_fields:
+        result["optional_fields"] = optional_fields
+    return result
+
+
 def get_custom_test_by_access_link(db: Session, access_token: str) -> dict:
-    link = get_active_access_link_by_token(db, access_token) # access token으로 링크 조회
+    link = get_active_access_link_by_token(db, access_token)
     if link is None:
         raise HTTPException(status_code=404, detail="유효하지 않은 검사 URL입니다.")
 
-    custom_test = get_custom_test_by_id_and_admin( # 해당 링크의 custom_test row 조회
+    custom_test = get_custom_test_by_id_and_admin(
         db,
-        custom_test_id=link.admin_custom_test_id, # 링크의 custom_test_id
-        admin_user_id=link.admin_user_id, # 링크의 admin_user_id(생성한 사람)
-    ) # child_test 테이블에서 row 반환
+        custom_test_id=link.admin_custom_test_id,
+        admin_user_id=link.admin_user_id,
+    )
     if custom_test is None:
         raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
 
-    payload = build_custom_assessment_profile_payload(custom_test) # 인적사항 입력 화면용 payload 빌드
-    payload["access_token"] = access_token # 응답에 access_token 포함
+    test_configs = load_custom_test_configs(custom_test)
+    if not test_configs:
+        raise HTTPException(status_code=404, detail="검사 구성 정보를 찾을 수 없습니다.")
+
+    payload = _build_custom_assessment_profile_meta(custom_test, test_configs)
+    payload["access_token"] = access_token
+    payload["profile_config"] = _load_test_profile_config(db, payload.get("test_ids") or [], test_configs)
     return payload
 
 # access token으로 링크 조회, 내담자 매칭(단일/모호/없음) 처리 후 검사 문항 payload 반환
@@ -903,6 +1057,8 @@ def validate_custom_test_profile_by_access_link(
     responder_choice: str | None = None,
     allow_retake: bool = False,
 ) -> dict:
+    profile = _resolve_subject_profile(profile)
+
     link = get_active_access_link_by_token(db, access_token)
     if link is None:
         raise HTTPException(status_code=404, detail="유효하지 않은 검사 URL입니다.")
@@ -1019,6 +1175,8 @@ def register_client_for_custom_test_by_access_link(
     access_token: str,
     profile: dict[str, Any],
 ) -> dict:
+    profile = _resolve_subject_profile(profile)
+
     link = get_active_access_link_by_token(db, access_token)
     if link is None:
         raise HTTPException(status_code=404, detail="유효하지 않은 검사 URL입니다.")
@@ -1140,6 +1298,89 @@ def save_assessment_draft_by_access_link(
     return {"message": "임시저장되었습니다.", "draft": _serialize_assessment_draft(draft)}
 
 
+def _register_secondary_clients_and_relations(
+    db: Session,
+    admin_user_id: int,
+    custom_test_id: int,
+    profile: dict[str, Any],
+    primary_client,
+) -> None:
+    """보조 대상자(부모, 선생 등)를 내담자로 등록하고 primary_client와 relation을 생성한다.
+    보조 대상자도 같은 검사에 배정 처리한다 (배정 상태 = 실시됨으로 표시).
+    """
+    from app.repositories.base_repository import commit
+    from app.repositories.client_repository import find_admin_client_by_identity
+    from app.services.admin.clients import assign_client_to_test
+
+    # primary role 판별: child_ 접두사 키가 있으면 "child", 없으면 "self"
+    has_child_prefix = any(k.startswith("child_") for k in profile)
+    primary_role = "child" if has_child_prefix else "self"
+
+    secondary_subjects = _extract_secondary_subjects(profile)
+    if not secondary_subjects:
+        return
+
+    for role, subject_profile in secondary_subjects:
+        try:
+            normalized_gender = normalize_gender_value(subject_profile["gender"])
+        except ValueError:
+            continue
+
+        birth_day_text = subject_profile.get("birth_day", "").strip()
+        try:
+            birth_day_value = date.fromisoformat(birth_day_text) if birth_day_text else None
+        except ValueError:
+            continue
+
+        secondary_client = find_admin_client_by_identity(
+            db,
+            admin_user_id=admin_user_id,
+            name=subject_profile["name"],
+            gender=normalized_gender,
+            birth_day=birth_day_value,
+        )
+        if secondary_client is None:
+            from app.repositories.client_repository import create_admin_client
+            secondary_client = create_admin_client(
+                db,
+                admin_user_id=admin_user_id,
+                name=subject_profile["name"],
+                gender=normalized_gender,
+                birth_day=birth_day_value,
+                memo="검사 링크에서 자동 등록 (보조 대상자)",
+                created_source="assessment_link_secondary",
+            )
+            db.flush()
+
+        # 같은 검사에 배정 처리 (이미 배정되어 있으면 무시)
+        assign_client_to_test(
+            db,
+            admin_id=admin_user_id,
+            client_id=secondary_client.id,
+            custom_test_id=custom_test_id,
+        )
+
+        # 실시 완료 로그 기록 (마지막 실시일 + 실시완료 상태)
+        from app.repositories.assessment_repository import create_assessment_log
+        create_assessment_log(
+            db,
+            admin_user_id=admin_user_id,
+            client_id=secondary_client.id,
+            assessed_on=date.today(),
+        )
+
+        create_client_relation(
+            db,
+            admin_user_id=admin_user_id,
+            client_id_a=primary_client.id,
+            role_a=primary_role,
+            client_id_b=secondary_client.id,
+            role_b=role,
+        )
+
+    commit(db)
+
+
 def submit_custom_test_by_access_link(
     db: Session,
     access_token: str,
@@ -1152,6 +1393,8 @@ def submit_custom_test_by_access_link(
     candidate_client_ids: list[int] | None = None,
 ) -> dict:
     from app.services.scoring.submissions import score_submission_by_id
+
+    profile = _resolve_subject_profile(profile)
 
     link = get_active_access_link_by_token(db, access_token)
     if link is None:
@@ -1271,6 +1514,9 @@ def submit_custom_test_by_access_link(
         )
         link_review_submission(db, review, submission.id)
         _commit(db)
+
+    # 보조 대상자(부모, 선생 등) 클라이언트 등록 + relation 생성
+    _register_secondary_clients_and_relations(db, link.admin_user_id, custom_test.id, clean_profile, client)
 
     return {
         "message": "검사가 제출되었습니다.",

@@ -33,9 +33,10 @@ const OptionGrid = ({ item, itemOptions, answerState, onAnswer }: {
                 ? "border-gray-400 bg-gray-100 text-gray-500"
                 : "border-[#e8ebee] bg-white text-[#8a9a96] hover:border-gray-300 hover:bg-gray-50"
               : checked
-                ? "border-[#175e63]/40 bg-[#175e63]/8 text-[#175e63]"
-                : "border-[#e8ebee] bg-white text-[#161d1b] hover:border-[#175e63]/30 hover:bg-[#eef2f4]/50"
+                ? "border-[var(--sa-40)]"
+                : "border-[#e8ebee] bg-white text-[#161d1b] hover:border-[var(--sa-30)] hover:bg-[#eef2f4]/50"
             }`}
+          style={!isNoAnswer && checked ? { backgroundColor: "var(--sa-08)", color: "var(--sa)" } : undefined}
         >
           <input
             type="radio"
@@ -45,15 +46,21 @@ const OptionGrid = ({ item, itemOptions, answerState, onAnswer }: {
             onChange={() => onAnswer(item.id, opt.value)}
             className="sr-only"
           />
-          <span className={`mx-auto flex size-8 items-center justify-center rounded-md text-sm font-extrabold ${
-            isNoAnswer
-              ? checked ? "bg-gray-300 text-gray-600" : "bg-[#f0f2f5] text-[#8a9a96]"
-              : checked ? "bg-[#175e63] text-white" : "bg-[#f0f2f5] text-[#5f6f73]"
-          }`}>
+          <span
+            className={`mx-auto flex size-8 items-center justify-center rounded-md text-sm font-extrabold ${
+              isNoAnswer
+                ? checked ? "bg-gray-300 text-gray-600" : "bg-[#f0f2f5] text-[#8a9a96]"
+                : checked ? "text-white" : "bg-[#f0f2f5] text-[#5f6f73]"
+            }`}
+            style={!isNoAnswer && checked ? { backgroundColor: "var(--sa)" } : undefined}
+          >
             {opt.value}
           </span>
           {opt.label && (
-            <span className={`mt-1 block text-xs font-semibold leading-tight ${checked && !isNoAnswer ? "text-[#175e63]" : "text-[#8a9a96]"}`}>{opt.label}</span>
+            <span
+              className={`mt-1 block text-xs font-semibold leading-tight ${checked && !isNoAnswer ? "" : "text-[#8a9a96]"}`}
+              style={checked && !isNoAnswer ? { color: "var(--sa)" } : undefined}
+            >{opt.label}</span>
           )}
         </label>
       )

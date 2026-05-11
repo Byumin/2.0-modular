@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
-import { IconChevronDown, IconChevronRight, IconLink, IconPlus, IconSearch, IconTrash } from "@tabler/icons-react"
+import { IconCheck, IconChevronDown, IconChevronLeft, IconChevronRight, IconLink, IconPlus, IconSearch, IconTrash, IconX } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -164,6 +164,24 @@ function isOptionType(type: FieldType) {
   return type === "select" || type === "multi_select"
 }
 
+const INFORMANT_LABEL: Record<string, string> = {
+  mother: "어머니",
+  father: "아버지",
+  etc: "기타",
+}
+
+function informantSuffix(subTestJson: string): string {
+  try {
+    const parsed = JSON.parse(subTestJson)
+    const informants: string[] = parsed?.informant ?? []
+    if (informants.length === 0) return ""
+    const labels = informants.map((v) => INFORMANT_LABEL[v] ?? v)
+    return ` (관찰자: ${labels.join("·")})`
+  } catch {
+    return ""
+  }
+}
+
 function scaleKey(testId: string, subTestJson: string, path: string[]) {
   return `${testId}::${subTestJson}::${path.join("/")}`
 }
@@ -284,7 +302,7 @@ function collectScaleGroups(catalog: CatalogTest[], testIds: string[]): ScaleGro
                 item_ids: scale.item_ids,
                 children: [],
               }))
-          const conditionLabel = subTest.age_label || describeSubTest(subTest)
+          const conditionLabel = (subTest.age_label || describeSubTest(subTest)) + informantSuffix(subTest.sub_test_json)
           tree.push({
             key: `${testId}::${subTest.sub_test_json}`,
             test_id: testId,
@@ -316,6 +334,14 @@ function normalizeClientIntakeMode(value: string) {
   return value === "auto_create" ? "auto_create" : "pre_registered_only"
 }
 
+const CREATE_STEPS = [
+  { id: 1, key: "basic",    title: "기본 정보",    hint: "이름과 운영 옵션" },
+  { id: 2, key: "tests",    title: "검사 선택",    hint: "포함할 검사군" },
+  { id: 3, key: "sessions", title: "세션 구성",    hint: "검사를 세션에 배정" },
+  { id: 4, key: "scales",   title: "척도 선택",    hint: "사용할 척도 트리" },
+  { id: 5, key: "profile",  title: "추가 인적사항", hint: "URL에서 받을 항목" },
+] as const
+
 export function TestManagement() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = React.useState<ManagementTab>("custom-tests")
@@ -346,6 +372,7 @@ export function TestManagement() {
   const [profileFields, setProfileFields] = React.useState<ProfileField[]>([])
   const [pendingPayload, setPendingPayload] = React.useState<CreatePayload | null>(null)
   const [missingVariants, setMissingVariants] = React.useState<MissingVariant[]>([])
+  const [createStep, setCreateStep] = React.useState(1)
 
   const scaleGroups = React.useMemo(
     () => collectScaleGroups(catalog, selectedTestIds),
@@ -450,6 +477,7 @@ export function TestManagement() {
     setProfileFields([])
     setPendingPayload(null)
     setMissingVariants([])
+    setCreateStep(1)
   }, [])
 
   const handleGenerateLink = async (id: number) => {
@@ -515,12 +543,6 @@ export function TestManagement() {
       const next = new Set(prev)
       if (checked) next.add(testId)
       else next.delete(testId)
-      return next
-    })
-    setExpandedTestIds((prev) => {
-      const next = new Set(prev)
-      if (checked) next.delete(testId)
-      else next.add(testId)
       return next
     })
     setSelectedScaleKeys((prev) => {
@@ -1021,17 +1043,75 @@ export function TestManagement() {
 
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
-          <section className="flex max-h-full w-full max-w-5xl flex-col rounded-lg border bg-card shadow-lg">
-            <div className="border-b px-6 py-4">
-              <h3 className="text-lg font-semibold">검사 생성</h3>
-              <p className="mt-1 text-sm text-muted-foreground">검사군, 척도, 추가 인적사항을 선택해 커스텀 검사를 생성합니다.</p>
-            </div>
-            <form onSubmit={handleCreate} className="flex min-h-0 flex-1 flex-col">
-              <div className="grid min-h-0 gap-4 overflow-auto p-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-                <section className="flex flex-col gap-4">
-                  <div className="rounded-lg border p-4">
-                    <h4 className="text-sm font-semibold">기본 정보</h4>
-                    <div className="mt-4 flex flex-col gap-3">
+          <section className="flex h-[78vh] max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-lg border bg-card shadow-lg">
+
+            {/* 헤더 */}
+            <header className="flex items-center justify-between border-b px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold">검사 생성</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {CREATE_STEPS[createStep - 1].title} · 단계 {createStep}/{CREATE_STEPS.length}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setShowCreateModal(false); resetCreateForm() }}
+                aria-label="닫기"
+                className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <IconX className="size-4" />
+              </button>
+            </header>
+
+            <form onSubmit={handleCreate} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+
+              {/* 2-컬럼: 단계 rail + 콘텐츠 */}
+              <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr] overflow-hidden">
+
+                {/* 왼쪽 단계 rail */}
+                <aside className="flex flex-col gap-2 overflow-auto border-r bg-muted/30 p-4">
+                  <p className="px-1 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">단계</p>
+                  <ol className="flex flex-col gap-1">
+                    {CREATE_STEPS.map((s) => {
+                      const done = s.id < createStep
+                      const active = s.id === createStep
+                      return (
+                        <li key={s.key}>
+                          <button
+                            type="button"
+                            onClick={() => setCreateStep(s.id)}
+                            className={`flex w-full items-start gap-3 rounded-md px-2.5 py-2 text-left transition-colors ${
+                              active ? "border border-border bg-white shadow-sm" : "hover:bg-white/70"
+                            }`}
+                          >
+                            <span className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+                              done ? "bg-primary text-primary-foreground" :
+                              active ? "bg-foreground text-background" :
+                              "border border-border bg-white text-muted-foreground"
+                            }`}>
+                              {done ? <IconCheck className="size-3" /> : s.id}
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium leading-tight">{s.title}</span>
+                              <span className="mt-0.5 block text-[11px] text-muted-foreground">{s.hint}</span>
+                            </span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ol>
+                </aside>
+
+                {/* 단계별 콘텐츠 */}
+                <div className="min-h-0 overflow-auto p-6">
+
+                  {/* Step 1: 기본 정보 */}
+                  {createStep === 1 && (
+                    <div className="flex max-w-xl flex-col gap-5">
+                      <div>
+                        <h4 className="text-sm font-semibold leading-tight">기본 정보</h4>
+                        <p className="mt-0.5 text-xs text-muted-foreground">검사 이름과 운영 방식을 정합니다.</p>
+                      </div>
                       <div className="flex flex-col gap-1.5">
                         <label htmlFor="create_custom_test_name" className="text-sm font-medium">검사 이름</label>
                         <Input
@@ -1057,7 +1137,7 @@ export function TestManagement() {
                       </div>
                       <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium">개인정보동의</label>
-                        <label className="flex items-center gap-2 cursor-pointer">
+                        <label className="flex cursor-pointer items-center gap-2">
                           <input
                             type="checkbox"
                             checked={createRequiresConsent}
@@ -1069,317 +1149,320 @@ export function TestManagement() {
                         <p className="text-xs text-muted-foreground">동의서 내용은 설정 메뉴에서 관리합니다.</p>
                       </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="rounded-lg border p-4">
-                    <div className="flex items-center justify-between gap-3">
+                  {/* Step 2: 검사 선택 */}
+                  {createStep === 2 && (
+                    <div className="flex flex-col gap-4">
                       <div>
-                        <h4 className="text-sm font-semibold">1. 검사 선택</h4>
-                        <p className="text-xs text-muted-foreground">생성할 검사군을 고릅니다.</p>
+                        <h4 className="text-sm font-semibold leading-tight">검사 선택</h4>
+                        <p className="mt-0.5 text-xs text-muted-foreground">생성할 커스텀 검사에 포함할 검사군을 고릅니다.</p>
                       </div>
-                    </div>
-                    <div className="mt-4 flex max-h-56 flex-col gap-2 overflow-auto">
-                      {catalog.length === 0 ? (
-                        <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">{catalogMessage || "생성 가능한 기반 검사가 없습니다."}</p>
-                      ) : catalog.map((test) => (
-                        <label key={test.test_id} className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                      <div className="flex flex-col gap-2">
+                        {catalog.length === 0 ? (
+                          <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">{catalogMessage || "생성 가능한 기반 검사가 없습니다."}</p>
+                        ) : catalog.map((test) => (
+                          <label key={test.test_id} className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
                             <input
                               type="checkbox"
                               checked={selectedTestIds.includes(test.test_id)}
                               onChange={(e) => setTestSelected(test.test_id, e.target.checked)}
                             />
                             <span className="truncate">{test.test_id}</span>
-                        </label>
-                      ))}
+                          </label>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="rounded-lg border p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h4 className="text-sm font-semibold">2. 세션 구성</h4>
-                        <p className="text-xs text-muted-foreground">검사를 묶을 세션과 세션별 안내 문구를 설정합니다.</p>
-                      </div>
-                      <Button type="button" size="sm" variant="outline" onClick={addSession}>
-                        <IconPlus className="size-3.5" />
-                        세션
-                      </Button>
-                    </div>
-                    {selectedTestIds.length > 0 && (
-                      <div className="mt-4 rounded-md border bg-muted/20 p-3">
-                        <p className="text-xs font-medium text-muted-foreground">선택한 검사</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {selectedTestIds.map((testId) => {
-                            const session = sessionsDraft.find((item) => item.local_id === testSessionMap[testId])
-                            return (
-                              <button
-                                key={testId}
-                                type="button"
-                                draggable
-                                data-session-test-chip={testId}
-                                onDragStart={(event) => handleTestDragStart(event, testId)}
-                                onDragEnd={() => setDraggingTestId(null)}
-                                className="cursor-grab rounded-md border bg-white px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors hover:border-primary/40 active:cursor-grabbing"
-                                title={`${session?.title || "세션 1"}에 배정됨`}
-                              >
-                                {testId}
-                              </button>
-                            )
-                          })}
+                  {/* Step 3: 세션 구성 */}
+                  {createStep === 3 && (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold leading-tight">세션 구성</h4>
+                          <p className="mt-0.5 text-xs text-muted-foreground">검사를 묶을 세션과 세션별 안내 문구를 설정합니다.</p>
                         </div>
+                        <Button type="button" size="sm" variant="outline" onClick={addSession}>
+                          <IconPlus className="size-3.5" />
+                          세션
+                        </Button>
                       </div>
-                    )}
-                    <div className="mt-4 flex max-h-72 flex-col gap-3 overflow-auto">
-                      {sessionsDraft.map((session, index) => {
-                        const sessionTestIds = selectedTestIds.filter((testId) => testSessionMap[testId] === session.local_id)
-                        return (
-                          <div
-                            key={session.local_id}
-                            data-session-drop-zone={session.local_id}
-                            className={`rounded-md border p-3 transition-colors ${draggingTestId ? "border-primary/40 bg-primary/5" : ""}`}
-                            onDragOver={(event) => {
-                              event.preventDefault()
-                              event.dataTransfer.dropEffect = "move"
-                            }}
-                            onDrop={(event) => handleSessionDrop(event, session.local_id)}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-semibold text-muted-foreground">세션 {index + 1}</span>
-                              {sessionsDraft.length > 1 && (
+                      {selectedTestIds.length === 0 ? (
+                        <p className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">이전 단계에서 검사를 먼저 선택해주세요.</p>
+                      ) : (
+                        <div className="grid gap-4 lg:grid-cols-[200px_1fr]">
+                          {/* 드래그 가능한 검사 칩 */}
+                          <aside className="flex flex-col gap-2 self-start rounded-md border bg-muted/30 p-3">
+                            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">선택한 검사</p>
+                            <p className="text-[11px] text-muted-foreground">아래 칩을 세션으로 드래그</p>
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              {selectedTestIds.map((testId) => {
+                                const session = sessionsDraft.find((item) => item.local_id === testSessionMap[testId])
+                                return (
+                                  <button
+                                    key={testId}
+                                    type="button"
+                                    draggable
+                                    data-session-test-chip={testId}
+                                    onDragStart={(event) => handleTestDragStart(event, testId)}
+                                    onDragEnd={() => setDraggingTestId(null)}
+                                    className={`cursor-grab rounded-md border bg-white px-2.5 py-1.5 font-mono text-[11px] font-semibold shadow-sm transition-colors hover:border-primary/40 active:cursor-grabbing ${draggingTestId === testId ? "opacity-50" : ""}`}
+                                    title={`${session?.title || "세션 1"}에 배정됨`}
+                                  >
+                                    ⋮⋮ {testId}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </aside>
+                          {/* 세션 드롭존 */}
+                          <div className="flex flex-col gap-2">
+                            {sessionsDraft.map((session, index) => {
+                              const sessionTestIds = selectedTestIds.filter((testId) => testSessionMap[testId] === session.local_id)
+                              return (
+                                <div
+                                  key={session.local_id}
+                                  data-session-drop-zone={session.local_id}
+                                  className={`rounded-md border p-3 transition-colors ${draggingTestId ? "border-primary/40 bg-primary/5" : ""}`}
+                                  onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move" }}
+                                  onDrop={(event) => handleSessionDrop(event, session.local_id)}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-semibold text-muted-foreground">세션 {index + 1}</span>
+                                    {sessionsDraft.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => removeSession(session.local_id)}
+                                        className="text-xs text-muted-foreground hover:text-destructive"
+                                      >
+                                        삭제
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="mt-2 grid gap-2">
+                                    <Input
+                                      value={session.title}
+                                      onChange={(e) => updateSession(session.local_id, { title: e.target.value })}
+                                      placeholder="세션 이름"
+                                      maxLength={80}
+                                    />
+                                    <textarea
+                                      value={session.description}
+                                      onChange={(e) => updateSession(session.local_id, { description: e.target.value })}
+                                      placeholder="세션 시작 전 보여줄 검사 안내 문구"
+                                      rows={3}
+                                      maxLength={500}
+                                      className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    />
+                                  </div>
+                                  <div className="mt-2 flex min-h-7 flex-wrap items-center gap-1.5 rounded border border-dashed border-border bg-muted/40 p-1.5">
+                                    {sessionTestIds.length === 0 ? (
+                                      <span className="px-1 text-[11px] text-muted-foreground">검사 칩을 여기로 드래그</span>
+                                    ) : sessionTestIds.map((testId) => (
+                                      <span key={testId} className="rounded bg-muted px-2 py-0.5 font-mono text-[11px] font-semibold">{testId}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Step 4: 척도 선택 */}
+                  {createStep === 4 && (
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <h4 className="text-sm font-semibold leading-tight">척도 선택</h4>
+                        <p className="mt-0.5 text-xs text-muted-foreground">실시구간을 펼쳐 척도를 개별 선택하거나 실시구간 체크박스로 전체 선택합니다.</p>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {scaleGroups.length === 0 ? (
+                          <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">먼저 검사 선택에서 검사 항목을 체크해주세요.</p>
+                        ) : scaleGroups.map((group) => {
+                          const allTestKeys = group.scales.map((s) => s.key)
+                          const isAllSelected = allScaleTestIds.has(group.test_id) ||
+                            (allTestKeys.length > 0 && allTestKeys.every((k) => selectedScaleKeys.has(k)))
+                          const isExpanded = expandedTestIds.has(group.test_id)
+                          return (
+                            <div key={group.test_id} className="rounded-md border">
+                              {/* 검사 헤더 */}
+                              <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
+                                <label className="flex cursor-pointer items-center gap-2 text-xs font-medium">
+                                  <input
+                                    type="checkbox"
+                                    className="size-3.5"
+                                    checked={isAllSelected}
+                                    onChange={(e) => setAllScalesForTest(group.test_id, e.target.checked)}
+                                  />
+                                  <span>{group.test_id}</span>
+                                </label>
                                 <button
                                   type="button"
-                                  onClick={() => removeSession(session.local_id)}
-                                  className="text-xs text-muted-foreground hover:text-destructive"
+                                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                                  onClick={() => setExpandedTestIds((prev) => {
+                                    const next = new Set(prev)
+                                    if (next.has(group.test_id)) next.delete(group.test_id)
+                                    else next.add(group.test_id)
+                                    return next
+                                  })}
                                 >
-                                  삭제
+                                  {isExpanded ? <IconChevronDown className="size-3" /> : <IconChevronRight className="size-3" />}
+                                  {isExpanded ? "접기" : "펼치기"}
                                 </button>
+                              </div>
+                              {/* 실시구간 목록 */}
+                              {isExpanded && (
+                                <div className="flex flex-col gap-1 border-t px-2 py-2">
+                                  {group.tree.map((conditionNode) => {
+                                    const conditionKeys = group.scales
+                                      .filter((s) => s.sub_test_json === conditionNode.sub_test_json)
+                                      .map((s) => s.key)
+                                    const isCondSelected = conditionKeys.length > 0 &&
+                                      conditionKeys.every((k) => selectedScaleKeys.has(k))
+                                    const isCondExpanded = expandedScaleNodeKeys.has(conditionNode.key)
+                                    return (
+                                      <div key={conditionNode.key} className="rounded border bg-muted/10">
+                                        {/* 실시구간 헤더: 체크박스 + 펼치기 버튼 */}
+                                        <div className="flex items-center gap-2 px-2 py-1.5">
+                                          <input
+                                            type="checkbox"
+                                            className="size-3.5 shrink-0"
+                                            checked={isCondSelected}
+                                            onChange={(e) => setScaleSelected(group.test_id, conditionKeys, e.target.checked)}
+                                          />
+                                          <button
+                                            type="button"
+                                            className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+                                            onClick={() => toggleScaleNode(conditionNode.key)}
+                                          >
+                                            <span className="flex items-center gap-1.5">
+                                              {isCondExpanded
+                                                ? <IconChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+                                                : <IconChevronRight className="size-3.5 shrink-0 text-muted-foreground" />}
+                                              <span className="text-xs font-medium">{conditionNode.label}</span>
+                                            </span>
+                                            <span className="shrink-0 text-[11px] text-muted-foreground">
+                                              {conditionNode.item_count ? `${conditionNode.item_count}문항` : "문항 정보 없음"}
+                                            </span>
+                                          </button>
+                                        </div>
+                                        {/* 척도 트리 */}
+                                        {isCondExpanded && (
+                                          <div className="border-t px-1 py-1">
+                                            {renderScaleNodes(group, conditionNode.children)}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
                               )}
                             </div>
-                            <div className="mt-2 grid gap-2">
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 5: 추가 인적사항 */}
+                  {createStep === 5 && (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold leading-tight">추가 인적사항</h4>
+                          <p className="mt-0.5 text-xs text-muted-foreground">검사 URL에서 받을 추가 정보 항목을 정의합니다.</p>
+                        </div>
+                        <Button type="button" size="sm" variant="outline" onClick={addProfileField}>추가</Button>
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        {profileFields.length === 0 ? (
+                          <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">추가 인적사항이 없습니다.</p>
+                        ) : profileFields.map((field) => (
+                          <div key={field.local_id} className="rounded-md border p-3">
+                            <div className="grid gap-3 md:grid-cols-2">
                               <Input
-                                value={session.title}
-                                onChange={(e) => updateSession(session.local_id, { title: e.target.value })}
-                                placeholder="세션 이름"
-                                maxLength={80}
+                                value={field.label}
+                                onChange={(e) => updateProfileField(field.local_id, { label: e.target.value })}
+                                placeholder="항목명"
+                                maxLength={60}
                               />
-                              <textarea
-                                value={session.description}
-                                onChange={(e) => updateSession(session.local_id, { description: e.target.value })}
-                                placeholder="세션 시작 전 보여줄 검사 안내 문구"
-                                rows={3}
-                                maxLength={500}
-                                className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                              />
-                            </div>
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              포함 검사: {sessionTestIds.length ? sessionTestIds.join(", ") : "없음"}
-                            </p>
-                            {sessionTestIds.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                {sessionTestIds.map((testId) => (
-                                  <span key={testId} className="rounded-md bg-muted px-2 py-1 text-[11px] font-semibold text-foreground">
-                                    {testId}
-                                  </span>
+                              <select
+                                value={field.type}
+                                onChange={(e) => updateProfileField(field.local_id, { type: e.target.value as FieldType })}
+                                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                              >
+                                {fieldTypes.map((type) => (
+                                  <option key={type.value} value={type.value}>{type.label}</option>
                                 ))}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border p-4">
-                    <h4 className="text-sm font-semibold">구성 요약</h4>
-                    <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                      <div className="rounded-md bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">검사군</p>
-                        <strong>{createSummary.selectedTestCount}개</strong>
-                      </div>
-                      <div className="rounded-md bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">선택 척도</p>
-                        <strong>{createSummary.selectedScaleCount}개</strong>
-                      </div>
-                      <div className="rounded-md bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">포함 실시구간</p>
-                        <strong>{createSummary.includedVariantCount}개</strong>
-                      </div>
-                      <div className="rounded-md bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">제외 예정</p>
-                        <strong className={createSummary.excludedVariantCount ? "text-yellow-700" : ""}>
-                          {createSummary.excludedVariantCount}개
-                        </strong>
-                      </div>
-                      <div className="rounded-md bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">예상 문항</p>
-                        <strong>{createSummary.estimatedItemCount || "-"}개</strong>
-                      </div>
-                      <div className="rounded-md bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">세션</p>
-                        <strong>{createSummary.sessionCount}개</strong>
-                      </div>
-                      <div className="rounded-md bg-muted/40 p-3">
-                        <p className="text-xs text-muted-foreground">추가 인적사항</p>
-                        <strong>{createSummary.profileFieldCount}개</strong>
-                      </div>
-                    </div>
-                    {selectedTestIds.length > 0 && (
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        {selectedTestIds.join(", ")}
-                      </p>
-                    )}
-                  </div>
-                </section>
-
-                <section className="flex flex-col gap-4">
-                  <div className="rounded-lg border p-4">
-                    <h4 className="text-sm font-semibold">3. 척도 선택</h4>
-                    <p className="text-xs text-muted-foreground">검사 선택 후 펼쳐지는 트리에서 사용할 척도를 고릅니다.</p>
-                    <div className="mt-3 flex max-h-80 flex-col gap-2 overflow-auto">
-                      {scaleGroups.length === 0 ? (
-                        <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">먼저 검사 선택에서 검사 항목을 체크해주세요.</p>
-                      ) : scaleGroups.map((group) => {
-                        const isAllSelected = allScaleTestIds.has(group.test_id)
-                        const isExpanded = expandedTestIds.has(group.test_id)
-                        return (
-                          <div key={group.test_id} className="rounded-md border">
-                            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
-                              <label className="flex items-center gap-2 text-xs font-medium">
+                              </select>
+                              <Input
+                                value={field.placeholder}
+                                onChange={(e) => updateProfileField(field.local_id, { placeholder: e.target.value })}
+                                placeholder="안내 문구"
+                                maxLength={120}
+                              />
+                              <label className="flex items-center gap-2 text-sm">
                                 <input
                                   type="checkbox"
-                                  className="size-3.5"
-                                  checked={isAllSelected}
-                                  onChange={(e) => setAllScalesForTest(group.test_id, e.target.checked)}
+                                  checked={field.required}
+                                  onChange={(e) => updateProfileField(field.local_id, { required: e.target.checked })}
                                 />
-                                <span>{group.test_id}</span>
+                                <span>필수 입력</span>
                               </label>
-                              <button
-                                type="button"
-                                className="text-[11px] text-muted-foreground hover:text-foreground"
-                                onClick={() => setExpandedTestIds((prev) => {
-                                  const next = new Set(prev)
-                                  if (next.has(group.test_id)) next.delete(group.test_id)
-                                  else next.add(group.test_id)
-                                  return next
-                                })}
-                              >
-                                {isExpanded ? "접기" : "펼치기"}
-                              </button>
                             </div>
-                            {isExpanded && (
-                              <div className="flex flex-col gap-2 border-t px-2 py-2">
-                                {group.tree.map((conditionNode) => (
-                                  <div key={conditionNode.key} className="rounded border bg-muted/10">
-                                    <div className="flex items-center justify-between gap-2 border-b px-2 py-1.5">
-                                      <p className="min-w-0 truncate text-xs font-medium">{conditionNode.label}</p>
-                                      <span className="shrink-0 text-[11px] leading-4 text-muted-foreground">
-                                        {conditionNode.item_count ? `${conditionNode.item_count}문항` : "문항 정보 없음"}
-                                      </span>
-                                    </div>
-                                    <div className="px-1 py-1">
-                                      {renderScaleNodes(group, conditionNode.children)}
-                                    </div>
+                            {isOptionType(field.type) && (
+                              <div className="mt-3 flex flex-col gap-2">
+                                {field.options.map((option, idx) => (
+                                  <div key={idx} className="flex gap-2">
+                                    <Input
+                                      value={option}
+                                      onChange={(e) => updateProfileField(field.local_id, {
+                                        options: field.options.map((item, itemIdx) => itemIdx === idx ? e.target.value : item),
+                                      })}
+                                      placeholder="옵션 값"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => updateProfileField(field.local_id, {
+                                        options: field.options.filter((_, itemIdx) => itemIdx !== idx).length
+                                          ? field.options.filter((_, itemIdx) => itemIdx !== idx)
+                                          : [""],
+                                      })}
+                                    >
+                                      삭제
+                                    </Button>
                                   </div>
                                 ))}
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => updateProfileField(field.local_id, { options: [...field.options, ""] })}
+                                >
+                                  옵션 추가
+                                </Button>
                               </div>
                             )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h4 className="text-sm font-semibold">4. 추가 인적사항</h4>
-                        <p className="text-xs text-muted-foreground">검사 URL에서 받을 추가 정보 항목을 정의합니다.</p>
-                      </div>
-                      <Button type="button" size="sm" variant="outline" onClick={addProfileField}>추가</Button>
-                    </div>
-                    <div className="mt-4 flex max-h-80 flex-col gap-3 overflow-auto">
-                      {profileFields.length === 0 ? (
-                        <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">추가 인적사항이 없습니다.</p>
-                      ) : profileFields.map((field) => (
-                        <div key={field.local_id} className="rounded-md border p-3">
-                          <div className="grid gap-3 md:grid-cols-2">
-                            <Input
-                              value={field.label}
-                              onChange={(e) => updateProfileField(field.local_id, { label: e.target.value })}
-                              placeholder="항목명"
-                              maxLength={60}
-                            />
-                            <select
-                              value={field.type}
-                              onChange={(e) => updateProfileField(field.local_id, { type: e.target.value as FieldType })}
-                              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                            >
-                              {fieldTypes.map((type) => (
-                                <option key={type.value} value={type.value}>{type.label}</option>
-                              ))}
-                            </select>
-                            <Input
-                              value={field.placeholder}
-                              onChange={(e) => updateProfileField(field.local_id, { placeholder: e.target.value })}
-                              placeholder="안내 문구"
-                              maxLength={120}
-                            />
-                            <label className="flex items-center gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                checked={field.required}
-                                onChange={(e) => updateProfileField(field.local_id, { required: e.target.checked })}
-                              />
-                              <span>필수 입력</span>
-                            </label>
-                          </div>
-                          {isOptionType(field.type) && (
-                            <div className="mt-3 flex flex-col gap-2">
-                              {field.options.map((option, idx) => (
-                                <div key={idx} className="flex gap-2">
-                                  <Input
-                                    value={option}
-                                    onChange={(e) => updateProfileField(field.local_id, {
-                                      options: field.options.map((item, itemIdx) => itemIdx === idx ? e.target.value : item),
-                                    })}
-                                    placeholder="옵션 값"
-                                  />
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => updateProfileField(field.local_id, {
-                                      options: field.options.filter((_, itemIdx) => itemIdx !== idx).length
-                                        ? field.options.filter((_, itemIdx) => itemIdx !== idx)
-                                        : [""],
-                                    })}
-                                  >
-                                    삭제
-                                  </Button>
-                                </div>
-                              ))}
+                            <div className="mt-3 flex justify-end">
                               <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => updateProfileField(field.local_id, { options: [...field.options, ""] })}
+                                onClick={() => setProfileFields((prev) => prev.filter((item) => item.local_id !== field.local_id))}
                               >
-                                옵션 추가
+                                항목 삭제
                               </Button>
                             </div>
-                          )}
-                          <div className="mt-3 flex justify-end">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => setProfileFields((prev) => prev.filter((item) => item.local_id !== field.local_id))}
-                            >
-                              항목 삭제
-                            </Button>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </section>
+                  )}
+
+                </div>
               </div>
 
               {createMessage && (
@@ -1387,14 +1470,37 @@ export function TestManagement() {
                   {createMessage.text}
                 </p>
               )}
-              <div className="flex justify-end gap-2 border-t px-6 py-4">
-                <Button type="button" variant="outline" onClick={() => { setShowCreateModal(false); resetCreateForm() }} disabled={creating}>
-                  닫기
-                </Button>
-                <Button type="submit" disabled={creating || !catalog.length}>
-                  {creating ? "생성 중..." : "생성"}
-                </Button>
-              </div>
+
+              {/* 푸터 */}
+              <footer className="flex items-center justify-between border-t px-6 py-3">
+                <span className="text-xs text-muted-foreground">
+                  {createStep === 1 && "검사 이름과 운영 옵션을 먼저 확인해주세요."}
+                  {createStep === 2 && "선택한 검사군이 다음 단계의 세션과 척도 트리에 펼쳐집니다."}
+                  {createStep === 3 && "검사 칩을 세션 카드로 드래그하여 배정합니다."}
+                  {createStep === 4 && "선택한 척도가 없는 실시구간은 자동으로 제외됩니다."}
+                  {createStep === 5 && "검사 URL에서 받을 추가 정보 항목을 정의합니다."}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="ghost" onClick={() => { setShowCreateModal(false); resetCreateForm() }} disabled={creating}>
+                    닫기
+                  </Button>
+                  {createStep > 1 && (
+                    <Button type="button" variant="outline" onClick={() => setCreateStep((s) => s - 1)} disabled={creating}>
+                      <IconChevronLeft className="size-3.5" /> 이전
+                    </Button>
+                  )}
+                  {createStep < CREATE_STEPS.length && (
+                    <Button type="button" onClick={() => setCreateStep((s) => s + 1)}>
+                      다음 <IconChevronRight className="size-3.5" />
+                    </Button>
+                  )}
+                  {createStep === CREATE_STEPS.length && (
+                    <Button type="submit" disabled={creating || !catalog.length}>
+                      {creating ? "생성 중..." : "생성"}
+                    </Button>
+                  )}
+                </div>
+              </footer>
             </form>
           </section>
         </div>

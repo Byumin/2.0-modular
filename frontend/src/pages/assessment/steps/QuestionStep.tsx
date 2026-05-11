@@ -91,6 +91,7 @@ interface Props {
   initialPartIndex?: number
   initialPage?: number
   onProgressChange?: (state: { answers: AnswerState; currentPartIndex: number; currentPage: number }) => void
+  sessionClass?: string
 }
 
 export function QuestionStep({
@@ -107,6 +108,7 @@ export function QuestionStep({
   initialPartIndex = 0,
   initialPage = 0,
   onProgressChange,
+  sessionClass = "session-teal",
 }: Props) {
   const safeInitialPartIndex = Math.min(Math.max(initialPartIndex, 0), Math.max(parts.length - 1, 0))
   const [partIndex, setPartIndex] = React.useState(safeInitialPartIndex)
@@ -437,19 +439,19 @@ export function QuestionStep({
     const showDots = total <= 20
 
     return (
-      <div className="flex min-h-screen flex-col bg-[#fafbfc]">
+      <div className={`${sessionClass} flex min-h-screen flex-col bg-[#fafbfc]`}>
         {/* Top progress bar */}
         <div className="h-1 bg-[#edf0ef]">
           <div
-            className="h-full bg-[#175e63] transition-all duration-500 ease-out"
-            style={{ width: `${percent}%` }}
+            className="h-full transition-all duration-500 ease-out"
+            style={{ width: `${percent}%`, backgroundColor: "var(--sa)" }}
           />
         </div>
 
         {/* Minimal header */}
         <header className="flex items-center justify-between px-6 py-4 sm:px-10">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#175e63] text-xs font-bold text-white">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ backgroundColor: "var(--sa)" }}>
               {testName.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
@@ -463,7 +465,7 @@ export function QuestionStep({
             <button
               type="button"
               onClick={() => handleViewModeChange("cards")}
-              className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-1.5 text-xs font-medium text-[#5f6f73] transition-colors hover:bg-[#f5f7fa] hover:text-[#175e63]"
+              className="rounded-lg border border-[#e2e8f0] bg-white px-3 py-1.5 text-xs font-medium text-[#5f6f73] transition-colors hover:bg-[#f5f7fa] hover:text-[var(--sa)]"
             >
               카드형
             </button>
@@ -471,7 +473,8 @@ export function QuestionStep({
               type="button"
               onClick={handleSubmitClick}
               disabled={!allAnswered() || submitting}
-              className="rounded-lg bg-[#175e63] px-5 py-1.5 text-sm font-semibold text-white transition-all hover:bg-[#124b4f] disabled:opacity-30"
+              className="rounded-lg px-5 py-1.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-30"
+              style={{ backgroundColor: "var(--sa)" }}
             >
               {submitting ? submittingLabel : submitLabel}
             </button>
@@ -483,10 +486,10 @@ export function QuestionStep({
           <div className="w-full max-w-3xl">
             {/* Watermark number */}
             <div className="mb-4 flex items-baseline gap-4">
-              <span className="text-[80px] font-black leading-none text-[#175e63]/10 sm:text-[120px]">
+              <span className="text-[80px] font-black leading-none sm:text-[120px]" style={{ color: "var(--sa-10)" }}>
                 {String(globalIndex).padStart(2, "0")}
               </span>
-              <span className="text-xs font-medium uppercase tracking-widest text-[#175e63]">
+              <span className="text-xs font-medium uppercase tracking-widest" style={{ color: "var(--sa)" }}>
                 Question {globalIndex} of {total}
               </span>
             </div>
@@ -524,13 +527,21 @@ export function QuestionStep({
                               <div
                                 className={`flex size-14 items-center justify-center rounded-2xl border-2 text-lg font-bold transition-all duration-200 sm:size-16
                                   ${isSelected
-                                    ? "border-[#175e63] bg-[#175e63] text-white shadow-lg shadow-[#175e63]/20 scale-110"
-                                    : "border-[#e2e8f0] bg-white text-[#8a9a96] hover:border-[#175e63]/40 hover:text-[#175e63] hover:scale-105"
+                                    ? "text-white scale-110"
+                                    : "border-[#e2e8f0] bg-white text-[#8a9a96] hover:border-[var(--sa-40)] hover:text-[var(--sa)] hover:scale-105"
                                   }`}
+                                style={isSelected ? {
+                                  backgroundColor: "var(--sa)",
+                                  borderColor: "var(--sa)",
+                                  boxShadow: "0 10px 15px -3px var(--sa-20), 0 4px 6px -4px var(--sa-20)",
+                                } : undefined}
                               >
                                 {opt.value}
                               </div>
-                              <span className={`text-[11px] transition-colors ${isSelected ? "font-semibold text-[#175e63]" : "text-[#8a9a96]"}`}>
+                              <span
+                                className={`text-[11px] transition-colors ${isSelected ? "font-semibold" : "text-[#8a9a96]"}`}
+                                style={isSelected ? { color: "var(--sa)" } : undefined}
+                              >
                                 {opt.label}
                               </span>
                             </button>
@@ -613,11 +624,17 @@ export function QuestionStep({
                 onClick={() => moveToItem(it.id)}
                 className={`rounded-full transition-all duration-200 ${
                   idx === flatCurrentIndex
-                    ? "size-3 bg-[#175e63] scale-125"
+                    ? "size-3 scale-125"
                     : answers[it.id]
-                      ? "size-2.5 bg-[#175e63]/40 hover:bg-[#175e63]/60"
+                      ? "size-2.5 hover:opacity-80"
                       : "size-2.5 bg-[#dfe5e3] hover:bg-[#b0bab7]"
                 }`}
+                style={idx === flatCurrentIndex
+                  ? { backgroundColor: "var(--sa)" }
+                  : answers[it.id]
+                    ? { backgroundColor: "var(--sa-40)" }
+                    : undefined
+                }
               />
             ))
           ) : (
@@ -641,13 +658,13 @@ export function QuestionStep({
 
   // ── 카드형 (cards) ────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#f0f2f5]">
+    <div className={`${sessionClass} min-h-screen bg-[#f0f2f5]`}>
       {/* Compact sticky header */}
       <header className="sticky top-0 z-30 border-b border-[#e8ebee] bg-white/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
           {/* Left: logo + test info */}
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#175e63] text-sm font-bold text-white">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white" style={{ backgroundColor: "var(--sa)" }}>
               {testName.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
@@ -665,15 +682,21 @@ export function QuestionStep({
               const current = i === 1
               return (
                 <React.Fragment key={label}>
-                  <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
-                    current ? "bg-[#175e63]/10 font-semibold text-[#175e63]"
-                    : past ? "text-[#8a9a96]" : "text-[#c5ccc9]"
-                  }`}>
-                    <div className={`flex size-4 items-center justify-center rounded-full text-[9px] font-bold ${
-                      current ? "bg-[#175e63] text-white"
-                      : past ? "bg-[#c5ccc9] text-white"
-                      : "border border-[#dfe5e3] text-[#c5ccc9]"
-                    }`}>
+                  <div
+                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
+                      current ? "font-semibold"
+                      : past ? "text-[#8a9a96]" : "text-[#c5ccc9]"
+                    }`}
+                    style={current ? { backgroundColor: "var(--sa-10)", color: "var(--sa)" } : undefined}
+                  >
+                    <div
+                      className={`flex size-4 items-center justify-center rounded-full text-[9px] font-bold ${
+                        current ? "text-white"
+                        : past ? "bg-[#c5ccc9] text-white"
+                        : "border border-[#dfe5e3] text-[#c5ccc9]"
+                      }`}
+                      style={current ? { backgroundColor: "var(--sa)" } : undefined}
+                    >
                       {past ? (
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="size-2.5"><polyline points="20 6 9 17 4 12" /></svg>
                       ) : String(i + 1)}
@@ -689,8 +712,8 @@ export function QuestionStep({
         {/* Progress bar */}
         <div className="h-0.5 bg-[#edf0ef]">
           <div
-            className="h-full bg-[#175e63] transition-all duration-500"
-            style={{ width: `${percent}%` }}
+            className="h-full transition-all duration-500"
+            style={{ width: `${percent}%`, backgroundColor: "var(--sa)" }}
           />
         </div>
       </header>
@@ -704,7 +727,7 @@ export function QuestionStep({
             {/* Page indicator row */}
             <div className="flex items-center justify-between">
               <div className="flex items-baseline gap-2">
-                <span className="text-sm font-semibold text-[#175e63]">
+                <span className="text-sm font-semibold" style={{ color: "var(--sa)" }}>
                   {activePart?.title || "파트"}
                 </span>
                 <span className="text-xs text-[#b0bab7]">
@@ -748,16 +771,19 @@ export function QuestionStep({
                       isMissing
                         ? "border-red-300 ring-2 ring-red-100"
                         : isAnswered
-                          ? "border-[#175e63]/15 shadow-sm"
+                          ? "shadow-sm"
                           : "border-transparent shadow-sm hover:shadow-md"
                     }`}
-                    style={{ animationDelay: `${cardIdx * 60}ms` }}
+                    style={{ animationDelay: `${cardIdx * 60}ms`, ...(isAnswered && !isMissing ? { borderColor: "var(--sa-15)" } : {}) }}
                   >
                     <div className="flex items-start gap-4">
                       {/* Number badge */}
-                      <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold transition-colors ${
-                        isAnswered ? "bg-[#175e63] text-white" : "bg-[#f0f2f5] text-[#8a9a96]"
-                      }`}>
+                      <div
+                        className={`flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold transition-colors ${
+                          isAnswered ? "text-white" : "bg-[#f0f2f5] text-[#8a9a96]"
+                        }`}
+                        style={isAnswered ? { backgroundColor: "var(--sa)" } : undefined}
+                      >
                         {item.global_order_index ?? currentBundle.startIndex + cardIdx + 1}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -773,8 +799,8 @@ export function QuestionStep({
                     </div>
                     {isAnswered && (
                       <div className="mt-3 flex items-center gap-2 pl-14">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#175e63" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-3.5"><polyline points="20 6 9 17 4 12" /></svg>
-                        <span className="text-[11px] font-medium text-[#175e63]">응답 완료</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--sa)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-3.5"><polyline points="20 6 9 17 4 12" /></svg>
+                        <span className="text-[11px] font-medium" style={{ color: "var(--sa)" }}>응답 완료</span>
                       </div>
                     )}
                   </div>
@@ -793,7 +819,7 @@ export function QuestionStep({
           <aside className="hidden lg:block">
             {/* Sidebar label — static (not sticky) */}
             <div className="mb-4 flex items-center">
-              <span className="text-sm font-semibold text-[#175e63]">진행 현황</span>
+              <span className="text-sm font-semibold" style={{ color: "var(--sa)" }}>진행 현황</span>
             </div>
 
             <div className="rounded-2xl bg-white p-4 shadow-sm lg:sticky lg:top-16">
@@ -802,7 +828,7 @@ export function QuestionStep({
                 <div className="relative size-20">
                   <svg viewBox="0 0 36 36" className="size-20 -rotate-90">
                     <circle cx="18" cy="18" r="15.9" fill="none" stroke="#edf0ef" strokeWidth="2.5" />
-                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#175e63" strokeWidth="2.5"
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--sa)" strokeWidth="2.5"
                       strokeDasharray={`${percent} ${100 - percent}`} strokeLinecap="round"
                       className="transition-all duration-500" />
                   </svg>
@@ -823,7 +849,7 @@ export function QuestionStep({
                 <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[#b0bab7]">문항 이동</p>
                 <div className="flex items-center gap-1">
                   <button type="button" onClick={handlePrev} disabled={isFirstPage}
-                    className="flex size-8 items-center justify-center rounded-lg border border-[#e8ebee] bg-[#fafbfc] text-[#8a9a96] transition-colors hover:bg-[#f0f2f5] hover:text-[#175e63] disabled:opacity-30">
+                    className="flex size-8 items-center justify-center rounded-lg border border-[#e8ebee] bg-[#fafbfc] text-[#8a9a96] transition-colors hover:bg-[#f0f2f5] hover:text-[var(--sa)] disabled:opacity-30">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5"><polyline points="15 18 9 12 15 6" /></svg>
                   </button>
                   <div className="flex-1 text-center">
@@ -832,7 +858,7 @@ export function QuestionStep({
                     <span className="text-[11px] text-[#b0bab7]"> / {totalPages}</span>
                   </div>
                   <button type="button" onClick={handleNext} disabled={isLastPage && isLastPart}
-                    className="flex size-8 items-center justify-center rounded-lg border border-[#e8ebee] bg-[#fafbfc] text-[#8a9a96] transition-colors hover:bg-[#f0f2f5] hover:text-[#175e63] disabled:opacity-30">
+                    className="flex size-8 items-center justify-center rounded-lg border border-[#e8ebee] bg-[#fafbfc] text-[#8a9a96] transition-colors hover:bg-[#f0f2f5] hover:text-[var(--sa)] disabled:opacity-30">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5"><polyline points="9 18 15 12 9 6" /></svg>
                   </button>
                 </div>
@@ -858,11 +884,18 @@ export function QuestionStep({
                             }}
                             className={`h-6 rounded text-[10px] font-semibold transition-all ${
                               answered(item.id)
-                                ? "bg-[#175e63] text-white"
+                                ? "text-white"
                                 : isOnCurrentPage
-                                  ? "bg-[#175e63]/10 text-[#175e63] ring-1 ring-[#175e63]/20"
+                                  ? "ring-1"
                                   : "bg-[#f5f7fa] text-[#8a9a96] hover:bg-[#edf0ef]"
                             }`}
+                          style={
+                            answered(item.id)
+                              ? { backgroundColor: "var(--sa)" }
+                              : isOnCurrentPage
+                                ? { backgroundColor: "var(--sa-10)", color: "var(--sa)" }
+                                : undefined
+                          }
                           >
                             {(item.global_order_index ?? globalIdx + 1)}
                           </button>
@@ -882,10 +915,11 @@ export function QuestionStep({
                       <button key={pi} type="button"
                         onClick={() => { setPartIndex(pi); setPage(0); setShowMissingHighlight(false) }}
                         className={`rounded-md px-2 py-1 text-[10px] font-semibold transition-colors ${
-                          pi === partIndex ? "bg-[#175e63] text-white"
+                          pi === partIndex ? "text-white"
                           : partAllAnswered(pi) ? "bg-green-50 text-green-600"
                           : "bg-[#f5f7fa] text-[#8a9a96] hover:bg-[#edf0ef]"
                         }`}
+                        style={pi === partIndex ? { backgroundColor: "var(--sa)" } : undefined}
                       >
                         {part.title}
                       </button>
@@ -904,8 +938,9 @@ export function QuestionStep({
                   ]).map((d) => (
                     <button key={d.key} type="button" onClick={() => handleViewModeChange(d.key)}
                       className={`flex-1 rounded-lg py-2 text-[11px] font-semibold transition-all ${
-                        viewMode === d.key ? "bg-[#175e63] text-white" : "bg-[#f5f7fa] text-[#8a9a96] hover:bg-[#edf0ef] hover:text-[#5f6f73]"
+                        viewMode === d.key ? "text-white" : "bg-[#f5f7fa] text-[#8a9a96] hover:bg-[#edf0ef] hover:text-[#5f6f73]"
                       }`}
+                      style={viewMode === d.key ? { backgroundColor: "var(--sa)" } : undefined}
                     >
                       {d.label}
                     </button>
@@ -917,7 +952,8 @@ export function QuestionStep({
               <div className="mt-3 border-t border-[#f0f2f5] pt-3">
                 <button type="button" onClick={handleSubmitClick}
                   disabled={submitting || !allAnswered()}
-                  className="h-10 w-full rounded-xl bg-[#175e63] text-sm font-semibold text-white transition-all hover:bg-[#124b4f] disabled:opacity-30"
+                  className="h-10 w-full rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-30"
+                  style={{ backgroundColor: "var(--sa)" }}
                 >
                   {submitting ? submittingLabel : submitLabel}
                 </button>

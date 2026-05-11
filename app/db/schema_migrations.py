@@ -391,6 +391,172 @@ def ensure_admin_assessment_draft_table() -> None:
         )
 
 
+_REGIONS = [
+    "서울특별시", "부산광역시", "대구광역시", "인천광역시",
+    "광주광역시", "대전광역시", "울산광역시", "세종특별자치시",
+    "경기도", "강원특별자치도", "충청북도", "충청남도",
+    "전북특별자치도", "전라남도", "경상북도", "경상남도", "제주특별자치도",
+]
+_EDUCATION_OPTIONS = [
+    "무학", "초등학교 졸업", "중학교 졸업", "고등학교 졸업",
+    "전문대학 졸업", "4년제 대학 또는 그 이상 졸업", "해당 없음",
+]
+
+_ESSENTIAL_SEED: dict[str, dict] = {
+    "PAT-2": {
+        "sections": [
+            {
+                "subject_type": "parent",
+                "section_hint": "부모/양육자 정보를 입력해주세요",
+                "fields": {
+                    "name":      {"label": "부모 이름",  "required": True},
+                    "informant": {"label": "관계",       "required": True, "type": "radio", "options": ["mother", "father", "etc"]},
+                },
+            },
+            {
+                "subject_type": "child",
+                "section_hint": "자녀 정보를 입력해주세요",
+                "fields": {
+                    "name":       {"label": "자녀 이름",    "required": True},
+                    "birth_day":  {"label": "자녀 생년월일", "required": True, "type": "date"},
+                    "gender":     {"label": "자녀 성별",    "required": True, "type": "radio"},
+                    "region":     {"label": "자녀 거주지역", "required": True, "type": "select", "options": _REGIONS},
+                    "school_age": {"label": "소속/학년",    "required": True, "type": "select"},
+                },
+            },
+        ],
+    },
+    "PCT": {
+        "subject_type": "child",
+        "section_hint": "자녀에 대한 정보를 입력해주세요",
+        "fields": {
+            "name":      {"label": "자녀 이름",    "required": True},
+            "gender":    {"label": "자녀 성별",    "required": True, "type": "radio"},
+            "birth_day": {"label": "자녀 생년월일", "required": True, "type": "date"},
+            "region":    {"label": "자녀 거주지역", "required": True, "type": "select", "options": _REGIONS},
+        },
+    },
+    "K-PSI-4-SF": {
+        "sections": [
+            {
+                "subject_type": "parent",
+                "section_hint": "부모/양육자 정보를 입력해주세요",
+                "fields": {
+                    "name":           {"label": "부모 이름",     "required": True},
+                    "gender":         {"label": "부모 성별",     "required": True, "type": "radio"},
+                    "birth_day":      {"label": "부모 생년월일",  "required": True, "type": "date"},
+                    "region":         {"label": "부모 거주 지역", "required": True, "type": "select", "options": _REGIONS},
+                    "marital_status": {"label": "부모 결혼 상태", "required": True, "type": "radio", "options": ["기혼", "미혼", "이혼", "별거", "기타"]},
+                    "informant":      {"label": "자녀와의 관계",  "required": True, "type": "radio", "options": ["부", "모", "기타"]},
+                },
+            },
+            {
+                "subject_type": "child",
+                "section_hint": "자녀 정보를 입력해주세요",
+                "fields": {
+                    "name":      {"label": "자녀 이름",    "required": True},
+                    "gender":    {"label": "자녀 성별",    "required": True, "type": "radio"},
+                    "birth_day": {"label": "자녀 생년월일", "required": True, "type": "date"},
+                },
+            },
+        ],
+    },
+    "PSES": {
+        "subject_type": "parent",
+        "section_hint": "부모/양육자 정보를 입력해주세요",
+        "fields": {
+            "name":      {"label": "부모 이름",    "required": True},
+            "gender":    {"label": "부모 성별",    "required": True, "type": "radio"},
+            "birth_day": {"label": "부모 생년월일", "required": True, "type": "date"},
+        },
+    },
+    "PET":    {"subject_type": "self"},
+    "GOLDEN": {"subject_type": "self"},
+    "STS":    {"subject_type": "self"},
+}
+
+
+def ensure_test_profile_config_table() -> None:
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        if "test_profile_config" not in tables:
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE test_profile_config (
+                    test_id                TEXT PRIMARY KEY REFERENCES test(id),
+                    essential_profile_json TEXT NOT NULL DEFAULT '{}',
+                    optional_profile_json  TEXT NOT NULL DEFAULT '{}'
+                )
+                """
+            )
+            _optional_seed: dict[str, dict] = {
+                "PAT-2": {
+                    "fields": {
+                        "caregiver_type": {"label": "양육 구분", "options": ["주 양육자", "기타 양육자"]},
+                    }
+                },
+                "PCT": {
+                    "fields": {
+                        "developmental_issues": {"label": "아동의 발달문제",   "type": "long_text"},
+                        "contact":              {"label": "연락처 및 이메일", "type": "text"},
+                        "author_name":          {"label": "작성자 이름",       "type": "text"},
+                        "child_relationship":   {"label": "아동과의 관계",     "type": "text"},
+                        "father_age":           {"label": "부 연령",           "type": "number"},
+                        "father_education":     {"label": "부 학력", "type": "text", "options": ["무학", "초등학교 졸업", "중학교 졸업", "고등학교 졸업", "전문대학 졸업", "4년제 대학 또는 그 이상 졸업", "해당 없음"]},
+                        "father_occupation":    {"label": "부 직업",           "type": "text"},
+                        "mother_age":           {"label": "모 연령",           "type": "number"},
+                        "mother_education":     {"label": "모 학력", "type": "text", "options": ["무학", "초등학교 졸업", "중학교 졸업", "고등학교 졸업", "전문대학 졸업", "4년제 대학 또는 그 이상 졸업", "해당 없음"]},
+                        "mother_occupation":    {"label": "모 직업",           "type": "text"},
+                    }
+                },
+            }
+            seed_rows = [
+                (
+                    tid,
+                    json.dumps(cfg, ensure_ascii=False),
+                    json.dumps(_optional_seed.get(tid, {}), ensure_ascii=False),
+                )
+                for tid, cfg in _ESSENTIAL_SEED.items()
+            ]
+            conn.exec_driver_sql(
+                "INSERT OR IGNORE INTO test_profile_config (test_id, essential_profile_json, optional_profile_json) VALUES (?, ?, ?)",
+                seed_rows,
+            )
+
+
+def ensure_test_profile_config_restructure() -> None:
+    """config_json 단일 컬럼 → essential_profile_json / optional_profile_json 두 컬럼으로 마이그레이션."""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "test_profile_config" not in tables:
+        return
+    columns = {col["name"] for col in inspector.get_columns("test_profile_config")}
+    if "essential_profile_json" in columns:
+        return  # 이미 마이그레이션 완료
+
+    with engine.begin() as conn:
+        existing = conn.exec_driver_sql(
+            "SELECT test_id, config_json FROM test_profile_config"
+        ).fetchall()
+        conn.exec_driver_sql("DROP TABLE test_profile_config")
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE test_profile_config (
+                test_id                TEXT PRIMARY KEY REFERENCES test(id),
+                essential_profile_json TEXT NOT NULL DEFAULT '{}',
+                optional_profile_json  TEXT NOT NULL DEFAULT '{}'
+            )
+            """
+        )
+        migrated = [(row[0], row[1] or "{}", "{}") for row in existing]
+        if migrated:
+            conn.exec_driver_sql(
+                "INSERT INTO test_profile_config (test_id, essential_profile_json, optional_profile_json) VALUES (?, ?, ?)",
+                migrated,
+            )
+
+
 def rotate_shared_submission_access_tokens() -> None:
     """기존 검사 링크 토큰을 공유하던 제출 결과 토큰을 제출별 토큰으로 회전한다."""
     inspector = inspect(engine)
@@ -536,3 +702,32 @@ def migrate_child_test_sub_test_json_to_structured() -> None:
                     row_id,
                 ),
             )
+
+
+def ensure_admin_client_relation_table() -> None:
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        if "admin_client_relation" not in tables:
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE admin_client_relation (
+                    id INTEGER PRIMARY KEY,
+                    admin_user_id INTEGER NOT NULL,
+                    client_id_a INTEGER NOT NULL,
+                    role_a VARCHAR(50) NOT NULL,
+                    client_id_b INTEGER NOT NULL,
+                    role_b VARCHAR(50) NOT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_admin_client_relation_admin_user_id ON admin_client_relation (admin_user_id)"
+        )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_admin_client_relation_client_id_a ON admin_client_relation (client_id_a)"
+        )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_admin_client_relation_client_id_b ON admin_client_relation (client_id_b)"
+        )

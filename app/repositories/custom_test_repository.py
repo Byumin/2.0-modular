@@ -1,10 +1,11 @@
-from sqlalchemy import func
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
     AdminAssessmentLog,
     AdminAssessmentDraft,
     AdminClientAssignment,
+    AdminClientRelation,
     AdminCustomTest,
     AdminCustomTestAccessLink,
     AdminCustomTestSubmission,
@@ -425,6 +426,21 @@ def list_submissions_by_client_with_test_name(
     client_id: int,
     limit: int = 30,
 ):
+    # 관련 내담자(relation)의 client_id도 포함 — 같은 관계 검사 결과 공유
+    related_ids_sq = (
+        select(AdminClientRelation.client_id_a)
+        .where(
+            AdminClientRelation.admin_user_id == admin_user_id,
+            AdminClientRelation.client_id_b == client_id,
+        )
+        .union(
+            select(AdminClientRelation.client_id_b).where(
+                AdminClientRelation.admin_user_id == admin_user_id,
+                AdminClientRelation.client_id_a == client_id,
+            )
+        )
+    ).subquery()
+
     return (
         db.query(
             AdminCustomTestSubmission,
@@ -438,7 +454,10 @@ def list_submissions_by_client_with_test_name(
         )
         .filter(
             AdminCustomTestSubmission.admin_user_id == admin_user_id,
-            AdminCustomTestSubmission.client_id == client_id,
+            or_(
+                AdminCustomTestSubmission.client_id == client_id,
+                AdminCustomTestSubmission.client_id.in_(related_ids_sq),
+            ),
         )
         .order_by(AdminCustomTestSubmission.created_at.desc(), AdminCustomTestSubmission.id.desc())
         .limit(limit)

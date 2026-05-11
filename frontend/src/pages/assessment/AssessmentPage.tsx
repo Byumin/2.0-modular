@@ -581,6 +581,9 @@ export function AssessmentPage() {
     window.location.href = window.location.pathname
   }
 
+  const SESSION_CLASSES = ["session-teal", "session-ocean", "session-navy"] as const
+  const sessionClass = SESSION_CLASSES[Math.min(activeSessionIndex, SESSION_CLASSES.length - 1)]
+
   const title = initialPayload?.custom_test_name || "검사 실시"
   const stepMeta: Record<AssessmentStep, { label: string; helper: string }> = {
     consent: {
@@ -733,6 +736,7 @@ export function AssessmentPage() {
               profile={activeProfile}
               onStart={() => setStep("question")}
               onBack={() => setStep("profile")}
+              sessionClass={sessionClass}
             />
           )}
 
@@ -752,6 +756,7 @@ export function AssessmentPage() {
               initialPartIndex={activeSessionIndex === 0 ? activeDraft?.current_part_index ?? 0 : 0}
               initialPage={activeSessionIndex === 0 ? activeDraft?.current_page ?? 0 : 0}
               onProgressChange={handleQuestionProgressChange}
+              sessionClass={sessionClass}
             />
           )}
         </div>

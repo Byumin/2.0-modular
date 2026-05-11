@@ -193,6 +193,19 @@ class AdminClientIdentityReview(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class AdminClientRelation(Base):
+    """내담자 간 관계 (부모-자녀, 선생-학생 등)를 기록하는 테이블."""
+    __tablename__ = "admin_client_relation"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_user_id: Mapped[int] = mapped_column(ForeignKey("admin_user.id"), nullable=False, index=True)
+    client_id_a: Mapped[int] = mapped_column(ForeignKey("admin_client.id"), nullable=False, index=True)
+    role_a: Mapped[str] = mapped_column(String(50), nullable=False)
+    client_id_b: Mapped[int] = mapped_column(ForeignKey("admin_client.id"), nullable=False, index=True)
+    role_b: Mapped[str] = mapped_column(String(50), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class AdminSettings(Base):
     __tablename__ = "admin_settings"
 

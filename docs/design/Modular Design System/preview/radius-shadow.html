@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>Radius & shadow</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { padding: 24px; display:grid; grid-template-columns: repeat(4, 1fr); gap: 16px; background: hsl(210 40% 98%); }
+  .box { background:#fff; border:1px solid var(--color-border); padding: 14px; display:flex; flex-direction:column; gap: 6px; min-height: 84px; }
+  .r-md { border-radius: 6px; }
+  .r-lg { border-radius: 8px; }
+  .r-xl { border-radius: 12px; }
+  .s-xs { box-shadow: 0 1px 0 0 rgb(0 0 0 / 0.04); }
+  .s-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.06); }
+  .s-lg { box-shadow: 0 10px 15px -3px rgb(0 0 0 / .10), 0 4px 6px -4px rgb(0 0 0 / .05); }
+  .name { font-size:12px; font-weight:600; }
+  .meta { font-size:11px; color:var(--color-muted-foreground); font-family:ui-monospace,monospace; }
+</style></head><body>
+  <div class="box r-md s-xs"><span class="name">rounded-md</span><span class="meta">6px · shadow-xs</span><span class="meta">Button, Input</span></div>
+  <div class="box r-lg s-sm"><span class="name">rounded-lg</span><span class="meta">8px · shadow-sm</span><span class="meta">Tool panel, Modal</span></div>
+  <div class="box r-xl s-sm"><span class="name">rounded-xl</span><span class="meta">12px · shadow-sm</span><span class="meta">Card (default)</span></div>
+  <div class="box r-lg s-lg"><span class="name">rounded-lg</span><span class="meta">8px · shadow-lg</span><span class="meta">Modal panel</span></div>
+</body></html>

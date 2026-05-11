@@ -7,6 +7,7 @@ interface Props {
   profile: Profile | null
   onStart: () => void
   onBack: () => void
+  sessionClass?: string
 }
 
 const TIPS = [
@@ -23,7 +24,7 @@ function responseScaleLabel(parts: AssessmentPart[]) {
   return `${scoredOptions.length}점 척도`
 }
 
-export function IntroStep({ payload, parts, session, onStart }: Props) {
+export function IntroStep({ payload, parts, session, onStart, sessionClass = "session-teal" }: Props) {
   const testName = payload.custom_test_name || payload.display_name || "검사"
   const sessionTitle = session?.title || "검사 안내"
   const sessionDescription = session?.description?.trim()
@@ -33,18 +34,18 @@ export function IntroStep({ payload, parts, session, onStart }: Props) {
 
   return (
     <div
-      className="relative min-h-screen overflow-hidden text-white"
-      style={{ background: "linear-gradient(180deg, #0d3b3f 0%, #0f4a4e 52%, #124b4f 100%)" }}
+      className={`${sessionClass} relative min-h-screen overflow-hidden text-white`}
+      style={{ background: "linear-gradient(180deg, var(--sa-gf) 0%, var(--sa-gm) 52%, var(--sa-gt) 100%)" }}
     >
-      <div className="h-[3px] bg-gradient-to-r from-[#175e63] via-[#5ce1e6] to-[#175e63]" />
+      <div className="h-[3px]" style={{ background: "linear-gradient(to right, var(--sa), var(--sa-l), var(--sa))" }} />
 
       <header className="relative z-10 border-b border-white/10 bg-white/[0.04] backdrop-blur-md">
         <div className="mx-auto flex max-w-[620px] items-center gap-3 px-4 py-4">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#175e63] text-sm font-bold text-white shadow-[0_12px_26px_rgba(0,0,0,0.22)]">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--sa)] text-sm font-bold text-white shadow-[0_12px_26px_rgba(0,0,0,0.22)]">
             H
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[#5ce1e6]/85">Inpsyt Assessment</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em]" style={{ color: "var(--sa-l85)" }}>Inpsyt Assessment</p>
             <p className="truncate text-sm font-semibold text-white/90">{testName}</p>
             {session?.title && <p className="truncate text-xs text-white/45">{session.title}</p>}
           </div>
@@ -57,8 +58,8 @@ export function IntroStep({ payload, parts, session, onStart }: Props) {
 
       <main className="relative z-10 mx-auto flex w-full max-w-[620px] flex-col px-4 pb-10 pt-11 sm:pt-12">
         <section className="rounded-[22px] border border-white/[0.18] bg-white/[0.12] px-8 py-8 shadow-[0_18px_55px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl sm:px-9 sm:py-9">
-          <div className="flex items-center gap-3 text-[12px] font-semibold tracking-[0.18em] text-[#5ce1e6]/85">
-            <span className="h-px w-7 bg-[#5ce1e6]/40" />
+          <div className="flex items-center gap-3 text-[12px] font-semibold tracking-[0.18em]" style={{ color: "var(--sa-l85)" }}>
+            <span className="h-px w-7" style={{ backgroundColor: "var(--sa-l40)" }} />
             검사 안내
           </div>
           <h1 className="mt-6 text-[26px] font-bold leading-tight tracking-tight text-white">
@@ -70,7 +71,7 @@ export function IntroStep({ payload, parts, session, onStart }: Props) {
 
           <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-white/55">
             <span className="flex items-center gap-1.5">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#5ce1e6" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="size-3.5" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--sa-l)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="size-3.5" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" />
                 <polyline points="12 6 12 12 16 14" />
               </svg>
@@ -78,7 +79,7 @@ export function IntroStep({ payload, parts, session, onStart }: Props) {
             </span>
             <span className="h-3 w-px bg-white/15" />
             <span className="flex items-center gap-1.5">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#5ce1e6" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="size-3.5" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--sa-l)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="size-3.5" aria-hidden="true">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
               </svg>
@@ -86,7 +87,7 @@ export function IntroStep({ payload, parts, session, onStart }: Props) {
             </span>
             <span className="h-3 w-px bg-white/15" />
             <span className="flex items-center gap-1.5">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#5ce1e6" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="size-3.5" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="var(--sa-l)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="size-3.5" aria-hidden="true">
                 <rect x="3" y="11" width="18" height="10" rx="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
@@ -100,7 +101,7 @@ export function IntroStep({ payload, parts, session, onStart }: Props) {
           <ul className="mt-5 space-y-3.5">
             {TIPS.map((tip, i) => (
               <li key={i} className="flex items-start gap-3">
-                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-[#5ce1e6]/15 text-[10px] font-bold text-[#5ce1e6]">
+                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold" style={{ backgroundColor: "var(--sa-l15)", color: "var(--sa-l)" }}>
                   {i + 1}
                 </span>
                 <span className="text-sm leading-6 text-white/62">{tip}</span>
@@ -112,7 +113,8 @@ export function IntroStep({ payload, parts, session, onStart }: Props) {
         <button
           type="button"
           onClick={onStart}
-          className="mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#175e63] to-[#1e8a8a] text-base font-semibold text-white shadow-[0_16px_28px_rgba(0,0,0,0.26)] transition-all hover:shadow-[0_18px_34px_rgba(92,225,230,0.16)] active:scale-[0.99]"
+          className="mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-lg text-base font-semibold text-white shadow-[0_16px_28px_rgba(0,0,0,0.26)] transition-all hover:opacity-90 active:scale-[0.99]"
+          style={{ background: "linear-gradient(to right, var(--sa), var(--sa-alt))" }}
         >
           검사 시작하기
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4" aria-hidden="true">

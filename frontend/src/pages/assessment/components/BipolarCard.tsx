@@ -45,9 +45,10 @@ function BipolarOptions({ item, itemOptions, answerState, onAnswer, globalIndex,
               aria-checked={checked}
               className={`assessment-option-card cursor-pointer rounded-lg border px-2 py-2 text-center transition-colors
                 ${checked
-                  ? "border-[#175e63]/40 bg-[#175e63]/8"
-                  : "border-[#e8ebee] bg-white hover:border-[#175e63]/30 hover:bg-[#eef2f4]/50"
+                  ? "border-[var(--sa-40)]"
+                  : "border-[#e8ebee] bg-white hover:border-[var(--sa-30)] hover:bg-[#eef2f4]/50"
                 }`}
+              style={checked ? { backgroundColor: "var(--sa-08)" } : undefined}
             >
               <input
                 type="radio"
@@ -57,7 +58,10 @@ function BipolarOptions({ item, itemOptions, answerState, onAnswer, globalIndex,
                 onChange={() => onAnswer(item.id, opt.value)}
                 className="sr-only"
               />
-              <span className={`mx-auto flex size-8 items-center justify-center rounded-md text-sm font-extrabold ${checked ? "bg-[#175e63] text-white" : "bg-[#f0f2f5] text-[#5f6f73]"}`}>
+              <span
+                className={`mx-auto flex size-8 items-center justify-center rounded-md text-sm font-extrabold ${checked ? "text-white" : "bg-[#f0f2f5] text-[#5f6f73]"}`}
+                style={checked ? { backgroundColor: "var(--sa)" } : undefined}
+              >
                 {opt.value}
               </span>
             </label>

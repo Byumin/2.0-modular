@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>Assessment colors</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { padding: 20px; }
+  .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .swatch { border:1px solid var(--color-assess-border-2); border-radius: 8px; overflow:hidden; }
+  .chip { height: 56px; }
+  .meta { padding: 8px 10px; display:flex; flex-direction:column; gap:2px; }
+  .name { font-size:12px; font-weight:600; color:var(--color-assess-text); }
+  .val { font-size:11px; color:var(--color-assess-text-2); font-family:ui-monospace,monospace; }
+</style></head><body>
+<div class="grid">
+  <div class="swatch"><div class="chip" style="background:#175e63"></div><div class="meta"><span class="name">deep teal</span><span class="val">#175e63</span></div></div>
+  <div class="swatch"><div class="chip" style="background:#124b4f"></div><div class="meta"><span class="name">deep teal hover</span><span class="val">#124b4f</span></div></div>
+  <div class="swatch"><div class="chip" style="background:#5ce1e6"></div><div class="meta"><span class="name">accent cyan</span><span class="val">#5ce1e6</span></div></div>
+  <div class="swatch"><div class="chip" style="background:#161d1b"></div><div class="meta"><span class="name">text</span><span class="val">#161d1b</span></div></div>
+  <div class="swatch"><div class="chip" style="background:#5f6f73"></div><div class="meta"><span class="name">text 2</span><span class="val">#5f6f73</span></div></div>
+  <div class="swatch"><div class="chip" style="background:#8a9a96"></div><div class="meta"><span class="name">text 3</span><span class="val">#8a9a96</span></div></div>
+  <div class="swatch"><div class="chip" style="background:#f3f5f4"></div><div class="meta"><span class="name">panel 1</span><span class="val">#f3f5f4</span></div></div>
+  <div class="swatch"><div class="chip" style="background:#dfe5e3"></div><div class="meta"><span class="name">border 1</span><span class="val">#dfe5e3</span></div></div>
+</div>
+</body></html>

@@ -45,6 +45,27 @@ export interface AdditionalProfileField {
   options: string[]
 }
 
+export interface TestProfileFieldConfig {
+  label?: string
+  required?: boolean
+  type?: 'text' | 'radio' | 'select' | 'long_text' | 'number' | 'date' | 'phone' | 'email'
+  options?: string[]
+}
+
+export interface TestProfileSection {
+  subject_type: 'child' | 'self' | 'parent'
+  section_hint?: string
+  fields?: Record<string, TestProfileFieldConfig>
+}
+
+export interface TestProfileConfig {
+  subject_type?: 'child' | 'self' | 'parent' | 'mixed'
+  section_hint?: string
+  fields?: Record<string, TestProfileFieldConfig>
+  sections?: TestProfileSection[]
+  optional_fields?: Record<string, TestProfileFieldConfig>
+}
+
 export interface InitialPayload {
   custom_test_name: string
   display_name?: string
@@ -56,6 +77,7 @@ export interface InitialPayload {
   additional_profile_fields: Array<AdditionalProfileField | string>
   sub_test_json?: string
   access_token: string
+  profile_config?: TestProfileConfig
 }
 
 export interface AssessmentPayload {

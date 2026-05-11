@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>Tree control</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { padding: 18px; background: hsl(210 40% 98%); }
+  .panel { background:#fff; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px; max-width: 460px; }
+  .group { border:1px solid var(--color-border); border-radius: 6px; margin-bottom: 8px; }
+  .group:last-child { margin-bottom: 0; }
+  .ghead { display:flex; align-items:center; justify-content:space-between; padding: 6px 10px; }
+  .ghead label { display:flex; align-items:center; gap:8px; font-size: 12px; font-weight:500; }
+  .toggle { font-size: 11px; color: var(--color-muted-foreground); background:none; border:none; cursor:pointer; }
+  .gbody { border-top: 1px solid var(--color-border); padding: 8px; background: hsl(210 40% 96.1% / 0.3); }
+  .cond { background: #fff; border:1px solid var(--color-border); border-radius: 5px; padding: 6px 8px; margin-bottom: 6px; }
+  .cond:last-child { margin-bottom:0;}
+  .cond-h { display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:500; padding-bottom: 4px; border-bottom: 1px solid var(--color-border); margin-bottom: 6px; }
+  .cond-h span:last-child { font-size: 11px; color: var(--color-muted-foreground); font-weight: 400; }
+  .leaf { display:flex; align-items:flex-start; gap: 8px; padding: 4px 6px; font-size: 13px; }
+  .leaf input { margin-top: 2px; }
+  .leaf-meta { font-size: 11px; color: var(--color-muted-foreground); display:block; }
+</style></head><body>
+  <div class="panel">
+    <div class="group">
+      <div class="ghead">
+        <label><input type="checkbox" checked> <span>STS</span></label>
+        <button class="toggle">접기</button>
+      </div>
+      <div class="gbody">
+        <div class="cond">
+          <div class="cond-h"><span>초등 4-6학년</span><span>32문항</span></div>
+          <label class="leaf"><input type="checkbox" checked><span>외현화 척도 <span class="leaf-meta">12문항</span></span></label>
+          <label class="leaf"><input type="checkbox" checked><span>내재화 척도 <span class="leaf-meta">10문항</span></span></label>
+          <label class="leaf"><input type="checkbox"><span>또래 관계 <span class="leaf-meta">10문항</span></span></label>
+        </div>
+        <div class="cond">
+          <div class="cond-h"><span>중학생</span><span>40문항</span></div>
+          <label class="leaf"><input type="checkbox"><span>학교 적응 <span class="leaf-meta">15문항</span></span></label>
+          <label class="leaf"><input type="checkbox"><span>가족 관계 <span class="leaf-meta">12문항</span></span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+</body></html>

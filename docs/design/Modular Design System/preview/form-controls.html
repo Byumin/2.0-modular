@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>Form controls</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { padding: 22px; display:grid; grid-template-columns: 1fr 1fr; gap: 18px 28px; }
+  .field { display:flex; flex-direction:column; gap:6px; }
+  .label { font-size: 14px; font-weight: 500; }
+  .hint  { font-size: 12px; color: var(--color-muted-foreground); }
+  .input, .select { height: 36px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--color-input); font-size: 14px; background: #fff; box-shadow: 0 1px 0 0 rgb(0 0 0 / 0.04); font-family: inherit; }
+  .input:focus, .select:focus { outline: 2px solid hsl(215 70% 35% / 0.5); outline-offset: 0; }
+  .check { display:flex; align-items:center; gap:8px; font-size:14px; }
+  textarea.input { height: 64px; resize: none; padding-top: 8px; line-height: 1.5; }
+</style></head><body>
+  <div class="field">
+    <label class="label" for="a">검사 이름</label>
+    <input id="a" class="input" placeholder="예: STS 파일럿-초등용" />
+    <span class="hint">최대 120자</span>
+  </div>
+  <div class="field">
+    <label class="label" for="b">내담자 등록 방식</label>
+    <select id="b" class="select"><option>사전 등록 필수</option><option>검사 진행 시 자동 생성 허용</option></select>
+    <span class="hint">자동 생성 허용은 검사 링크에서 등록을 진행합니다.</span>
+  </div>
+  <div class="field" style="grid-column: span 2;">
+    <label class="label" for="c">세션 안내 문구</label>
+    <textarea id="c" class="input" placeholder="세션 시작 전 보여줄 검사 안내 문구"></textarea>
+  </div>
+  <label class="check"><input type="checkbox" checked> 수검 전 개인정보 수집·이용 동의 받기</label>
+  <label class="check"><input type="checkbox"> 필수 입력</label>
+</body></html>

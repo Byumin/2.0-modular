@@ -9,7 +9,11 @@
       "Bash(npm install *)",
       "Bash(sqlite3 *)",
       "Bash(python3 *)",
-      "Bash(node -e \"require\\('playwright'\\)\")"
+      "Bash(node -e \"require\\('playwright'\\)\")",
+      "Bash(/mnt/c/Users/user/workspace/2.0-modular/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8120)",
+      "Read(//tmp/**)",
+      "Bash(npx playwright *)",
+      "Bash(node *)"
     ]
   }
 }

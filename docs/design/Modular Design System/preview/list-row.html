@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>List row</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { padding: 18px; }
+  .card { border:1px solid var(--color-border); border-radius:12px; background:#fff; box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05); overflow:hidden; }
+  .head { display:grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 152px; gap: 8px; height: 40px; padding: 0 16px; border-bottom: 2px solid var(--color-border); align-items:center; background: var(--color-muted); font-size: 12px; font-weight: 500; }
+  .head span { text-align: center; }
+  .row { display:grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 152px; gap: 8px; padding: 12px 16px; align-items:center; border-bottom: 1px solid var(--color-border); }
+  .row:hover { background: hsl(210 40% 96.1% / 0.4); }
+  .row span { text-align: center; font-size: 14px; }
+  .name-col { display:flex; flex-direction:column; align-items:center; gap: 1px; }
+  .name { font-weight: 500; }
+  .meta { font-size: 12px; color: var(--color-muted-foreground); }
+  .badge { display:inline-flex; padding: 2px 8px; font-size: 11px; font-weight: 600; border-radius: 6px; }
+  .b-success { background: hsl(141 78.9% 85.1%); color: hsl(142 76% 26%); }
+  .b-secondary { background: var(--color-secondary); color: hsl(222.2 47.4% 11.2%); }
+  .actions { display:flex; gap:4px; justify-content: center; }
+  .btn { display:inline-flex; align-items:center; gap:4px; height: 28px; padding: 0 10px; font-size: 12px; border:1px solid var(--color-border); background: #fff; border-radius:6px; cursor:pointer; font-family:inherit;}
+  .btn-ghost { border-color: transparent; background: transparent; color: var(--color-muted-foreground);}
+  .btn:hover { background: var(--color-accent); }
+</style></head><body>
+  <div class="card">
+    <div class="head"><span>검사명</span><span>기반 검사</span><span>척도 수</span><span>배정 / 실시</span><span>진행 상태</span><span></span></div>
+    <div class="row">
+      <div class="name-col"><span class="name">STS 파일럿-초등용</span><span class="meta">2026-04-22 생성</span></div>
+      <span class="meta">STS</span>
+      <span>척도 12개</span>
+      <span>34 / 28</span>
+      <span style="display:flex;justify-content:center;gap:4px"><span class="badge b-success">운영중</span><span class="badge b-secondary">진행</span></span>
+      <span class="actions"><button class="btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17H7a5 5 0 0 1 0-10h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"/></svg>URL</button><button class="btn btn-ghost">상세</button></span>
+    </div>
+    <div class="row" style="border-bottom:none">
+      <div class="name-col"><span class="name">MMPI-2 성인용 표준</span><span class="meta">2026-04-15 생성</span></div>
+      <span class="meta">MMPI-2</span>
+      <span>척도 24개</span>
+      <span>120 / 95</span>
+      <span style="display:flex;justify-content:center;gap:4px"><span class="badge b-success">운영중</span><span class="badge b-secondary">진행</span></span>
+      <span class="actions"><button class="btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17H7a5 5 0 0 1 0-10h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"/></svg>URL</button><button class="btn btn-ghost">상세</button></span>
+    </div>
+  </div>
+</body></html>

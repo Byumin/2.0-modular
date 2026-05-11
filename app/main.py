@@ -11,6 +11,7 @@ from app.db.schema_migrations import (
     ensure_admin_client_extended_fields,
     ensure_admin_client_group_tables,
     ensure_admin_client_identity_review_table,
+    ensure_admin_client_relation_table,
     ensure_admin_client_report_table,
     ensure_admin_settings_table,
     ensure_admin_assessment_draft_table,
@@ -21,6 +22,8 @@ from app.db.schema_migrations import (
     rotate_shared_submission_access_tokens,
     ensure_submission_client_id_column,
     ensure_submission_scoring_result_table,
+    ensure_test_profile_config_table,
+    ensure_test_profile_config_restructure,
 )
 from app.db.session import Base, engine
 from app.router.assessment_link_router import router as assessment_link_router
@@ -107,4 +110,7 @@ def on_startup() -> None:
     ensure_admin_assessment_draft_table()
     migrate_child_test_sub_test_json_to_structured()
     rotate_shared_submission_access_tokens()
+    ensure_test_profile_config_table()
+    ensure_test_profile_config_restructure()
+    ensure_admin_client_relation_table()
     seed_default_admin()

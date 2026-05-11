@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>Spacing</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { padding: 22px; }
+  .row { display:grid; grid-template-columns: 70px 1fr 90px; gap: 12px; align-items:center; padding: 6px 0; }
+  .name { font-size:12px; font-weight:600; }
+  .bar  { height: 14px; background: var(--color-primary); border-radius: 3px; }
+  .use  { font-size:11px; color:var(--color-muted-foreground); font-family:ui-monospace,monospace; }
+</style></head><body>
+  <div class="row"><span class="name">4 px</span><div class="bar" style="width:4px"></div><span class="use">gap-1, p-1</span></div>
+  <div class="row"><span class="name">8 px</span><div class="bar" style="width:8px"></div><span class="use">gap-2, p-2</span></div>
+  <div class="row"><span class="name">12 px</span><div class="bar" style="width:12px"></div><span class="use">gap-3, p-3</span></div>
+  <div class="row"><span class="name">16 px</span><div class="bar" style="width:16px"></div><span class="use">gap-4, p-4</span></div>
+  <div class="row"><span class="name">24 px</span><div class="bar" style="width:24px"></div><span class="use">gap-6, p-6</span></div>
+  <div class="row"><span class="name">32 px</span><div class="bar" style="width:32px"></div><span class="use">gap-8, p-8</span></div>
+</body></html>

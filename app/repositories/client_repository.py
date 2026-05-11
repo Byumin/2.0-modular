@@ -1,7 +1,7 @@
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.db.models import AdminAssessmentLog, AdminClient, AdminClientAssignment, AdminCustomTest
+from app.db.models import AdminAssessmentLog, AdminClient, AdminClientAssignment, AdminClientRelation, AdminCustomTest
 
 
 def get_assignment_by_admin_client_and_test(
@@ -197,6 +197,56 @@ def create_admin_client(
     )
     db.add(row)
     return row
+
+
+def create_client_relation(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id_a: int,
+    role_a: str,
+    client_id_b: int,
+    role_b: str,
+) -> AdminClientRelation:
+    existing = (
+        db.query(AdminClientRelation)
+        .filter(
+            AdminClientRelation.admin_user_id == admin_user_id,
+            AdminClientRelation.client_id_a == client_id_a,
+            AdminClientRelation.client_id_b == client_id_b,
+        )
+        .first()
+    )
+    if existing:
+        return existing
+    row = AdminClientRelation(
+        admin_user_id=admin_user_id,
+        client_id_a=client_id_a,
+        role_a=role_a,
+        client_id_b=client_id_b,
+        role_b=role_b,
+    )
+    db.add(row)
+    return row
+
+
+def get_client_relations_by_client(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+) -> list[AdminClientRelation]:
+    return (
+        db.query(AdminClientRelation)
+        .filter(
+            AdminClientRelation.admin_user_id == admin_user_id,
+            or_(
+                AdminClientRelation.client_id_a == client_id,
+                AdminClientRelation.client_id_b == client_id,
+            ),
+        )
+        .all()
+    )
 
 
 def get_admin_client_by_id_and_admin(db: Session, *, client_id: int, admin_user_id: int) -> AdminClient | None:

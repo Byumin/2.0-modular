@@ -1,5 +1,5 @@
 import * as React from "react"
-import type { InitialPayload, AdditionalProfileField, Profile } from "../types"
+import type { InitialPayload, AdditionalProfileField, Profile, TestProfileSection, TestProfileFieldConfig } from "../types"
 
 const INFORMANT_LABELS: Record<string, string> = {
   mother: "어머니",
@@ -66,9 +66,90 @@ interface Props {
   onViewExistingResult?: () => void
 }
 
+// subject_type별 섹션 라벨
+const SUBJECT_TYPE_LABELS: Record<string, string> = {
+  self: "개인 정보",
+  child: "자녀 정보",
+  parent: "부모/보호자 정보",
+  teacher: "선생님 정보",
+  classmate: "친구/동료 정보",
+  guardian: "보호자 정보",
+}
+
+// subject_type별 이름 필드 라벨
+const SUBJECT_NAME_LABELS: Record<string, string> = {
+  self: "이름",
+  child: "자녀 이름",
+  parent: "부모 이름",
+  teacher: "선생님 이름",
+  classmate: "친구/동료 이름",
+  guardian: "보호자 이름",
+}
+
+// subject_type별 필드 키 네이밍
+// - informant: 항상 prefix 없음 (특수 필드)
+// - child 섹션의 name: 클라이언트 매칭 기준이므로 prefix 없이 "name"으로 저장
+// - self 섹션: prefix 없음
+// - 그 외(parent 등): subjectType_fieldName
+function fieldKey(name: string, subjectType: string, isMixed: boolean): string {
+  if (!isMixed || name === "informant") return name
+  if (subjectType === "self" || (subjectType === "child" && name === "name")) return name
+  return `${subjectType}_${name}`
+}
+
+const BASE_FIELDS = ["name", "gender", "birth_day"] as const
+
+function calcKoreanAge(birthDayStr: string): string {
+  if (!birthDayStr) return ""
+  const birth = new Date(birthDayStr)
+  if (isNaN(birth.getTime())) return ""
+  const today = new Date()
+  let years = today.getFullYear() - birth.getFullYear()
+  let months = today.getMonth() - birth.getMonth()
+  if (today.getDate() < birth.getDate()) months -= 1
+  if (months < 0) { years -= 1; months += 12 }
+  if (years < 0) return ""
+  if (years === 0 && months === 0) return "(만 0세)"
+  if (years === 0) return `(만 ${months}개월)`
+  if (months === 0) return `(만 ${years}세)`
+  return `(만 ${years}세 ${months}개월)`
+}
+
+function getLabel(fieldName: string, section: TestProfileSection): string {
+  const custom = section.fields?.[fieldName]?.label
+  if (custom) return custom
+  const defaults: Record<string, string> = {
+    name: "이름", birth_day: "생년월일", gender: "성별", school_age: "학령", informant: "관찰자",
+  }
+  return defaults[fieldName] ?? fieldName
+}
+
+function getInformantOptions(section: TestProfileSection): string[] {
+  const raw = section.fields?.informant?.options ?? []
+  return Array.from(new Set(raw)).sort((a, b) => {
+    const order = INFORMANT_DISPLAY_ORDER
+    const li = order.indexOf(a), ri = order.indexOf(b)
+    if (li === -1 && ri === -1) return 0
+    if (li === -1) return 1
+    if (ri === -1) return -1
+    return li - ri
+  })
+}
+
 export function ProfileStep({ payload, onNext, loading, error, initialProfile, requiresConsent = false, consentText, scrollToHistory, retakeInfo, retakeProfile, onRetakeConfirm, onViewExistingResult }: Props) {
-  const required = payload.required_profile_fields ?? []
   const testName = payload.custom_test_name || payload.display_name || "검사"
+
+  // profile_config에서 섹션 목록 추출
+  const sections: TestProfileSection[] = React.useMemo(() => {
+    const pc = payload.profile_config
+    if (!pc) {
+      return [{ subject_type: "self", required_fields: payload.required_profile_fields ?? [] }]
+    }
+    if (pc.subject_type === "mixed" && pc.sections) return pc.sections
+    return [pc as TestProfileSection]
+  }, [payload.profile_config, payload.required_profile_fields])
+
+  const isMixed = sections.length > 1
   const [identityOpen, setIdentityOpen] = React.useState(() => Boolean(initialProfile))
   const [privacyAgreed, setPrivacyAgreed] = React.useState(() => Boolean(initialProfile) && requiresConsent)
   const [privacyModalOpen, setPrivacyModalOpen] = React.useState(false)
@@ -100,27 +181,29 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
     [payload.additional_profile_fields]
   )
 
-  const informantOptions = React.useMemo(() => {
-    const rawOptions = payload.profile_field_options?.informant ?? []
-    const uniqueOptions = Array.from(new Set(rawOptions))
-    return uniqueOptions.sort((a, b) => {
-      const left = INFORMANT_DISPLAY_ORDER.indexOf(a)
-      const right = INFORMANT_DISPLAY_ORDER.indexOf(b)
-      if (left === -1 && right === -1) return 0
-      if (left === -1) return 1
-      if (right === -1) return -1
-      return left - right
-    })
-  }, [payload.profile_field_options?.informant])
-
-  const [name, setName] = React.useState(() => initialProfile?.name ?? "")
   const [examDate, setExamDate] = React.useState(() =>
     String(initialProfile?.exam_date ?? new Date().toISOString().slice(0, 10))
   )
-  const [gender, setGender] = React.useState(() => String(initialProfile?.gender ?? ""))
-  const [birthDay, setBirthDay] = React.useState(() => String(initialProfile?.birth_day ?? ""))
-  const [schoolAge, setSchoolAge] = React.useState(() => String(initialProfile?.school_age ?? ""))
-  const [informant, setInformant] = React.useState(() => String(initialProfile?.informant ?? ""))
+  const [sectionValues, setSectionValues] = React.useState<Record<string, string>>(() => {
+    if (!initialProfile) return {}
+    const vals: Record<string, string> = {}
+    for (const section of sections) {
+      // base fields (name/gender/birth_day) 항상 복원
+      for (const fieldName of BASE_FIELDS) {
+        const key = fieldKey(fieldName, section.subject_type, sections.length > 1)
+        const val = initialProfile[key]
+        if (val !== undefined) vals[key] = String(val)
+      }
+      // 섹션 추가 필드
+      for (const fieldName of Object.keys(section.fields ?? {})) {
+        if ((BASE_FIELDS as readonly string[]).includes(fieldName)) continue
+        const key = fieldKey(fieldName, section.subject_type, sections.length > 1)
+        const val = initialProfile[key]
+        if (val !== undefined) vals[key] = String(val)
+      }
+    }
+    return vals
+  })
   const [extras, setExtras] = React.useState<Record<string, string | string[]>>(() => {
     if (!initialProfile) return {}
     return additional.reduce<Record<string, string | string[]>>((acc, field) => {
@@ -130,6 +213,11 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
     }, {})
   })
   const [validationError, setValidationError] = React.useState("")
+  const [optOpen, setOptOpen] = React.useState(false)
+
+  function setSectionValue(key: string, val: string) {
+    setSectionValues(prev => ({ ...prev, [key]: val }))
+  }
 
   function setExtra(label: string, value: string | string[]) {
     setExtras((prev) => ({ ...prev, [label]: value }))
@@ -146,12 +234,28 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
   }
 
   function validate(): string {
-    if (!name.trim()) return "이름"
     if (!examDate) return "검사 실시일"
-    if (required.includes("gender") && !gender) return "성별"
-    if (required.includes("birth_day") && !birthDay) return "생년월일"
-    if (required.includes("school_age") && !schoolAge) return "학령"
-    if (required.includes("informant") && !informant) return "관찰자"
+    for (const section of sections) {
+      // 이름/성별/생년월일 항상 필수
+      for (const fieldName of BASE_FIELDS) {
+        const key = fieldKey(fieldName, section.subject_type, isMixed)
+        if (!sectionValues[key]?.trim()) {
+          const nameLabel = SUBJECT_NAME_LABELS[section.subject_type] ?? "이름"
+          if (fieldName === "name") return nameLabel
+          if (fieldName === "gender") return isMixed ? `${SUBJECT_TYPE_LABELS[section.subject_type] ?? section.subject_type} 성별` : "성별"
+          if (fieldName === "birth_day") return isMixed ? `${SUBJECT_TYPE_LABELS[section.subject_type] ?? section.subject_type} 생년월일` : "생년월일"
+        }
+      }
+      // 섹션 추가 필드
+      for (const [fieldName, fieldCfg] of Object.entries(section.fields ?? {})) {
+        if ((BASE_FIELDS as readonly string[]).includes(fieldName)) continue
+        if (!fieldCfg.required) continue
+        const key = fieldKey(fieldName, section.subject_type, isMixed)
+        if (!sectionValues[key]?.trim()) {
+          return fieldCfg.label ?? getLabel(fieldName, section)
+        }
+      }
+    }
     for (const f of additional) {
       if (!f.required) continue
       if (f.type === "multi_select") {
@@ -165,11 +269,8 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
   }
 
   function buildProfile(): Profile {
-    const profile: Profile = { name: name.trim(), exam_date: examDate }
-    if (required.includes("gender")) profile.gender = gender
-    if (required.includes("birth_day")) profile.birth_day = birthDay
-    if (required.includes("school_age")) profile.school_age = schoolAge
-    if (required.includes("informant")) profile.informant = informant
+    const profile: Profile = { exam_date: examDate }
+    Object.assign(profile, sectionValues)
     additional.forEach((f) => { profile[f.label] = extras[f.label] ?? "" })
     return profile
   }
@@ -403,47 +504,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                   <p className="text-sm font-semibold text-[#161d1b]">인적사항 입력</p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">검사 대상과 결과 연결을 위해 필수 정보를 입력해주세요.</p>
                 </div>
-              {/* 이름 (항상 필수) */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="required_name" className="text-sm font-medium">
-                  이름 <span className="text-destructive">*</span>
-                </label>
-                <input
-                  id="required_name"
-                  type="text"
-                  maxLength={60}
-                  placeholder="이름 입력"
-                  required
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
 
-              {/* 성별 */}
-              {required.includes("gender") && (
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium">성별 <span className="text-destructive">*</span></span>
-                  <div className="flex gap-2" role="radiogroup" aria-label="성별">
-                    {[{ value: "male", label: "남" }, { value: "female", label: "여" }].map(({ value, label }) => (
-                      <label key={value} className={`flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors
-                        ${gender === value ? "border-[#175e63] bg-[#e8f3f1] text-[#175e63]" : "border-input bg-background hover:bg-accent"}`}>
-                        <input
-                          type="radio"
-                          name="required_gender"
-                          value={value}
-                          checked={gender === value}
-                          onChange={() => setGender(value)}
-                          className="sr-only"
-                        />
-                        {label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 검사 실시일 */}
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="required_exam_date" className="text-sm font-medium">
                   검사 실시일 <span className="text-destructive">*</span>
@@ -459,66 +520,268 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                 />
               </div>
 
-              {/* 생년월일 */}
-              {required.includes("birth_day") && (
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="required_birth_day" className="text-sm font-medium">
-                    생년월일 <span className="text-destructive">*</span>
-                  </label>
-                  <input
-                    id="required_birth_day"
-                    type="date"
-                    required
-                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30"
-                    value={birthDay}
-                    onChange={(e) => setBirthDay(e.target.value)}
-                  />
-                </div>
-              )}
+              {/* 섹션별 필드 */}
+              {sections.map((section) => {
+                const sectionLabel = section.section_hint ?? SUBJECT_TYPE_LABELS[section.subject_type] ?? section.subject_type
+                const nameLabel = section.fields?.name?.label ?? SUBJECT_NAME_LABELS[section.subject_type] ?? "이름"
+                const genderLabel = section.fields?.gender?.label ?? "성별"
+                const birthDayLabel = section.fields?.birth_day?.label ?? "생년월일"
+                const nameKey = fieldKey("name", section.subject_type, isMixed)
+                const genderKey = fieldKey("gender", section.subject_type, isMixed)
+                const birthDayKey = fieldKey("birth_day", section.subject_type, isMixed)
+                return (
+                <div key={section.subject_type} className={isMixed ? "grid gap-3 rounded-lg border border-[#e8eded] bg-[#f9fbfb] p-4" : "contents"}>
+                  {isMixed && (
+                    <p className="text-xs font-semibold" style={{ color: "var(--sa, #175e63)" }}>{sectionLabel}</p>
+                  )}
 
-              {/* 학령 */}
-              {required.includes("school_age") && (
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="required_school_age" className="text-sm font-medium">
-                    학령 <span className="text-destructive">*</span>
-                  </label>
-                  <select
-                    id="required_school_age"
-                    required
-                    value={schoolAge}
-                    onChange={(e) => setSchoolAge(e.target.value)}
-                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30"
-                  >
-                    <option value="" disabled>학령을 선택하세요</option>
-                    {SCHOOL_AGE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                  </select>
-                </div>
-              )}
-
-              {/* 관찰자 */}
-              {required.includes("informant") && informantOptions.length > 0 && (
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium">관찰자 <span className="text-destructive">*</span></span>
-                  <div className="flex gap-2 flex-wrap" role="radiogroup" aria-label="관찰자">
-                    {informantOptions.map((val) => (
-                      <label key={val} className={`flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors
-                        ${informant === val ? "border-[#175e63] bg-[#e8f3f1] text-[#175e63]" : "border-input bg-background hover:bg-accent"}`}>
-                        <input
-                          type="radio"
-                          name="required_informant"
-                          value={val}
-                          checked={informant === val}
-                          onChange={() => setInformant(val)}
-                          className="sr-only"
-                        />
-                        {INFORMANT_LABELS[val] ?? val}
-                      </label>
-                    ))}
+                  {/* 이름 — 항상 필수 */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium">
+                      {nameLabel} <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={60}
+                      placeholder={`${nameLabel} 입력`}
+                      required
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30"
+                      value={sectionValues[nameKey] ?? ""}
+                      onChange={(e) => setSectionValue(nameKey, e.target.value)}
+                    />
                   </div>
-                </div>
-              )}
 
-              {/* 추가 필드 */}
+                  {/* 성별 — 항상 필수 */}
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-sm font-medium">{genderLabel} <span className="text-destructive">*</span></span>
+                    <div className="flex gap-2" role="radiogroup">
+                      {[{ value: "male", label: "남" }, { value: "female", label: "여" }].map(({ value, label: lbl }) => (
+                        <label key={value} className={`flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors
+                          ${sectionValues[genderKey] === value ? "border-[#175e63] bg-[#e8f3f1] text-[#175e63]" : "border-input bg-background hover:bg-accent"}`}>
+                          <input type="radio" name={`gender_${section.subject_type}`} value={value}
+                            checked={sectionValues[genderKey] === value}
+                            onChange={() => setSectionValue(genderKey, value)} className="sr-only" />
+                          {lbl}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 생년월일 — 항상 필수 */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm font-medium">{birthDayLabel} <span className="text-destructive">*</span></label>
+                      {sectionValues[birthDayKey] && (
+                        <span className="text-xs text-muted-foreground">
+                          {calcKoreanAge(sectionValues[birthDayKey])}
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="date"
+                      required
+                      max={new Date().toISOString().slice(0, 10)}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30"
+                      value={sectionValues[birthDayKey] ?? ""}
+                      onChange={(e) => setSectionValue(birthDayKey, e.target.value)}
+                    />
+                  </div>
+
+                  {/* 섹션 추가 필드 (base fields 제외) */}
+                  {Object.entries(section.fields ?? {}).filter(([fn]) =>
+                    !(BASE_FIELDS as readonly string[]).includes(fn)
+                  ).map(([fieldName, fieldCfg]) => {
+                    const key = fieldKey(fieldName, section.subject_type, isMixed)
+                    const label = fieldCfg.label ?? getLabel(fieldName, section)
+                    const isRequired = fieldCfg.required ?? false
+                    const reqMark = isRequired ? <span className="text-destructive">*</span> : null
+                    const options = fieldCfg.options ?? []
+                    const type = fieldCfg.type
+
+                    // 성별: radio without options → 남/여 고정
+                    if (fieldName === "gender" && type === "radio" && options.length === 0) {
+                      return (
+                        <div key={fieldName} className="flex flex-col gap-1.5">
+                          <span className="text-sm font-medium">{label} {reqMark}</span>
+                          <div className="flex gap-2" role="radiogroup">
+                            {[{ value: "male", label: "남" }, { value: "female", label: "여" }].map(({ value, label: lbl }) => (
+                              <label key={value} className={`flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors
+                                ${sectionValues[key] === value ? "border-[#175e63] bg-[#e8f3f1] text-[#175e63]" : "border-input bg-background hover:bg-accent"}`}>
+                                <input type="radio" name={`gender_${section.subject_type}`} value={value}
+                                  checked={sectionValues[key] === value}
+                                  onChange={() => setSectionValue(key, value)} className="sr-only" />
+                                {lbl}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    // select: type=select 또는 school_age 기본 드롭다운
+                    if (type === "select" || (fieldName === "school_age" && options.length === 0)) {
+                      const selectOpts = options.length > 0 ? options : SCHOOL_AGE_OPTIONS
+                      return (
+                        <div key={fieldName} className="flex flex-col gap-1.5">
+                          <label className="text-sm font-medium">{label} {reqMark}</label>
+                          <select value={sectionValues[key] ?? ""}
+                            onChange={(e) => setSectionValue(key, e.target.value)}
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30">
+                            <option value="" disabled>{label} 선택</option>
+                            {selectOpts.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                          </select>
+                        </div>
+                      )
+                    }
+
+                    // radio: type=radio with options
+                    if (type === "radio" && options.length > 0) {
+                      return (
+                        <div key={fieldName} className="flex flex-col gap-1.5">
+                          <span className="text-sm font-medium">{label} {reqMark}</span>
+                          <div className="flex gap-2 flex-wrap" role="radiogroup">
+                            {options.map((opt) => (
+                              <label key={opt} className={`flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors
+                                ${sectionValues[key] === opt ? "border-[#175e63] bg-[#e8f3f1] text-[#175e63]" : "border-input bg-background hover:bg-accent"}`}>
+                                <input type="radio" name={`field_${key}`} value={opt}
+                                  checked={sectionValues[key] === opt}
+                                  onChange={() => setSectionValue(key, opt)} className="sr-only" />
+                                {INFORMANT_LABELS[opt] ?? opt}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    // date
+                    if (type === "date" || (fieldName === "birth_day" && !type)) {
+                      return (
+                        <div key={fieldName} className="flex flex-col gap-1.5">
+                          <label className="text-sm font-medium">{label} {reqMark}</label>
+                          <input type="date"
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30"
+                            value={sectionValues[key] ?? ""}
+                            onChange={(e) => setSectionValue(key, e.target.value)} />
+                        </div>
+                      )
+                    }
+
+                    // 기타: text / number
+                    const inputType = type === "number" ? "number" : type === "phone" ? "tel" : type === "email" ? "email" : "text"
+                    return (
+                      <div key={fieldName} className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium">{label} {reqMark}</label>
+                        <input type={inputType} placeholder={`${label} 입력`}
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30"
+                          value={sectionValues[key] ?? ""}
+                          onChange={(e) => setSectionValue(key, e.target.value)} />
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+              })}
+
+              {/* 추가 인적사항 (optional_fields) */}
+              {(() => {
+                const optFields = payload.profile_config?.optional_fields
+                if (!optFields || Object.keys(optFields).length === 0) return null
+                return (
+                  <div className="rounded-lg border border-[#e8eded] bg-[#f9fbfb]">
+                    <button
+                      type="button"
+                      onClick={() => setOptOpen(v => !v)}
+                      className="flex w-full items-center justify-between px-4 py-3 text-left"
+                    >
+                      <span className="text-xs font-semibold text-[#175e63]">추가 인적사항 (선택)</span>
+                      <svg
+                        className={`h-4 w-4 text-[#175e63] transition-transform ${optOpen ? "rotate-180" : ""}`}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {optOpen && <div className="grid gap-3 px-4 pb-4">
+                    {Object.entries(optFields).map(([key, cfg]) => {
+                      const label = cfg.label ?? key
+                      const options = cfg.options ?? []
+
+                      if (cfg.type === "long_text") {
+                        return (
+                          <div key={key} className="flex flex-col gap-1.5">
+                            <label className="text-sm font-medium">{label}</label>
+                            <textarea
+                              rows={3}
+                              placeholder={`${label} 입력`}
+                              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30"
+                              value={String(sectionValues[key] ?? "")}
+                              onChange={(e) => setSectionValue(key, e.target.value)}
+                            />
+                          </div>
+                        )
+                      }
+
+                      if (options.length > 0 && options.length <= 4) {
+                        return (
+                          <div key={key} className="flex flex-col gap-1.5">
+                            <span className="text-sm font-medium">{label}</span>
+                            <div className="flex gap-2 flex-wrap" role="radiogroup">
+                              {options.map((opt) => (
+                                <label key={opt} className={`flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors
+                                  ${sectionValues[key] === opt ? "border-[#175e63] bg-[#e8f3f1] text-[#175e63]" : "border-input bg-background hover:bg-accent"}`}>
+                                  <input type="radio" name={`opt_${key}`} value={opt}
+                                    checked={sectionValues[key] === opt}
+                                    onChange={() => setSectionValue(key, opt)}
+                                    className="sr-only" />
+                                  {opt}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      if (options.length > 4) {
+                        return (
+                          <div key={key} className="flex flex-col gap-1.5">
+                            <label className="text-sm font-medium">{label}</label>
+                            <select
+                              value={sectionValues[key] ?? ""}
+                              onChange={(e) => setSectionValue(key, e.target.value)}
+                              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30"
+                            >
+                              <option value="">{label} 선택</option>
+                              {options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                          </div>
+                        )
+                      }
+
+                      const inputType = cfg.type === "number" ? "number"
+                        : cfg.type === "date" ? "date"
+                        : cfg.type === "phone" ? "tel"
+                        : cfg.type === "email" ? "email"
+                        : "text"
+                      return (
+                        <div key={key} className="flex flex-col gap-1.5">
+                          <label className="text-sm font-medium">{label}</label>
+                          <input
+                            type={inputType}
+                            placeholder={`${label} 입력`}
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30"
+                            value={String(sectionValues[key] ?? "")}
+                            onChange={(e) => setSectionValue(key, e.target.value)}
+                          />
+                        </div>
+                      )
+                    })}
+                    </div>}
+                  </div>
+                )
+              })()}
+
+              {/* 추가 필드 (admin 설정) */}
               {additional.map((f, i) => renderAdditionalField(f, i))}
 
               {(validationError || error) && (
