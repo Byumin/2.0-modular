@@ -28,6 +28,16 @@ function normalizeClientIntakeMode(value?: string): ClientIntakeMode {
   return value === "auto_create" ? "auto_create" : "pre_registered_only"
 }
 
+async function copyTextWithPromptFallback(value: string) {
+  try {
+    await navigator.clipboard.writeText(value)
+    return true
+  } catch {
+    window.prompt("클립보드 복사가 차단되었습니다. 아래 URL을 복사하세요.", value)
+    return false
+  }
+}
+
 export function TestDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -113,9 +123,11 @@ export function TestDetail() {
 
   const handleCopy = async () => {
     if (!accessLink) return
-    await navigator.clipboard.writeText(accessLink)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    const copied = await copyTextWithPromptFallback(accessLink)
+    if (copied) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
   }
 
   if (loading) {

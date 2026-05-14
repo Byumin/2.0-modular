@@ -18,6 +18,7 @@ from app.db.schema_migrations import (
     ensure_child_test_client_intake_mode_column,
     ensure_child_test_requires_consent_column,
     ensure_client_consent_record_table,
+    ensure_postgresql_boolean_columns,
     migrate_child_test_sub_test_json_to_structured,
     rotate_shared_submission_access_tokens,
     ensure_submission_client_id_column,
@@ -94,6 +95,7 @@ app.include_router(settings_router)
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_postgresql_boolean_columns()
     ensure_child_test_client_intake_mode_column()
     ensure_admin_client_created_source_column()
     ensure_admin_client_assignment_unique_index()

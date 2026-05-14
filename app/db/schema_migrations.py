@@ -3,9 +3,59 @@ from __future__ import annotations
 import json
 import secrets
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from app.db.session import engine
+
+
+def ensure_postgresql_boolean_columns() -> None:
+    if engine.dialect.name != "postgresql":
+        return
+
+    def column_type(conn, table_name: str, column_name: str) -> str | None:
+        return conn.execute(
+            text(
+                """
+                SELECT data_type
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = :table_name
+                  AND column_name = :column_name
+                """
+            ),
+            {"table_name": table_name, "column_name": column_name},
+        ).scalar_one_or_none()
+
+    with engine.begin() as conn:
+        if column_type(conn, "admin_client", "is_closed") != "boolean":
+            conn.exec_driver_sql("ALTER TABLE admin_client ALTER COLUMN is_closed DROP DEFAULT")
+            conn.exec_driver_sql(
+                """
+                ALTER TABLE admin_client
+                ALTER COLUMN is_closed TYPE BOOLEAN
+                USING CASE
+                    WHEN is_closed IS NULL THEN FALSE
+                    WHEN is_closed::text IN ('1', 'true', 't', 'yes', 'y') THEN TRUE
+                    ELSE FALSE
+                END
+                """
+            )
+        conn.exec_driver_sql("ALTER TABLE admin_client ALTER COLUMN is_closed SET DEFAULT FALSE")
+
+        if column_type(conn, "child_test", "requires_consent") != "boolean":
+            conn.exec_driver_sql("ALTER TABLE child_test ALTER COLUMN requires_consent DROP DEFAULT")
+            conn.exec_driver_sql(
+                """
+                ALTER TABLE child_test
+                ALTER COLUMN requires_consent TYPE BOOLEAN
+                USING CASE
+                    WHEN requires_consent IS NULL THEN FALSE
+                    WHEN requires_consent::text IN ('1', 'true', 't', 'yes', 'y') THEN TRUE
+                    ELSE FALSE
+                END
+                """
+            )
+        conn.exec_driver_sql("ALTER TABLE child_test ALTER COLUMN requires_consent SET DEFAULT FALSE")
 
 
 def ensure_submission_client_id_column() -> None:
@@ -519,9 +569,24 @@ def ensure_test_profile_config_table() -> None:
                 )
                 for tid, cfg in _ESSENTIAL_SEED.items()
             ]
-            conn.exec_driver_sql(
-                "INSERT OR IGNORE INTO test_profile_config (test_id, essential_profile_json, optional_profile_json) VALUES (?, ?, ?)",
-                seed_rows,
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO test_profile_config
+                        (test_id, essential_profile_json, optional_profile_json)
+                    VALUES
+                        (:test_id, :essential_profile_json, :optional_profile_json)
+                    ON CONFLICT (test_id) DO NOTHING
+                    """
+                ),
+                [
+                    {
+                        "test_id": test_id,
+                        "essential_profile_json": essential_profile_json,
+                        "optional_profile_json": optional_profile_json,
+                    }
+                    for test_id, essential_profile_json, optional_profile_json in seed_rows
+                ],
             )
 
 
@@ -551,9 +616,23 @@ def ensure_test_profile_config_restructure() -> None:
         )
         migrated = [(row[0], row[1] or "{}", "{}") for row in existing]
         if migrated:
-            conn.exec_driver_sql(
-                "INSERT INTO test_profile_config (test_id, essential_profile_json, optional_profile_json) VALUES (?, ?, ?)",
-                migrated,
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO test_profile_config
+                        (test_id, essential_profile_json, optional_profile_json)
+                    VALUES
+                        (:test_id, :essential_profile_json, :optional_profile_json)
+                    """
+                ),
+                [
+                    {
+                        "test_id": test_id,
+                        "essential_profile_json": essential_profile_json,
+                        "optional_profile_json": optional_profile_json,
+                    }
+                    for test_id, essential_profile_json, optional_profile_json in migrated
+                ],
             )
 
 
@@ -592,9 +671,15 @@ def rotate_shared_submission_access_tokens() -> None:
             while new_token in existing_tokens:
                 new_token = secrets.token_urlsafe(32)
             existing_tokens.add(new_token)
-            conn.exec_driver_sql(
-                "UPDATE admin_custom_test_submission SET access_token = ? WHERE id = ?",
-                (new_token, submission_id),
+            conn.execute(
+                text(
+                    """
+                    UPDATE admin_custom_test_submission
+                    SET access_token = :new_token
+                    WHERE id = :submission_id
+                    """
+                ),
+                {"new_token": new_token, "submission_id": submission_id},
             )
 
 
@@ -694,13 +779,20 @@ def migrate_child_test_sub_test_json_to_structured() -> None:
                     selected_structured[test_id_text] = selected_variants
             if not structured:
                 continue
-            conn.exec_driver_sql(
-                "UPDATE child_test SET sub_test_json = ?, selected_scales_json = ? WHERE id = ?",
-                (
-                    json.dumps(structured, ensure_ascii=False),
-                    json.dumps(selected_structured, ensure_ascii=False),
-                    row_id,
+            conn.execute(
+                text(
+                    """
+                    UPDATE child_test
+                    SET sub_test_json = :sub_test_json,
+                        selected_scales_json = :selected_scales_json
+                    WHERE id = :row_id
+                    """
                 ),
+                {
+                    "sub_test_json": json.dumps(structured, ensure_ascii=False),
+                    "selected_scales_json": json.dumps(selected_structured, ensure_ascii=False),
+                    "row_id": row_id,
+                },
             )
 
 

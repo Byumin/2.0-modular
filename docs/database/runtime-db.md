@@ -1,15 +1,16 @@
 # Runtime DB
 
-## Runtime Database File
-현재 코드 기준 기본 런타임 DB 파일은 루트의 `modular.db`다.
+## Runtime Database
+현재 코드 기준 기본 런타임 DB는 RDS PostgreSQL이다.
 
 근거:
 - `app/db/session.py`
-- `DATABASE_URL = "sqlite:///./modular.db"`
+- `.env`의 `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+- `DATABASE_URL`이 명시되면 그 값을 우선 사용한다.
 
 ## Single DB Rule
-앞으로 운영 기준 DB 연결은 루트 `modular.db` 하나로 통일한다.
-별도 `.db` 파일이 있어도 실제 운영 연결과 혼용하지 않는다.
+앞으로 운영 기준 DB 연결은 RDS PostgreSQL 하나로 통일한다.
+루트 `modular.db`는 RDS 전환 전 운영 스냅샷/마이그레이션 원본으로만 취급하고, 앱 런타임 기준으로 사용하지 않는다.
 
 이 문서는 DB 운영 기준의 source of truth로 사용한다.
 
@@ -17,11 +18,13 @@
 실행 시 DB 관련 기준 코드는 아래 순서로 본다.
 
 1. `app/db/session.py`
+   - `.env` 로드
+   - RDS PostgreSQL SQLAlchemy URL 생성
    - 엔진, 세션, `DATABASE_URL`
 2. `app/db/models.py`
    - SQLAlchemy 모델 정의
 3. `app/db/schema_migrations.py`
-   - startup 시 보정되는 컬럼/테이블
+   - startup 시 보정되는 컬럼/테이블/인덱스
 4. `app/main.py`
    - startup 시 `Base.metadata.create_all()` 및 보정 함수 호출
 
@@ -44,19 +47,21 @@
 14. 개인정보동의 기록 테이블(`client_consent_record`) 보정
 15. 검사 실시 임시저장 테이블(`admin_assessment_draft`) 보정
 16. 제출별 보고서 접근 토큰 회전(`rotate_shared_submission_access_tokens`)
+17. `test_profile_config` 테이블과 프로필 설정 구조 보정
+18. 내담자 관계 테이블(`admin_client_relation`) 보정
 
-즉, DB 구조는 모델 정의만 보는 것으로 끝나지 않고 startup 보정 코드까지 함께 봐야 한다.
 정확한 최신 실행 순서는 `app/main.py`의 `on_startup()` 함수와 `app/db/schema_migrations.py`를 최종 기준으로 본다.
 
 ## Operational Interpretation
-- 루트 `modular.db`: 현재 앱이 기본적으로 읽고 쓰는 SQLite 파일
+- RDS PostgreSQL: 현재 앱이 기본적으로 읽고 쓰는 운영 DB
+- 루트 `modular.db`: RDS 전환 전 운영 스냅샷/마이그레이션 원본
 - 루트 `app.db`: 현재 런타임 연결 기준 파일은 아님
 - `docs/` 내부 `.db` 파일들: 운영 기준 DB가 아니라 참고/백업/테스트 자산
 
 ## Caution
-- DB 구조 설명은 항상 `modular.db` 기준으로 한다.
-- 과거 `app.db` 기준 흔적이 있어도 실제 판단은 `app/db/*` 코드와 함께 한다.
-- 인증/관리자 검증처럼 SQLite를 직접 여는 코드도 같은 `modular.db` 기준을 따라야 한다.
+- DB 구조 설명은 항상 RDS PostgreSQL 기준으로 한다.
+- 과거 `modular.db` 기준 흔적이 있어도 실제 판단은 `app/db/*` 코드와 RDS 상태를 함께 본다.
+- 인증/관리자 검증도 SQLAlchemy 엔진을 통해 RDS를 조회한다.
 
 ## Related Documents
 - [docs/database/README.md](README.md)

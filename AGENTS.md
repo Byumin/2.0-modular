@@ -8,7 +8,7 @@
 - 앱: FastAPI 백엔드 + React SPA 관리자/수검자 화면
 - 운영 엔트리포인트: `app/main.py` (`main.py`는 호환 shim)
 - 로컬 고정 포트: FastAPI `8120`, Vite dev `5120`
-- 운영 DB: 루트 `modular.db`
+- 운영 DB: RDS PostgreSQL (`.env`의 `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`)
 - React browser route: `/`, `/admin/*`, `/assessment/custom/{token}`, `/report/{submissionId}?token={accessToken}`, `/admin/report/{submissionId}`
 - 정적 자원: `static/`은 운영 React SPA가 아니라 보고서/레거시 보조 자원 용도
 - 레거시 정적 HTML/JS 화면은 운영 기준에서 제외한다.

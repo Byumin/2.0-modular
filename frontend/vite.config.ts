@@ -15,6 +15,7 @@ export default defineConfig({
   server: {
     port: 5120,
     strictPort: true,
+    allowedHosts: ['inpsyt-norm.com', 'www.inpsyt-norm.com'],
     proxy: {
       // API 호출
       '/api': {

@@ -342,6 +342,15 @@ const CREATE_STEPS = [
   { id: 5, key: "profile",  title: "추가 인적사항", hint: "URL에서 받을 항목" },
 ] as const
 
+async function copyTextWithPromptFallback(value: string) {
+  try {
+    await navigator.clipboard.writeText(value)
+    alert("URL이 클립보드에 복사되었습니다.")
+  } catch {
+    window.prompt("클립보드 복사가 차단되었습니다. 아래 URL을 복사하세요.", value)
+  }
+}
+
 export function TestManagement() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = React.useState<ManagementTab>("custom-tests")
@@ -490,8 +499,7 @@ export function TestManagement() {
         return
       }
       const fullUrl = `${window.location.origin}${data.assessment_url}`
-      await navigator.clipboard.writeText(fullUrl)
-      alert("URL이 클립보드에 복사되었습니다.")
+      await copyTextWithPromptFallback(fullUrl)
     } catch {
       alert("URL 생성에 실패했습니다.")
     } finally {

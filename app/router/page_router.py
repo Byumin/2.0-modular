@@ -53,4 +53,4 @@ def admin_spa_page(path: str) -> FileResponse:
 
 @router.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "router+service", "ui": "react", "db": "sqlite"}
+    return {"status": "ok", "service": "router+service", "ui": "react", "db": "postgresql"}

@@ -76,6 +76,16 @@ async function apiFetch(url: string, init?: RequestInit) {
   return res.json()
 }
 
+async function copyTextWithPromptFallback(value: string) {
+  try {
+    await navigator.clipboard.writeText(value)
+    return true
+  } catch {
+    window.prompt("클립보드 복사가 차단되었습니다. 아래 URL을 복사하세요.", value)
+    return false
+  }
+}
+
 // ── 하위 컴포넌트들 ───────────────────────────────────────────────────────────
 
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -257,8 +267,10 @@ function AssignmentSection({ clientId, assigned, allTests, onRefresh }: {
     setGeneratingId(testId)
     try {
       const data = await apiFetch(`/api/admin/custom-tests/${testId}/access-link`, { method: "POST" })
-      await navigator.clipboard.writeText(`${window.location.origin}${data.assessment_url}`)
-      setCopiedId(testId); setTimeout(() => setCopiedId(null), 2000)
+      const copied = await copyTextWithPromptFallback(`${window.location.origin}${data.assessment_url}`)
+      if (copied) {
+        setCopiedId(testId); setTimeout(() => setCopiedId(null), 2000)
+      }
     } catch { /* ignore */ } finally { setGeneratingId(null) }
   }
 

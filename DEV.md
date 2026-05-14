@@ -100,8 +100,9 @@ npm run build:frontend
 
 ## 운영 DB
 
-- 파일: 루트 `modular.db` (SQLite)
-- 별도 DB 서버 불필요, 파일 하나로 운영
+- RDS PostgreSQL
+- `.env`의 `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` 기준으로 접속
+- 루트 `modular.db`는 RDS 전환 전 스냅샷/마이그레이션 원본이며 앱 런타임 DB가 아니다.
 
 ---
 

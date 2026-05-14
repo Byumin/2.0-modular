@@ -216,17 +216,17 @@ Claude 리뷰 JSON 결과는 `artifacts/`가 아니라 `claude/reviews/runs/`에
 서버 로그와 테스트 실행 로그를 보관한다.
 
 ## Data and State
-- DB는 SQLite 기반으로 사용된다.
-- 운영 기준 DB 연결은 루트 `modular.db` 하나로 통일한다.
+- DB는 RDS PostgreSQL 기반으로 사용된다.
+- 운영 기준 DB 연결은 `.env`의 RDS 접속 정보로 통일한다.
 - ORM은 SQLAlchemy를 사용한다.
 - 요청/응답 검증은 Pydantic이 담당한다.
 - 관리자 인증 상태는 `admin_session` 쿠키로 전달된다.
 - 보고서/레거시 보조 정적 리소스는 FastAPI `StaticFiles`로 서빙한다.
 
 ## Database Rule
-- 애플리케이션 런타임 DB 기준은 루트 `modular.db`다.
+- 애플리케이션 런타임 DB 기준은 RDS PostgreSQL이다.
 - 인증, 세션 검증 보조 조회, 일반 서비스, 스크립트, 문서 모두 이 기준에 맞춰 정리하는 것을 원칙으로 한다.
-- `app.db`, `docs/*.db`, `.mwb`, `.sql`은 운영 기준 DB와 혼동되지 않게 명확히 구분한다.
+- 루트 `modular.db`, `app.db`, `docs/*.db`, `.mwb`, `.sql`은 운영 기준 DB와 혼동되지 않게 스냅샷/레거시 자산으로 구분한다.
 
 ## Startup Responsibilities
 애플리케이션 startup 시 다음 작업을 수행한다.
