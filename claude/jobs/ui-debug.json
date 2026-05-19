@@ -1,0 +1,30 @@
+{
+  "job_type": "ui-debug",
+  "description": "Frontend debugging job with before/after screenshot verification.",
+  "permission_mode": "acceptEdits",
+  "max_turns": 14,
+  "allowed_tools": [
+    "Read",
+    "Glob",
+    "Grep",
+    "Edit",
+    "Write",
+    "Bash(.venv/bin/python:*)",
+    "Bash(node:*)"
+  ],
+  "prompt_preamble": [
+    "AGENTS.md를 먼저 읽는다.",
+    "이 작업은 UI 디버그 작업으로 취급한다.",
+    "저장소 UI 디버그 규칙을 따라 수정 전 스크린샷과 수정 후 스크린샷으로 모두 검증한다.",
+    "프로젝트 런타임 명령은 `.venv/bin/python ...`을 사용한다.",
+    "브라우저 캡처가 필요하면 저장소 스크린샷 도구를 사용한다.",
+    "최종 보고에서 수정 전후 시각 검증을 생략하지 않는다.",
+    "최종 응답은 반드시 한국어로 작성한다."
+  ],
+  "report_sections": [
+    "수정 전 확인한 문제",
+    "수정한 내용",
+    "수정 후 스크린샷 검증",
+    "남아 있는 UI 위험"
+  ]
+}

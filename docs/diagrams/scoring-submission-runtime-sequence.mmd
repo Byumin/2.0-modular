@@ -1,0 +1,54 @@
+sequenceDiagram
+    autonumber
+    actor A as Admin\n관리자
+    participant SR as Router\nrouter/scoring_router.py\nscore_submission
+    participant SS as Service\nservices/scoring/submissions.py\ntrigger_submission_scoring
+    participant CS as Service\nservices/scoring/submissions.py\nbuild_scoring_context_from_submission
+    participant AUTH as Service\nservices/admin/auth.py\nget_current_admin
+    participant CR as Repo\nrepositories/custom_test_repository.py\nget_submission_by_id_and_admin
+    participant CTR as Repo\nrepositories/custom_test_repository.py\nget_custom_test_by_id_and_admin
+    participant CM as Service\nservices/admin/common.py\nload_custom_test_configs
+    participant AL as Service\nservices/admin/assessment_links.py\nbuild_custom_assessment_question_payload
+
+    rect rgb(240,248,255)
+    Note over A,SR: 1) 채점 라우터 호출 시작\n입력: POST /api/admin/submissions/{submission_id}/score\n예시 path: /api/admin/submissions/16/score
+    A->>SR: score_submission(submission_id, db, admin_session)
+    SR->>SS: trigger_submission_scoring(db, admin_session, submission_id)
+    end
+
+    rect rgb(245,255,245)
+    Note over SS,AUTH: 2) submission + custom_test 로드 및 컨텍스트 조립 시작
+    SS->>CS: build_scoring_context_from_submission(db, admin_session, submission_id)
+    CS->>AUTH: get_current_admin(db, admin_session)
+    AUTH-->>CS: AdminUser(id, username)
+    CS->>CR: get_submission_by_id_and_admin(submission_id, admin.id)
+    CR-->>CS: AdminCustomTestSubmission\n{ id, client_id, admin_custom_test_id, answers_json }
+    CS->>CTR: get_custom_test_by_id_and_admin(submission.admin_custom_test_id, admin.id)
+    CTR-->>CS: AdminCustomTest\n{ id, test_id, custom_test_name, selected_scales_json, sub_test_json }
+    end
+
+    rect rgb(255,250,240)
+    Note over CS,AL: 3) answers_json 파싱 + test_configs 복원 + assessment_payload 재구성 + 채점용 index 생성
+    CS->>CS: answers_payload = json.loads(submission.answers_json)
+    Note over CS: 예시 answers_payload\n{ profile:{name:'부유민',gender:'male',birth_day:'1993-06-09'},\nanswers:[\n { test_id:'GOLDEN', sub_test_json:'{...}', items:[{order:1,parent_item_id:'8',answer_value:'1'}] },\n { test_id:'STS', sub_test_json:'{...}', items:[{order:2,parent_item_id:'1',answer_value:'3'}] }\n] }
+    CS->>CS: _flatten_submission_answers(answers_payload["answers"])
+    Note over CS: 평탄화 출력 예시\n{ 'GOLDEN::{sub_test_json}::8': '1',\n  'STS::{sub_test_json}::1': '3' }
+    CS->>CS: _build_answers_by_test_variant(flattened_answers)
+    Note over CS: row 구조 예시\n{ 'STS': {'{...}': {'3':'4','22':'4'}},\n  'GOLDEN': {'{...}': {'16':'1'}} }
+    CS->>CM: load_custom_test_configs(custom_test)
+    CM-->>CS: test_configs\n[{ test_id, sub_test_variants:[{ sub_test_json, available_scale_codes, selected_scale_codes }] }]
+    CS->>CS: summarize_custom_test_ids(test_configs, custom_test.test_id)
+    CS->>AL: build_custom_assessment_question_payload(custom_test, profile)
+    AL-->>CS: assessment_payload\n{ items:[{ id:'GOLDEN::{...}::8', test_id:'GOLDEN', item_id:'8' }, ...],\nselected_scales:[...], parts:[...], item_count }
+    CS->>CS: _build_scoring_index_by_test_variant(assessment_payload)
+    Note over CS: index 예시\n{ 'STS': {'{...}': {'scales': {'CA': {'items': {...}}}}},\n  'GOLDEN': {'{...}': {'scales': {'T': {'facets': {...}}}}} }
+    end
+
+    rect rgb(245,255,245)
+    Note over CS,SS: 4) ScoringContext 반환 + 엔진 호출 + trigger 응답 구성
+    CS-->>SS: ScoringContext\n{ custom_test_id, custom_test_name,\nprofile:{...},\nanswers:{...},\nanswers_by_test_variant:{...},\nscoring_index_by_test_variant:{...},\nassessment_payload:{ items[], selected_scales[], parts[] } }\n+ test_ids + test_id_text
+    SS->>SS: ScoringEngine.score_tests(test_ids, context)
+    SS->>SS: message/status/results 조립
+    SS-->>SR: { submission_id, client_id, admin_custom_test_id, custom_test_name, test_ids, flattened_answer_count, assessment_item_count, engine_statuses, results, status }
+    SR-->>A: JSON 응답
+    end

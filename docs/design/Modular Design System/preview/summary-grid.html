@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>Summary tiles</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { padding: 18px; background: #fff; }
+  .panel { border:1px solid var(--color-border); border-radius: 8px; padding: 16px; max-width: 540px; }
+  .h { font-size: 14px; font-weight: 600; margin: 0 0 12px; }
+  .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .tile { background: hsl(210 40% 96.1% / 0.6); border-radius: 6px; padding: 12px; }
+  .tile p { font-size: 12px; color: var(--color-muted-foreground); margin: 0 0 4px; }
+  .tile strong { font-size: 14px; }
+  .warn { color: hsl(35 91% 33%); }
+</style></head><body>
+  <div class="panel">
+    <h4 class="h">구성 요약</h4>
+    <div class="grid">
+      <div class="tile"><p>검사군</p><strong>3개</strong></div>
+      <div class="tile"><p>선택 척도</p><strong>18개</strong></div>
+      <div class="tile"><p>포함 실시구간</p><strong>5개</strong></div>
+      <div class="tile"><p>제외 예정</p><strong class="warn">1개</strong></div>
+      <div class="tile"><p>예상 문항</p><strong>284개</strong></div>
+      <div class="tile"><p>세션</p><strong>2개</strong></div>
+    </div>
+  </div>
+</body></html>

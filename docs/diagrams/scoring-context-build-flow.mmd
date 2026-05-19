@@ -1,0 +1,182 @@
+flowchart TD
+    A["채점 라우터 입력
+입력: submission_id
+예시: 16"] --> B["score_submission
+app/router/scoring_router.py
+목적: submission_id 기준 채점 트리거 진입"]
+
+    B --> C["trigger_submission_scoring
+app/services/scoring/submissions.py
+목적: 채점 호출 준비 및 요약 응답 생성"]
+
+    C --> D["build_scoring_context_from_submission
+app/services/scoring/submissions.py
+목적: submission + custom_test를 읽어 ScoringContext 조립"]
+
+    D --> E["get_current_admin
+app/services/admin/auth.py
+목적: admin_session 인증"]
+    E --> F["get_submission_by_id_and_admin
+app/repositories/custom_test_repository.py
+목적: admin_custom_test_submission row 조회
+출력: { id, client_id, admin_custom_test_id, answers_json }"]
+    F --> G["get_custom_test_by_id_and_admin
+app/repositories/custom_test_repository.py
+목적: child_test row 조회
+출력: { id, test_id, custom_test_name, selected_scales_json, sub_test_json }"]
+
+    G --> H["answers_json 파싱
+app/services/scoring/submissions.py
+목적: profile / answers 추출
+입력 예시: { profile, answers:[{ test_id, sub_test_json, items[] }] }"]
+
+    H --> I["_flatten_submission_answers
+app/services/scoring/submissions.py
+목적: 저장된 answers를 scorer 입력용 dict로 평탄화
+출력 예시:
+{
+ 'GOLDEN::{sub_test_json}::8': '1',
+ 'STS::{sub_test_json}::1': '3'
+}"]
+
+    I --> I2["_build_answers_by_test_variant
+app/services/scoring/submissions.py
+목적: 평탄화 answers를 test_id -> sub_test_json -> item row 구조로 재정리
+출력 예시:
+{
+ 'STS': {'{...}': {'3':'4','22':'4'}},
+ 'GOLDEN': {'{...}': {'16':'1','17':'1'}}
+}"]
+
+    G --> J["load_custom_test_configs
+app/services/admin/common.py
+목적: child_test 저장값을 test_configs 표준 구조로 복원"]
+    J --> K["summarize_custom_test_ids
+app/services/admin/common.py
+목적: test_ids / test_id_text 추출
+출력 예시: ['GOLDEN', 'STS'] / 'GOLDEN, STS'"]
+
+    H --> L["build_custom_assessment_question_payload
+app/services/admin/assessment_links.py
+목적: profile에 맞는 assessment_payload 재구성
+출력 예시:
+{
+ items:[{id:'GOLDEN::{...}::8',test_id:'GOLDEN',item_id:'8'}],
+ selected_scales:[...],
+ parts:[...],
+ item_count:N
+}"]
+
+    L --> L2["_build_scoring_index_by_test_variant
+app/services/scoring/submissions.py
+목적: assessment_payload.selected_scales 기준으로 test_id/sub_test_json별 selected_scale_codes 묶음 생성 후 variant별 채점 index 생성
+출력 예시:
+{
+ 'STS': {'{...}': {'selected_scale_codes':['CA'],'scales':{'CA': {'items': {...}}}}},
+ 'GOLDEN': {'{...}': {'scales':{'T': {'facets': {...}}}}}
+}"]
+
+    L2 -.-> L21["함수 내부 순서
+app/services/scoring/submissions.py
+1. assessment_payload.get('selected_scales')
+2. test_id / sub_test_json / code 추출
+3. selected_codes_by_test_variant 생성
+4. variant마다 _build_variant_scoring_index 호출
+5. scoring_index 반환"]
+
+    L2 --> L3["_build_variant_scoring_index
+app/services/scoring/submissions.py
+목적: variant 하나에 대해 parent_scale.scale_struct를 채점용 index로 전개
+입력:
+- test_id
+- sub_test_json
+- selected_scale_codes
+출력:
+{ selected_scale_codes, scales }"]
+
+    L3 --> L4["fetch_parent_scale_struct
+app/repositories/parent_test_repository.py
+목적: parent_scale에서 scale_struct 조회
+입력: test_id, sub_test_json
+출력: row.scale_struct"]
+
+    L4 --> L5{"_build_variant_scoring_index
+app/services/scoring/submissions.py
+scale_struct JSON 파싱 성공 + dict 인가?"}
+    L5 -- 아니오 --> L6["빈 scales 반환
+{ selected_scale_codes:[...], scales:{} }"]
+    L5 -- 예 --> L7["top-level scale 반복
+예시:
+{
+ 'CA': {'name':'조심성','choice_score':{...}},
+ 'T': {'name':'사고','facet_scale':{...}}
+}"]
+
+    L7 --> L8["_normalize_choice_score_map
+app/services/scoring/submissions.py
+목적: choice_score 문자열 맵을 숫자 점수표 index로 정규화
+입력 예시:
+{'22': {'1':'5','2':'4','3':'3','4':'2','5':'1'}}
+출력 예시:
+{'22': {'1':5,'2':4,'3':3,'4':2,'5':1}}"]
+
+    L7 --> L9{"_build_variant_scoring_index
+app/services/scoring/submissions.py
+top-level scale에 choice_score가 있는가?"}
+    L9 -- 예 --> L10["단층 scale index 생성
+예시:
+{
+ 'CA': {
+   code:'CA',
+   name:'조심성',
+   items:{...}
+ }
+}"]
+    L9 -- 아니오 --> L11{"_build_variant_scoring_index
+app/services/scoring/submissions.py
+facet_scale가 있는가?"}
+    L11 -- 아니오 --> L12["현재 scale skip"]
+    L11 -- 예 --> L13["facet 반복 + _normalize_choice_score_map
+예시:
+{
+ 'T': {
+   code:'T',
+   name:'사고',
+   facets:{
+     'T1': { code:'T1', name:'이성적인', items:{...} }
+   }
+ }
+}"]
+
+    I2 --> M["ScoringContext 생성
+app/services/scoring/base.py
+입력:
+- custom_test_id
+- custom_test_name
+- profile
+- answers
+- answers_by_test_variant
+- scoring_index_by_test_variant
+- assessment_payload
+출력 예시:
+ScoringContext(
+ custom_test_id=3,
+ custom_test_name='봄학기용 검사',
+ answers={...},
+ answers_by_test_variant={...},
+ scoring_index_by_test_variant={...}
+)"]
+    L2 --> M
+    K --> M
+
+    M --> N["trigger_submission_scoring 응답 조립
+app/services/scoring/submissions.py
+출력:
+{ submission_id, client_id, admin_custom_test_id, test_ids, flattened_answer_count, assessment_item_count, engine_statuses, results, status }"]
+
+    M --> O["ScoringEngine.score_tests
+app/services/scoring/engine.py
+입력:
+- test_ids=['GOLDEN','STS']
+- context=ScoringContext(...)"]
+    O --> N

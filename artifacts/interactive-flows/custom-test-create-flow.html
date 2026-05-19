@@ -1,0 +1,1408 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>커스텀 검사 생성 흐름</title>
+    <style>
+      :root {
+        --bg: #f6efe5;
+        --paper: rgba(255, 250, 244, 0.82);
+        --paper-strong: #fffaf3;
+        --line: rgba(29, 35, 38, 0.12);
+        --ink: #1d2326;
+        --muted: #6f6861;
+        --accent: #bf5127;
+        --accent-soft: rgba(191, 81, 39, 0.14);
+        --accent-2: #0f617a;
+        --accent-2-soft: rgba(15, 97, 122, 0.14);
+        --success: #256c4f;
+        --success-soft: rgba(37, 108, 79, 0.12);
+        --danger: #ae3c32;
+        --danger-soft: rgba(174, 60, 50, 0.14);
+        --warn: #9b6510;
+        --warn-soft: rgba(155, 101, 16, 0.12);
+        --violet: #7047c7;
+        --violet-soft: rgba(112, 71, 199, 0.13);
+        --shadow: 0 28px 80px rgba(70, 43, 20, 0.14);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: "Trebuchet MS", "Noto Sans KR", sans-serif;
+        background:
+          radial-gradient(circle at 12% 12%, rgba(15, 97, 122, 0.17), transparent 28%),
+          radial-gradient(circle at 88% 18%, rgba(191, 81, 39, 0.18), transparent 24%),
+          radial-gradient(circle at 55% 80%, rgba(188, 156, 108, 0.18), transparent 26%),
+          linear-gradient(180deg, #fbf4ea 0%, var(--bg) 100%);
+        color: var(--ink);
+      }
+
+      .page { width: min(1460px, calc(100% - 28px)); margin: 18px auto 44px; }
+
+      .hero,
+      .panel,
+      .detail-panel,
+      .node-card,
+      .branch-card {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+      }
+
+      .hero,
+      .panel,
+      .detail-panel { padding: 22px; }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        font-size: 12px;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(22px, 3vw, 34px);
+        line-height: 0.98;
+      }
+
+      h2 { margin: 0 0 12px; font-size: 19px; }
+      h3 { margin: 0 0 10px; font-size: 15px; }
+
+      .hero-copy {
+        max-width: 980px;
+        margin: 14px 0 0;
+        font-size: 16px;
+        line-height: 1.75;
+        color: var(--muted);
+      }
+
+      .hero-grid,
+      .main-grid,
+      .branch-grid,
+      .info-grid {
+        display: grid;
+        gap: 18px;
+      }
+
+      .hero-grid {
+        grid-template-columns: 1.35fr 1fr;
+        margin-top: 24px;
+      }
+
+      .main-grid {
+        grid-template-columns: minmax(0, 1.42fr) minmax(380px, 0.9fr);
+        gap: 18px;
+        margin-top: 22px;
+        align-items: start;
+      }
+
+      .control-row,
+      .graph-tools,
+      .graph-legend,
+      .detail-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .chip,
+      .zoom-btn {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 14px;
+        font: inherit;
+        background: rgba(29, 35, 38, 0.08);
+        color: var(--ink);
+        cursor: pointer;
+      }
+
+      .chip.active {
+        color: #fffaf4;
+        background: linear-gradient(135deg, var(--accent), #de8550);
+      }
+
+      .chip.active.success {
+        background: linear-gradient(135deg, var(--success), #39a06f);
+      }
+
+      .chip.active.validation,
+      .chip.active.failure {
+        background: linear-gradient(135deg, var(--danger), #d56858);
+      }
+
+      .chip.active.variant {
+        background: linear-gradient(135deg, var(--accent-2), #3f8da3);
+      }
+
+      .summary-box {
+        margin-top: 14px;
+        padding: 16px;
+        border-radius: 18px;
+        background: linear-gradient(140deg, rgba(15, 97, 122, 0.12), rgba(191, 81, 39, 0.1));
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .summary-box strong {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--ink);
+      }
+
+      .meta-list,
+      .reference-list {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+        line-height: 1.72;
+      }
+
+      .graph-shell { padding: 18px; }
+
+      .graph-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+
+      .graph-tools {
+        flex-wrap: nowrap;
+        align-items: center;
+      }
+
+      .graph-tools .zoom-btn,
+      .graph-tools .zoom-indicator {
+        flex: 0 0 auto;
+      }
+
+      .graph-header p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .zoom-indicator {
+        display: inline-flex;
+        align-items: center;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(15, 97, 122, 0.1);
+        color: var(--accent-2);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .graph-legend { margin-top: 14px; }
+
+      .legend-chip {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(29, 35, 38, 0.06);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .legend-chip::before {
+        content: "";
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+
+      .legend-chip.browser::before { background: var(--accent); }
+      .legend-chip.router::before { background: var(--violet); }
+      .legend-chip.schema::before { background: #5f55d7; }
+      .legend-chip.service::before { background: var(--success); }
+      .legend-chip.db::before { background: var(--accent-2); }
+      .legend-chip.response::before { background: var(--warn); }
+
+      .graph-stage {
+        overflow: auto;
+        border-radius: 22px;
+        padding: 8px;
+        background: rgba(255, 255, 255, 0.28);
+      }
+
+      .graph-canvas {
+        position: relative;
+        width: 1240px;
+        height: 1580px;
+        transform-origin: left top;
+      }
+
+      .edge-layer,
+      .node-layer {
+        position: absolute;
+        inset: 0;
+        width: 1240px;
+        height: 1580px;
+      }
+
+      .edge-layer path {
+        fill: none;
+        stroke: rgba(29, 35, 38, 0.18);
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-dasharray: 8 10;
+        marker-end: url(#arrow-neutral);
+      }
+
+      .edge-layer path.active {
+        stroke-width: 4;
+        opacity: 1;
+      }
+
+      .edge-layer path.active.success {
+        stroke: var(--success);
+        marker-end: url(#arrow-success);
+      }
+
+      .edge-layer path.active.validation,
+      .edge-layer path.active.failure {
+        stroke: var(--danger);
+        marker-end: url(#arrow-failure);
+      }
+
+      .edge-layer path.active.variant {
+        stroke: var(--accent-2);
+        marker-end: url(#arrow-variant);
+      }
+
+      .edge-layer path.dimmed { opacity: 0.2; }
+
+      .node-card {
+        position: absolute;
+        width: 256px;
+        min-height: 196px;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, width 180ms ease, min-height 180ms ease;
+        text-align: left;
+      }
+
+      .node-card:hover,
+      .node-card:focus-visible {
+        transform: translateY(-4px);
+      }
+
+      .node-card.active {
+        width: 320px;
+        min-height: 334px;
+        z-index: 2;
+      }
+
+      .node-card.neighbor {
+        box-shadow: 0 16px 36px rgba(70, 43, 20, 0.12);
+      }
+
+      .node-card.browser { border-left: 5px solid var(--accent); }
+      .node-card.router { border-left: 5px solid var(--violet); }
+      .node-card.schema { border-left: 5px solid #5f55d7; }
+      .node-card.service { border-left: 5px solid var(--success); }
+      .node-card.db { border-left: 5px solid var(--accent-2); }
+      .node-card.response { border-left: 5px solid var(--warn); }
+
+      .node-kicker {
+        display: inline-flex;
+        width: fit-content;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(29, 35, 38, 0.06);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .node-title {
+        margin: 10px 0 0;
+        font-size: 17px;
+        line-height: 1.32;
+      }
+
+      .node-copy {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.58;
+      }
+
+      .subnode-grid {
+        display: none;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .node-card.active .subnode-grid {
+        display: grid;
+      }
+
+      .subnode {
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.74);
+        border: 1px solid rgba(29, 35, 38, 0.08);
+        font-size: 12px;
+        line-height: 1.58;
+        color: var(--muted);
+      }
+
+      .detail-panel {
+        position: sticky;
+        top: 18px;
+        max-height: calc(100vh - 36px);
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+
+      .detail-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .info-card {
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.56);
+        min-width: 0;
+      }
+
+      .info-grid > * {
+        min-width: 0;
+      }
+
+      .fold-group {
+        display: grid;
+        gap: 8px;
+      }
+
+      .fold-card {
+        border-radius: 16px;
+        border: 1px solid rgba(29, 35, 38, 0.08);
+        background: rgba(255, 255, 255, 0.7);
+        overflow: hidden;
+        min-width: 0;
+      }
+
+      .fold-card summary {
+        list-style: none;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        padding: 14px 16px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .fold-card summary::-webkit-details-marker { display: none; }
+      .fold-card summary::after { content: "펼치기"; font-size: 12px; color: var(--accent-2); }
+      .fold-card[open] summary::after { content: "접기"; }
+      .fold-card[open] summary {
+        border-bottom: 1px solid rgba(29, 35, 38, 0.08);
+      }
+
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        max-width: 100%;
+        overflow-x: auto;
+        font-family: "Consolas", "Courier New", monospace;
+        font-size: 13px;
+        line-height: 1.62;
+      }
+
+      .fold-card pre {
+        padding: 14px 16px 16px;
+      }
+
+      .branch-card { padding: 18px; }
+      .branch-card h3 { margin-bottom: 8px; }
+      .branch-card p,
+      .branch-card li { color: var(--muted); line-height: 1.68; }
+      .branch-card ul { margin: 0; padding-left: 18px; }
+
+      .callout {
+        margin-top: 18px;
+        border-left: 4px solid var(--warn);
+        border-radius: 0 14px 14px 0;
+        padding: 14px 16px;
+        background: rgba(155, 101, 16, 0.08);
+        color: #604713;
+        line-height: 1.72;
+      }
+
+      .callout:empty { display: none; }
+
+      code {
+        padding: 0.08em 0.38em;
+        border-radius: 8px;
+        background: rgba(29, 35, 38, 0.08);
+        font-family: "Consolas", "Courier New", monospace;
+        font-size: 0.94em;
+      }
+
+      .glossary-term {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        cursor: help;
+      }
+
+      .glossary-term code {
+        position: relative;
+        z-index: 1;
+      }
+
+      .term-tooltip-layer {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: min(300px, calc(100vw - 24px));
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(29, 35, 38, 0.96);
+        color: #fffaf4;
+        font-size: 12px;
+        line-height: 1.58;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(4px);
+        transition: opacity 120ms ease, transform 120ms ease;
+        z-index: 9999;
+      }
+
+      .term-tooltip-layer.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .term-tooltip-layer::after {
+        content: "";
+        position: absolute;
+        left: 18px;
+        top: 100%;
+        border-width: 7px 6px 0 6px;
+        border-style: solid;
+        border-color: rgba(29, 35, 38, 0.96) transparent transparent transparent;
+      }
+
+      @media (max-width: 1220px) {
+        .hero-grid,
+        .main-grid,
+        .branch-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .detail-panel { position: static; max-height: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <section class="hero">
+        <p class="eyebrow">Custom Test Create Flow</p>
+        <h1>커스텀 검사 생성 흐름</h1>
+        <p class="hero-copy">
+          관리자 생성 모달에서 커스텀 검사를 만들 때, 브라우저는 먼저 추가 인적사항과 검사별 척도 선택을 따로 정리하고
+          누락 실시구간이 있으면 확인 모달로 한 번 더 분기합니다. 서버에 들어간 뒤에도 라우터, Pydantic, 관리자 인증,
+          추가 인적사항 재정규화, parent variant 조회, 척도 교집합 계산, 저장 구조 조립이 각각 독립 단계로 실행되고,
+          마지막 목록 화면은 `selected_scales_json`을 다시 해석해 카드 shape를 복원합니다.
+        </p>
+
+        <div class="hero-grid">
+          <div class="panel">
+            <h2>시나리오 선택</h2>
+            <div class="control-row" id="scenarioControls"></div>
+            <div class="summary-box" id="scenarioSummary"></div>
+          </div>
+          <div class="panel">
+            <h2>핵심 구조</h2>
+            <ul class="meta-list">
+              <li>페이지 로드 직후 카탈로그와 관리 목록이 먼저 조회되고, 생성 모달은 그 카탈로그를 로컬 상태로 사용합니다.</li>
+              <li>프런트 단계도 하나로 묶지 않고, 추가 인적사항 정규화와 검사별 `test_configs` 조립을 분리해서 보여줍니다.</li>
+              <li>서버 단계도 인증, 필드 재정규화, parent row 조회, variant 대조, 저장 구조 조립을 각각 분리했습니다.</li>
+              <li>저장은 `selected_scales_json` 중심 구조이고, 이후 목록 조회는 이 값을 다시 파싱해 `test_configs`로 복원합니다.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="main-grid">
+        <section class="panel graph-shell">
+          <div class="graph-header">
+            <div>
+              <h2>런타임 그래프</h2>
+              <p>노드를 클릭하면 오른쪽 패널에서 입력, 예시 payload, 내부 처리, 저장 결과, 실제 소스 기준점을 함께 볼 수 있습니다.</p>
+            </div>
+            <div class="graph-tools">
+              <button class="zoom-btn" id="zoomOutBtn" type="button" aria-label="축소">-</button>
+              <span class="zoom-indicator" id="zoomLevel">100%</span>
+              <button class="zoom-btn" id="zoomInBtn" type="button" aria-label="확대">+</button>
+            </div>
+          </div>
+          <div class="graph-legend">
+            <span class="legend-chip browser">브라우저 / UI 상태</span>
+            <span class="legend-chip router">라우터</span>
+            <span class="legend-chip schema">스키마</span>
+            <span class="legend-chip service">서비스 / 정규화</span>
+            <span class="legend-chip db">DB / 저장 구조</span>
+            <span class="legend-chip response">응답 / 후속 UI</span>
+          </div>
+          <div class="graph-stage">
+            <div class="graph-canvas" id="graphCanvas">
+              <svg class="edge-layer" viewBox="0 0 1240 1580" preserveAspectRatio="none">
+                <defs>
+                  <marker id="arrow-neutral" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(29, 35, 38, 0.24)"></path>
+                  </marker>
+                  <marker id="arrow-success" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#256c4f"></path>
+                  </marker>
+                  <marker id="arrow-failure" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#ae3c32"></path>
+                  </marker>
+                  <marker id="arrow-variant" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f617a"></path>
+                  </marker>
+                </defs>
+                <g id="edgeLayer"></g>
+              </svg>
+              <div class="node-layer" id="nodeLayer"></div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="detail-panel">
+          <div class="detail-meta">
+            <span class="detail-pill" id="detailStepPill">Step</span>
+            <span class="detail-pill" id="detailLanePill">Layer</span>
+          </div>
+          <h2 id="detailTitle"></h2>
+          <p id="detailSummary"></p>
+
+          <div class="info-grid">
+            <section class="info-card">
+              <h3>입력 / 현재 상태</h3>
+              <pre id="detailInput"></pre>
+            </section>
+            <section class="info-card">
+              <h3>데이터 예시</h3>
+              <div class="fold-group">
+                <details class="fold-card" open>
+                  <summary>요청 데이터 예시</summary>
+                  <pre id="detailRequestExample"></pre>
+                </details>
+                <details class="fold-card">
+                  <summary>응답 데이터 예시</summary>
+                  <pre id="detailResponseExample"></pre>
+                </details>
+                <details class="fold-card">
+                  <summary>내부 상태 / 저장 예시</summary>
+                  <pre id="detailStateExample"></pre>
+                </details>
+              </div>
+            </section>
+            <section class="info-card">
+              <h3>내부 처리</h3>
+              <pre id="detailWork"></pre>
+            </section>
+            <section class="info-card">
+              <h3>출력 / 다음 단계</h3>
+              <pre id="detailOutput"></pre>
+            </section>
+            <section class="info-card">
+              <h3>실제 소스 기준점</h3>
+              <pre id="detailRefs"></pre>
+            </section>
+          </div>
+
+          <div class="branch-grid" id="branchGrid"></div>
+          <div class="callout" id="detailCallout"></div>
+        </aside>
+      </section>
+    </div>
+
+    <div class="term-tooltip-layer" id="termTooltipLayer" aria-hidden="true"></div>
+
+    <script>
+      const scenarios = {
+        success: {
+          label: "정상 생성",
+          tone: "success",
+          summary: "추가 인적사항, 검사별 척도, parent variant 대조가 모두 통과하면 `selected_scales_json`과 `additional_profile_fields_json`이 저장되고 관리 목록이 다시 로드됩니다.",
+          branchMode: "success"
+        },
+        variant: {
+          label: "실시구간 제외 확인",
+          tone: "variant",
+          summary: "프런트가 누락 실시구간을 먼저 감지하면 확인 모달로 한 번 분기하고, 사용자가 동의한 payload만 서버로 보냅니다. 서버는 동일한 제외값을 다시 검증합니다.",
+          branchMode: "variant"
+        },
+        validation: {
+          label: "클라이언트 검증 실패",
+          tone: "validation",
+          summary: "이름 공백, 검사 미선택, 척도 미선택, 선택형 옵션 누락 같은 오류는 브라우저에서 먼저 걸러지며 POST 단계까지 가지 않습니다.",
+          branchMode: "validation"
+        },
+        failure: {
+          label: "서버 검증 실패",
+          tone: "failure",
+          summary: "stale 카탈로그, 잘못된 제외값, 실제 parent DB와의 불일치가 있으면 variant resolver 단계에서 400이 발생하고 생성이 중단됩니다.",
+          branchMode: "failure"
+        }
+      };
+
+      const steps = [
+        {
+          id: "page-init",
+          stage: "Step 1",
+          lane: "browser",
+          title: "페이지 초기화와 카탈로그 적재",
+          summary: "관리자 인증 후 카탈로그와 관리 목록을 먼저 읽어 생성 화면의 기준 상태를 만든다.",
+          left: 40,
+          top: 70,
+          subnodes: ["initCreatePage()", "GET /api/admin/tests/catalog", "refreshManagedTests()"],
+          detail: {
+            stepLabel: "Step 1 · 브라우저",
+            laneLabel: "Browser",
+            summary: "생성 모달이 열리기 전부터 `catalog`와 `managedItems`가 준비됩니다. 이후 검사 트리, 척도 트리, 누락 실시구간 계산은 모두 이 로컬 카탈로그를 기준으로 진행됩니다.",
+            input: "브라우저 진입\n- body[data-page=\"admin-create\"]\n- admin_session 쿠키",
+            requestExample: "GET /api/admin/tests/catalog\nCookie: admin_session=...\n\nGET /api/admin/custom-tests/management",
+            responseExample: "{\n  \"tests\": [\n    {\n      \"test_id\": \"GOLDEN\",\n      \"sub_tests\": [\n        {\"display_name\": \"아동용\", \"age_label\": \"만 4~14세\", \"scales\": [...]},\n        {\"display_name\": \"성인용\", \"age_label\": \"만 18세 이상\", \"scales\": [...]}\n      ]\n    },\n    {\n      \"test_id\": \"STS\",\n      \"sub_tests\": [...]\n    }\n  ]\n}",
+            stateExample: "catalog.tests.length = 2\nmanagedItems = [\n  { id: 1, custom_test_name: \"봄학기용 검사\", test_id: \"GOLDEN, STS\" }\n]\ncustomFields = []",
+            work: "1. `initCreatePage()`가 `ensureAdmin()` 호출\n2. `/api/admin/tests/catalog` 응답을 `catalog`에 저장\n3. `refreshManagedTests()`가 기존 커스텀 검사 목록 재조회\n4. 검사 체크박스 / 척도 트리 렌더 기준 상태 준비",
+            output: "이후 생성 모달 편집과 제출 직전 계산은 모두 `catalog`와 현재 DOM 체크 상태를 읽어서 진행",
+            refs: [
+              "static/admin.js:1213",
+              "static/admin.js:1538",
+              "app/router/custom_test_router.py:27",
+              "app/router/custom_test_router.py:43"
+            ],
+            callout: "카탈로그는 설명용 조회 응답이고, 실제 저장 시점의 검증은 나중에 서버가 parent scale row를 다시 읽어 한 번 더 수행합니다."
+          }
+        },
+        {
+          id: "compose-ui",
+          stage: "Step 2",
+          lane: "browser",
+          title: "검사, 척도, 필드 입력 상태 수집",
+          summary: "관리자는 검사 체크박스, 척도 트리, 추가 인적사항 에디터를 조합해 브라우저 상태를 만든다.",
+          left: 330,
+          top: 70,
+          subnodes: ["selected_test_id", "selected_scale_key", "customFields[]"],
+          detail: {
+            stepLabel: "Step 2 · 브라우저",
+            laneLabel: "Browser",
+            summary: "이 단계는 아직 정규화가 아니라 입력 수집 단계입니다. `customFields`는 사용자가 편집한 원본 상태이고, 척도 선택도 DOM 체크 상태 그대로 유지됩니다.",
+            input: "사용자 행동\n- 검사 체크 / 해제\n- 개별 척도 선택\n- 추가 인적사항 행 생성 / 삭제 / 수정",
+            requestExample: "설명용 입력 예시\n- GOLDEN 체크\n- STS 체크\n- GOLDEN: Calm, E, F, I, N, Z\n- STS: CA, EC, SE\n- 추가 필드: 보호자 관계(select), 실시 계기(short_text)",
+            responseExample: "브라우저 내부 이벤트만 발생\n- 아직 POST 없음",
+            stateExample: "customFields = [\n  {\n    local_id: \"field_1\",\n    label: \"보호자 관계\",\n    type: \"select\",\n    required: true,\n    placeholder: \"\",\n    options: [\"어머니\", \"아버지\", \"기타\"]\n  },\n  {\n    local_id: \"field_2\",\n    label: \"검사를 실시하게 된 계기는 무엇인가?\",\n    type: \"short_text\",\n    required: false,\n    placeholder: \"솔직하게 입력 부탁드립니다.\",\n    options: []\n  }\n]",
+            work: "1. 검사 체크 상태는 `selectedTestIds()`가 읽을 수 있게 DOM에 남김\n2. 척도 트리는 `renderScaleTreeForSelectedTests()`가 재렌더\n3. 필드 편집 이벤트가 `customFields` 배열을 계속 갱신",
+            output: "제출 시점에는 이 raw 입력을 바탕으로 필드 정규화와 test별 payload 조립이 차례로 실행됨",
+            refs: [
+              "static/admin-create.html:87",
+              "static/admin-create.html:102",
+              "static/admin-create.html:112",
+              "static/admin.js:1769",
+              "static/admin.js:2053",
+              "static/admin.js:2120"
+            ]
+          }
+        },
+        {
+          id: "client-field-normalize",
+          stage: "Step 3",
+          lane: "browser",
+          title: "추가 인적사항 필드 정규화와 선검증",
+          summary: "브라우저는 `customFields`를 먼저 정리해 빈 라벨, 중복 라벨, 선택형 옵션 누락을 잡고 POST용 필드 shape로 바꾼다.",
+          left: 620,
+          top: 70,
+          subnodes: ["sanitizeAndValidateCustomFields()", "normalizedCustomFields", "options[]"],
+          detail: {
+            stepLabel: "Step 3 · 브라우저",
+            laneLabel: "Browser",
+            summary: "이 단계는 추가 인적사항 전용 정규화 단계입니다. 검사별 척도 조립과 분리해서, 입력 필드가 어떤 shape로 바뀌는지 따로 보여줘야 흐름이 읽힙니다.",
+            input: "raw `customFields`\n- label\n- type\n- required\n- placeholder\n- options",
+            requestExample: "입력 예시\n[\n  {\"label\": \"보호자 관계\", \"type\": \"select\", \"required\": true, \"placeholder\": \"\", \"options\": [\"어머니\", \"\", \"아버지\", \"어머니\"]},\n  {\"label\": \"검사를 실시하게 된 계기는 무엇인가?\", \"type\": \"short_text\", \"required\": false, \"placeholder\": \"솔직하게 입력 부탁드립니다.\", \"options\": []}\n]",
+            responseExample: "클라이언트 검증 실패 예시\n- Error: \"보호자 관계\" 항목은 선택지를 최소 1개 이상 입력해야 합니다.\n- Error: 추가 인적사항 라벨은 중복될 수 없습니다.",
+            stateExample: "normalizedCustomFields = [\n  {\"label\": \"보호자 관계\", \"type\": \"select\", \"required\": true, \"placeholder\": \"\", \"options\": [\"어머니\", \"아버지\"]},\n  {\"label\": \"검사를 실시하게 된 계기는 무엇인가?\", \"type\": \"short_text\", \"required\": false, \"placeholder\": \"솔직하게 입력 부탁드립니다.\", \"options\": []}\n]",
+            work: "1. 라벨 trim과 빈 값 검사\n2. 라벨 중복 검사\n3. `select` / `multi_select`는 빈 옵션 제거 후 최소 1개 이상인지 확인\n4. 중복 옵션 제거 후 `normalizedCustomFields` 배열 생성",
+            output: "실패하면 브라우저에서 즉시 중단하고, 성공하면 다음 단계에서 검사별 `test_configs` 조립에 함께 사용",
+            refs: [
+              "static/admin.js:2235",
+              "static/admin.js:2381"
+            ],
+            scenarioOverrides: {
+              validation: {
+                output: "HTTP 요청 없음\n- `createTestMessage`에 오류 표시\n- 생성 버튼 텍스트 복구"
+              }
+            }
+          }
+        },
+        {
+          id: "build-test-configs",
+          stage: "Step 4",
+          lane: "browser",
+          title: "검사별 `test_configs` 조립과 누락 실시구간 계산",
+          summary: "브라우저는 선택된 검사와 척도를 test별로 묶고, 각 sub_test에서 척도 교집합이 0인 variant를 `missingVariants`로 따로 모은다.",
+          left: 910,
+          top: 70,
+          subnodes: ["buildCreateRequestPayload()", "selectedCodes vs availableCodes", "missingVariants[]"],
+          detail: {
+            stepLabel: "Step 4 · 브라우저",
+            laneLabel: "Browser",
+            summary: "여기서야 비로소 `requestBody`가 조립됩니다. 이 단계는 필드 정규화와 다르게, 검사별 `selected_scale_codes`, `excluded_sub_test_jsons`, `missingVariants`를 계산하는 대조 단계입니다.",
+            input: "입력\n- selected test ids\n- selected scale keys\n- `catalog.tests[].sub_tests[]`\n- `normalizedCustomFields`",
+            requestExample: "비교 예시\nselectedCodes(STS) = [\"CA\", \"EC\", \"SE\"]\navailableCodes(sub_test A) = [\"CA\", \"EC\", \"SE\"]\navailableCodes(sub_test B) = [\"CA\"]\n=> A는 유지, B는 선택 척도 일부만 일치, 교집합이 0이면 missingVariants로 이동",
+            responseExample: "POST 전 결과 예시\nrequestBody = {\n  \"custom_test_name\": \"봄학기용 검사\",\n  \"test_configs\": [\n    {\"test_id\": \"GOLDEN\", \"selected_scale_codes\": [\"Calm\", \"E\", \"F\", \"I\", \"N\", \"Z\"], \"excluded_sub_test_jsons\": []},\n    {\"test_id\": \"STS\", \"selected_scale_codes\": [\"CA\", \"EC\", \"SE\"], \"excluded_sub_test_jsons\": []}\n  ],\n  \"additional_profile_fields\": [...]\n}",
+            stateExample: "missingVariants = [\n  {\n    test_id: \"STS\",\n    label: \"STS / 만 18세 이상\",\n    available_scale_codes: [\"CA\", \"EC\", \"SE\"]\n  }\n]\nrequestBody.test_configs[1].excluded_sub_test_jsons = []",
+            work: "1. 검사별 선택 척도를 `selected_scale_codes`로 묶음\n2. 각 sub_test의 `availableCodes`와 비교\n3. 교집합이 0인 sub_test는 `missingVariants`와 `excluded_sub_test_jsons` 후보로 분리\n4. 교집합이 남는 test만 `test_configs`에 유지",
+            output: "정상 시 바로 POST 단계로 가고, `missingVariants`가 있으면 확인 모달 분기로 전환",
+            refs: [
+              "static/admin.js:1866",
+              "static/admin.js:1891",
+              "static/admin.js:1930"
+            ],
+            scenarioOverrides: {
+              validation: {
+                output: "검사 없음 / 척도 없음이면 POST 이전 중단\n- `검사별로 최소 1개 이상의 척도를 선택해주세요.`"
+              },
+              variant: {
+                output: "POST 보류\n- `pendingCreatePayload` 저장\n- 실시구간 제외 확인 모달 오픈"
+              }
+            },
+            callout: "이 단계는 프런트 대조 결과일 뿐입니다. 서버는 같은 `selected_scale_codes`와 `excluded_sub_test_jsons`를 parent DB 기준으로 한 번 더 검증합니다."
+          }
+        },
+        {
+          id: "variant-confirm",
+          stage: "Step 5",
+          lane: "browser",
+          title: "실시구간 제외 확인 모달",
+          summary: "누락 실시구간이 있으면 모달에 제외 대상과 가능 척도 목록을 보여주고, 동의한 payload만 서버에 보낸다.",
+          left: 40,
+          top: 390,
+          subnodes: ["openVariantConfirmModal()", "pendingCreatePayload", "variantConfirmMessage"],
+          detail: {
+            stepLabel: "Step 5 · 브라우저",
+            laneLabel: "Browser",
+            summary: "보정 경로는 자동 보정이 아니라 사용자 확인 단계입니다. 프런트는 감지한 누락 실시구간을 그대로 보여주고, 진행 버튼을 눌렀을 때만 `pendingCreatePayload`를 POST합니다.",
+            input: "`missingVariants[]`\n- label\n- available_scale_codes\n- `pendingCreatePayload.test_configs[].excluded_sub_test_jsons`",
+            requestExample: "가상 보정 예시\n- 모달 제목: 선택한 척도가 없는 실시구간이 있습니다.\n- 행 1: STS / 만 18세 이상\n- 가능 척도: CA, EC, SE",
+            responseExample: "모달 버튼 결과\n- 진행: `submitCreatePayload(pendingCreatePayload)`\n- 취소: payload 폐기 후 모달 닫기",
+            stateExample: "pendingCreatePayload.test_configs = [\n  {\n    test_id: \"STS\",\n    selected_scale_codes: [\"CA\", \"EC\", \"SE\"],\n    excluded_sub_test_jsons: [\"{\\\"age_range\\\": {...}}\"]\n  }\n]",
+            work: "1. `openVariantConfirmModal()`가 누락 실시구간 라벨과 척도 목록 렌더\n2. 진행 버튼은 보류 중 payload를 제출\n3. 취소, ESC, backdrop 클릭은 payload 폐기 후 원 모달 유지",
+            output: "variant 시나리오에서만 실행되는 중간 확인 단계. 이후 서버에서도 canonical JSON 비교로 같은 제외값인지 다시 확인",
+            refs: [
+              "static/admin-create.html:176",
+              "static/admin.js:1258",
+              "static/admin.js:1664",
+              "static/admin.js:1734"
+            ]
+          }
+        },
+        {
+          id: "router-entry",
+          stage: "Step 6",
+          lane: "router",
+          title: "POST 라우터 진입",
+          summary: "`/api/admin/custom-tests` 라우터가 요청을 받고, 검증이 끝난 payload만 서비스로 전달한다.",
+          left: 330,
+          top: 390,
+          subnodes: ["POST /api/admin/custom-tests", "create_custom_test()", "payload: CreateCustomTestBatchIn"],
+          detail: {
+            stepLabel: "Step 6 · 라우터",
+            laneLabel: "Router",
+            summary: "라우터는 실행 자체는 단순하지만, 이후 서비스 설명과 구분해 보여줘야 합니다. 실제 비즈니스 로직은 라우터 안이 아니라 `create_admin_custom_test_batch()`에서 실행됩니다.",
+            input: "HTTP POST JSON body\n- custom_test_name\n- test_configs[]\n- additional_profile_fields[]",
+            requestExample: "POST /api/admin/custom-tests\n{\n  \"custom_test_name\": \"봄학기용 검사\",\n  \"test_configs\": [...],\n  \"additional_profile_fields\": [...]\n}",
+            responseExample: "성공이면 서비스 결과 그대로 dict 반환\n실패면 FastAPI가 422 또는 서비스의 400/404 예외 반환",
+            stateExample: "라우터 인자\npayload: CreateCustomTestBatchIn\nadmin_session: Cookie\nDB Session: Depends(get_db)",
+            work: "1. FastAPI가 body를 `CreateCustomTestBatchIn`으로 파싱\n2. 파싱이 성공한 payload를 `create_custom_test()`에 주입\n3. 라우터는 `create_admin_custom_test_batch(db, admin_session, payload)` 호출",
+            output: "shape 검증이 끝난 payload만 서비스 단계로 전달",
+            refs: [
+              "app/router/custom_test_router.py:62"
+            ]
+          }
+        },
+        {
+          id: "schema-validate",
+          stage: "Step 7",
+          lane: "schema",
+          title: "Pydantic shape 검증과 선택형 옵션 조건 확인",
+          summary: "FastAPI는 서비스 전에 `CreateCustomTestBatchIn`과 `AdditionalProfileFieldIn`으로 요청 shape를 확인한다.",
+          left: 620,
+          top: 390,
+          subnodes: ["CreateCustomTestBatchIn", "CreateCustomTestConfigIn", "AdditionalProfileFieldIn"],
+          detail: {
+            stepLabel: "Step 7 · 스키마",
+            laneLabel: "Schema",
+            summary: "이 단계는 서비스 재정규화와 별개로, 라우터 도달 전 shape를 먼저 막는 방어선입니다. 최근 수정으로 `select`와 `multi_select`는 옵션이 최소 1개 이상이어야 합니다.",
+            input: "nested body shape\n- custom_test_name: str\n- test_configs: list\n- additional_profile_fields: list",
+            requestExample: "{\n  \"custom_test_name\": \"봄학기용 검사\",\n  \"test_configs\": [...],\n  \"additional_profile_fields\": [\n    {\"label\": \"보호자 관계\", \"type\": \"select\", \"options\": []}\n  ]\n}",
+            responseExample: "422 example\n{\n  \"detail\": [\n    {\n      \"loc\": [\"body\", \"additional_profile_fields\", 0],\n      \"msg\": \"Value error, select/multi_select type requires at least one option\"\n    }\n  ]\n}",
+            stateExample: "payload.additional_profile_fields[0]\n-> AdditionalProfileFieldIn\n-> model_validator(after) 실행",
+            work: "1. `custom_test_name`, `test_configs`, `selected_scale_codes` 길이 확인\n2. 각 `AdditionalProfileFieldIn`에 대해 선택형 옵션 존재 여부 확인\n3. 스키마 통과 payload만 서비스로 이동",
+            output: "스키마 오류는 서비스 진입 전 422로 종료",
+            refs: [
+              "app/schemas/custom_tests.py:6",
+              "app/schemas/custom_tests.py:22",
+              "app/schemas/custom_tests.py:32",
+              "app/schemas/custom_tests.py:38"
+            ]
+          }
+        },
+        {
+          id: "service-auth-name",
+          stage: "Step 8",
+          lane: "service",
+          title: "관리자 인증과 검사명 trim 검증",
+          summary: "서비스는 먼저 관리자 세션을 확인하고, 공백만 있는 검사명인지 별도로 검사한다.",
+          left: 910,
+          top: 390,
+          subnodes: ["get_current_admin()", "payload.custom_test_name.strip()", "HTTPException(400)"],
+          detail: {
+            stepLabel: "Step 8 · 서비스",
+            laneLabel: "Service",
+            summary: "이 단계는 추가 인적사항 정규화와도, variant 대조와도 다른 서비스 초입 검증입니다. 관리자 세션과 검사명 trim 결과를 먼저 확정한 뒤 다음 단계로 넘어갑니다.",
+            input: "입력\n- admin_session 쿠키\n- payload.custom_test_name",
+            requestExample: "payload.custom_test_name = \"  봄학기용 검사  \"",
+            responseExample: "400 example\n{\"detail\": \"검사명은 공백만 입력할 수 없습니다.\"}",
+            stateExample: "admin = get_current_admin(...)\ntrimmed_name = \"봄학기용 검사\"",
+            work: "1. `get_current_admin()`로 관리자 인증\n2. `custom_test_name.strip()` 수행\n3. 빈 문자열이면 400 예외\n4. 이후 단계에서 `trimmed_name`을 저장용 이름으로 사용",
+            output: "관리자와 trim된 검사명이 확정되면 필드 재정규화 단계로 이동",
+            refs: [
+              "app/services/admin/auth.py:27",
+              "app/services/admin/custom_tests.py:431",
+              "app/services/admin/custom_tests.py:432"
+            ]
+          }
+        },
+        {
+          id: "service-field-normalize",
+          stage: "Step 9",
+          lane: "service",
+          title: "추가 인적사항 재정규화와 길이 비교",
+          summary: "서비스는 스키마를 통과한 필드도 다시 `normalize_additional_profile_fields()`에 넣어 저장용 shape로 정리하고 누락 여부를 확인한다.",
+          left: 40,
+          top: 710,
+          subnodes: ["field.model_dump()", "normalize_additional_profile_fields()", "len 비교"],
+          detail: {
+            stepLabel: "Step 9 · 서비스",
+            laneLabel: "Service",
+            summary: "Pydantic이 shape를 확인한 뒤에도 서비스는 저장 직전 한 번 더 정규화합니다. 문자열 trim, 허용 타입 보정, 선택형 옵션 중복 제거를 적용한 뒤 입력 개수와 결과 개수를 비교합니다.",
+            input: "payload.additional_profile_fields\n- list[AdditionalProfileFieldIn]",
+            requestExample: "입력 예시\n[\n  {\"label\": \"보호자 관계\", \"type\": \"select\", \"required\": true, \"placeholder\": \"\", \"options\": [\"어머니\", \"어머니\", \"아버지\"]}\n]",
+            responseExample: "400 example\n{\"detail\": \"Invalid additional profile fields.\"}",
+            stateExample: "normalized_fields = [\n  {\"label\": \"보호자 관계\", \"type\": \"select\", \"required\": true, \"placeholder\": \"\", \"options\": [\"어머니\", \"아버지\"]}\n]\nlen(normalized_fields) === len(payload.additional_profile_fields)",
+            work: "1. 각 field를 `model_dump()`로 dict 변환\n2. `normalize_additional_profile_fields()`로 trim, 중복 제거, 허용 타입 보정, 옵션 정리\n3. 정규화 결과 길이가 입력보다 줄었는지 검사\n4. 줄어들면 잘못된 필드로 보고 400 반환",
+            output: "정상 시 `normalized_fields`가 저장용 추가 인적사항 source of truth가 됨",
+            refs: [
+              "app/services/admin/custom_tests.py:436",
+              "app/services/admin/custom_tests.py:438",
+              "app/services/admin/custom_tests.py:441",
+              "app/services/admin/common.py:114"
+            ]
+          }
+        },
+        {
+          id: "fetch-parent-rows",
+          stage: "Step 10",
+          lane: "db",
+          title: "검사별 parent scale row 조회",
+          summary: "서비스는 각 `test_config`마다 parent DB에서 `sub_test_json`과 `scale_struct` row를 다시 가져온다.",
+          left: 330,
+          top: 710,
+          subnodes: ["for config in payload.test_configs", "fetch_parent_scale_rows_by_test()", "rows[]"],
+          detail: {
+            stepLabel: "Step 10 · DB 조회",
+            laneLabel: "DB",
+            summary: "이 단계는 아직 비교가 아니라 조회 단계입니다. 서버는 프런트 카탈로그를 믿지 않고, 현재 parent DB 기준 row들을 다시 읽어 다음 단계의 대조 입력으로 사용합니다.",
+            input: "config.test_id\nconfig.selected_scale_codes\nconfig.excluded_sub_test_jsons",
+            requestExample: "조회 입력 예시\nconfig = {\n  \"test_id\": \"STS\",\n  \"selected_scale_codes\": [\"CA\", \"EC\", \"SE\"],\n  \"excluded_sub_test_jsons\": []\n}",
+            responseExample: "조회 결과 예시\nrows = [\n  { test_id: \"STS\", sub_test_json: \"{...}\", scale_struct: \"{\\\"CA\\\": {...}, \\\"EC\\\": {...}, \\\"SE\\\": {...}}\" }\n]",
+            stateExample: "rows[0].sub_test_json = \"{...}\"\nrows[0].scale_struct = \"{\\\"CA\\\": {...}, \\\"EC\\\": {...}}\"",
+            work: "1. `payload.test_configs`를 검사별로 순회\n2. 각 `test_id`에 대해 `fetch_parent_scale_rows_by_test()` 호출\n3. row가 없으면 404 예외\n4. 조회된 rows를 다음 교집합 계산 단계에 전달",
+            output: "각 검사별 현재 DB 기준 variant row 목록 확보",
+            refs: [
+              "app/services/admin/custom_tests.py:448",
+              "app/services/admin/custom_tests.py:450",
+              "app/services/admin/custom_tests.py:305",
+              "app/repositories/parent_test_repository.py:255"
+            ]
+          }
+        },
+        {
+          id: "resolve-variant-intersections",
+          stage: "Step 11",
+          lane: "db",
+          title: "variant별 척도 교집합 계산과 제외값 검증",
+          summary: "서버는 각 row의 `available_scale_codes`와 사용자가 보낸 `selected_scale_codes`를 대조해 저장 가능한 variant만 남긴다.",
+          left: 620,
+          top: 710,
+          subnodes: ["_canonicalize_sub_test_json()", "selected ∩ available", "missing_variants / invalid_exclusions"],
+          detail: {
+            stepLabel: "Step 11 · DB 대조",
+            laneLabel: "Resolver",
+            summary: "여기가 실제 variant 검증 핵심입니다. canonical JSON 문자열 비교로 제외값을 확인하고, 척도 교집합이 0인 실시구간은 누락 variant 또는 잘못된 exclusion으로 분기합니다.",
+            input: "rows[]\nconfig.selected_scale_codes\nconfig.excluded_sub_test_jsons",
+            requestExample: "비교 예시\nselected_codes = [\"CA\", \"EC\", \"SE\"]\navailable_codes = [\"CA\", \"EC\", \"SE\"]\n=> selected_for_variant = [\"CA\", \"EC\", \"SE\"]\n\nselected_codes = [\"CA\", \"EC\", \"SE\"]\navailable_codes = [\"A\"]\n=> 교집합 0, missing variant 또는 valid exclusion 후보",
+            responseExample: "400 example\n{\"detail\": \"STS: 선택한 척도가 없는 실시구간이 있습니다. 만 18세 이상(가능 척도: CA, EC, SE)\"}\n\n400 example\n{\"detail\": \"STS: 선택 척도가 존재하는 실시구간은 제외할 수 없습니다. 만 18세 이상\"}",
+            stateExample: "resolved_variant_configs = [\n  {\n    test_id: \"STS\",\n    sub_test_json: \"{...}\",\n    available_scale_codes: [\"CA\", \"EC\", \"SE\"],\n    selected_scale_codes: [\"CA\", \"EC\", \"SE\"]\n  }\n]\nflattened_variants = [...resolved_variant_configs]",
+            work: "1. `scale_struct`에서 `available_scale_codes` 추출\n2. `sub_test_json`을 canonical JSON 문자열로 바꿔 중복 / 제외 비교\n3. `selected_codes ∩ available_codes` 계산\n4. 교집합이 0이면 `missing_variants` 또는 valid exclusion 처리\n5. 남은 candidate를 정렬해 `resolved_variant_configs`와 `flattened_variants`에 누적",
+            output: "성공 시 저장 가능한 variant만 남고, 실패 시 400 detail로 생성 중단",
+            refs: [
+              "app/services/admin/custom_tests.py:286",
+              "app/services/admin/custom_tests.py:297",
+              "app/services/admin/custom_tests.py:341",
+              "app/services/admin/custom_tests.py:357",
+              "app/services/admin/custom_tests.py:366"
+            ],
+            scenarioOverrides: {
+              variant: {
+                output: "프런트가 보낸 `excluded_sub_test_jsons`와 일치하는 variant만 제외하고, 남은 candidate만 저장 대상으로 유지"
+              },
+              failure: {
+                output: "stale payload나 잘못된 exclusion이면 400\n- `missing_variants`\n- `invalid_exclusions`\n- `사용 가능한 문항 구간이 없습니다.`"
+              }
+            },
+            callout: "기존 artifact에서 이 단계가 가장 뭉쳐 있었습니다. 조회, 대조, 누적이 함께 보여져서 읽기 어려웠기 때문에, 이번 버전에서는 조회 단계와 교집합 계산 단계를 분리했습니다."
+          }
+        },
+        {
+          id: "persist-row",
+          stage: "Step 12",
+          lane: "db",
+          title: "저장 구조 조립과 `AdminCustomTest` row 생성",
+          summary: "정규화된 variant와 필드를 JSON 중심 저장 구조로 바꿔 `AdminCustomTest` row 하나에 저장한다.",
+          left: 910,
+          top: 710,
+          subnodes: ["selected_scales_struct_json", "_build_merged_sub_test_json()", "serialize_additional_profile_payload()"],
+          detail: {
+            stepLabel: "Step 12 · DB 저장",
+            laneLabel: "DB",
+            summary: "이 단계는 대조가 끝난 뒤의 병합 단계입니다. `resolved_test_configs`와 `flattened_variants`를 저장 컬럼 구조로 재조합하고, 추가 인적사항도 `schema_version`이 붙은 payload로 감싸서 저장합니다.",
+            input: "resolved_test_configs\nflattened_variants\nnormalized_fields\ntrimmed_name",
+            requestExample: "selected_scales_struct_json excerpt\n{\n  \"GOLDEN\": [\n    {\n      \"sub_test_json\": {\"age_range\": {\"start_inclusive\": [4,0,0], \"end_exclusive\": [15,0,0]}},\n      \"variable\": {\n        \"available_scale_codes\": [\"A\", \"Calm\", \"E\", \"F\", \"I\", \"N\", \"S\", \"T\", \"Tense\", \"Z\"],\n        \"selected_scale_codes\": [\"Calm\", \"E\", \"F\", \"I\", \"N\", \"Z\"]\n      }\n    }\n  ]\n}",
+            responseExample: "{\n  \"message\": \"Custom tests created.\",\n  \"created_count\": 1,\n  \"ids\": [2]\n}",
+            stateExample: "저장 전\nresolved_test_configs.length = 2\nflattened_variants.length = 2\n\n저장 후 row\nchild_test.id = 2\nchild_test.test_id = \"[\\\"GOLDEN\\\", \\\"STS\\\"]\"\nchild_test.selected_scales_json = {...}\nchild_test.additional_profile_fields_json = {\"schema_version\": 2, \"fields\": [...]}",
+            work: "1. `sys_test_ids` 집합으로 test id 배열 구성\n2. `selected_scales_struct_json` 생성\n3. `_build_merged_sub_test_json()`으로 variant 조건 병합\n4. `serialize_additional_profile_payload()`로 필드 payload 감싸기\n5. `AdminCustomTest` row 생성 후 flush / commit",
+            output: "생성 API는 새 row id만 반환하고, 목록 표시용 복원은 다음 management 조회가 담당",
+            refs: [
+              "app/services/admin/custom_tests.py:463",
+              "app/services/admin/custom_tests.py:470",
+              "app/services/admin/custom_tests.py:486",
+              "app/services/admin/custom_tests.py:498",
+              "app/services/admin/common.py:422"
+            ]
+          }
+        },
+        {
+          id: "refresh-list",
+          stage: "Step 13",
+          lane: "response",
+          title: "응답 수신 후 목록 재조회와 JSON 복원",
+          summary: "브라우저는 생성 응답 후 관리 목록을 다시 가져오고, 서버는 `selected_scales_json`을 `test_configs` shape로 복원해 카드용 데이터를 만든다.",
+          left: 330,
+          top: 1350,
+          subnodes: ["submitCreatePayload()", "GET /management", "parse_custom_test_configs()"],
+          detail: {
+            stepLabel: "Step 13 · 응답 / 후속 UI",
+            laneLabel: "Response",
+            summary: "생성 성공의 최종 사용자 경험은 POST 응답 본문보다 후속 management GET에 달려 있습니다. 목록 카드에 보이는 척도 수, 검사 id, 추가 필드 정보는 저장 JSON을 다시 해석한 결과입니다.",
+            input: "POST success response\n- ids: [row.id]",
+            requestExample: "GET /api/admin/custom-tests/management",
+            responseExample: "{\n  \"items\": [\n    {\n      \"id\": 2,\n      \"custom_test_name\": \"봄학기용 검사\",\n      \"test_id\": \"GOLDEN, STS\",\n      \"selected_scale_codes\": [\"CA\", \"Calm\", \"E\", \"EC\", \"F\", \"I\", \"N\", \"SE\", \"Z\"],\n      \"test_configs\": [...],\n      \"additional_profile_fields\": [...]\n    }\n  ]\n}",
+            stateExample: "row.selected_scales_json -> parse_custom_test_configs() -> test_configs\nrow.additional_profile_fields_json -> normalize_additional_profile_fields() -> additional_profile_fields",
+            work: "1. `submitCreatePayload()`가 form reset, modal close, `refreshManagedTests()` 호출\n2. management 목록 서비스가 row별 `load_custom_test_configs()` 수행\n3. `parse_custom_test_configs()`가 `selected_scales_json`을 variant 구조로 복원\n4. 목록 렌더 함수가 카드에 검사명, scale count, 추가 인적사항 정보를 반영",
+            output: "사용자는 생성 직후 새 검사 row를 관리 목록에서 확인하고, 이후 링크 생성과 상세 이동도 이 복원된 shape를 기준으로 수행",
+            refs: [
+              "static/admin.js:1686",
+              "static/admin.js:1700",
+              "static/admin.js:1538",
+              "app/services/admin/common.py:325",
+              "app/services/admin/common.py:357",
+              "app/services/admin/common.py:432"
+            ],
+            callout: "커스텀 검사 생성 설명에서 저장과 복원을 함께 보여줘야 하는 이유가 여기에 있습니다. 목록 화면은 DB row 원본을 그대로 쓰지 않고, `selected_scales_json`을 다시 파싱한 결과를 사용합니다."
+          }
+        }
+      ];
+
+      const edges = [
+        { from: "page-init", to: "compose-ui", path: "M 296 168 C 310 168, 316 168, 330 168", scenarios: ["success", "variant", "validation", "failure"] },
+        { from: "compose-ui", to: "client-field-normalize", path: "M 586 168 C 600 168, 606 168, 620 168", scenarios: ["success", "variant", "validation", "failure"] },
+        { from: "client-field-normalize", to: "build-test-configs", path: "M 876 168 C 890 168, 896 168, 910 168", scenarios: ["success", "variant", "validation", "failure"] },
+        { from: "build-test-configs", to: "variant-confirm", path: "M 970 266 C 820 330, 320 360, 168 488", scenarios: ["variant"] },
+        { from: "build-test-configs", to: "router-entry", path: "M 980 266 C 930 340, 700 390, 458 488", scenarios: ["success", "failure"] },
+        { from: "variant-confirm", to: "router-entry", path: "M 296 488 C 310 488, 316 488, 330 488", scenarios: ["variant"] },
+        { from: "router-entry", to: "schema-validate", path: "M 586 488 C 600 488, 606 488, 620 488", scenarios: ["success", "variant", "failure"] },
+        { from: "schema-validate", to: "service-auth-name", path: "M 876 488 C 890 488, 896 488, 910 488", scenarios: ["success", "variant", "failure"] },
+        { from: "service-auth-name", to: "service-field-normalize", path: "M 980 586 C 820 650, 320 690, 168 808", scenarios: ["success", "variant", "failure"] },
+        { from: "service-field-normalize", to: "fetch-parent-rows", path: "M 296 808 C 310 808, 316 808, 330 808", scenarios: ["success", "variant", "failure"] },
+        { from: "fetch-parent-rows", to: "resolve-variant-intersections", path: "M 586 808 C 600 808, 606 808, 620 808", scenarios: ["success", "variant", "failure"] },
+        { from: "resolve-variant-intersections", to: "persist-row", path: "M 876 808 C 890 808, 896 808, 910 808", scenarios: ["success", "variant"] },
+        { from: "persist-row", to: "refresh-list", path: "M 970 906 C 870 1180, 590 1320, 458 1448", scenarios: ["success", "variant"] }
+      ];
+
+      const branches = {
+        success: [
+          {
+            title: "정상 생성 포인트",
+            body: [
+              "브라우저 정규화와 서버 재정규화가 모두 통과해야 저장까지 도달합니다.",
+              "생성 응답은 단순하지만, 실제 사용자 화면은 후속 management GET 복원 결과에 의해 결정됩니다."
+            ]
+          },
+          {
+            title: "저장 구조 핵심",
+            body: [
+              "`selected_scales_json`이 variant 복원의 source of truth입니다.",
+              "`additional_profile_fields_json`은 `schema_version`이 붙은 래핑 payload로 저장됩니다."
+            ]
+          }
+        ],
+        variant: [
+          {
+            title: "확인 후 제외",
+            body: [
+              "프런트는 누락 실시구간을 자동 수정하지 않고 확인 모달로 분기합니다.",
+              "동의 후 전송된 `excluded_sub_test_jsons`는 서버에서 canonical JSON 비교로 다시 검증됩니다."
+            ]
+          },
+          {
+            title: "의미 보존",
+            body: [
+              "선택하지 않은 척도를 임의 추가하지 않습니다.",
+              "최종 생성 결과는 일부 실시구간이 제외된 검사입니다."
+            ]
+          }
+        ],
+        validation: [
+          {
+            title: "브라우저 선차단",
+            body: [
+              "이름 공백, 검사 미선택, 척도 미선택, 선택형 옵션 누락은 모두 브라우저에서 먼저 막습니다.",
+              "이 시나리오는 라우터, 스키마, DB 단계로 내려가지 않습니다."
+            ]
+          }
+        ],
+        failure: [
+          {
+            title: "서버 400 지점",
+            body: [
+              "stale 카탈로그나 잘못된 exclusion은 `resolve-variant-intersections` 단계에서 400으로 막힙니다.",
+              "`missing_variants`, `invalid_exclusions`, `사용 가능한 문항 구간이 없습니다.`가 대표 실패 메시지입니다."
+            ]
+          },
+          {
+            title: "표시 위치",
+            body: [
+              "일반 생성 실패는 `createTestMessage`에 표시됩니다.",
+              "확인 모달 경로 실패는 `variantConfirmMessage`에 표시됩니다."
+            ]
+          }
+        ]
+      };
+
+      const scenarioControls = document.getElementById("scenarioControls");
+      const scenarioSummary = document.getElementById("scenarioSummary");
+      const nodeLayer = document.getElementById("nodeLayer");
+      const edgeLayer = document.getElementById("edgeLayer");
+      const branchGrid = document.getElementById("branchGrid");
+      const graphCanvas = document.getElementById("graphCanvas");
+      const detailStepPill = document.getElementById("detailStepPill");
+      const detailLanePill = document.getElementById("detailLanePill");
+      const detailTitle = document.getElementById("detailTitle");
+      const detailSummary = document.getElementById("detailSummary");
+      const detailInput = document.getElementById("detailInput");
+      const detailRequestExample = document.getElementById("detailRequestExample");
+      const detailResponseExample = document.getElementById("detailResponseExample");
+      const detailStateExample = document.getElementById("detailStateExample");
+      const detailWork = document.getElementById("detailWork");
+      const detailOutput = document.getElementById("detailOutput");
+      const detailRefs = document.getElementById("detailRefs");
+      const detailCallout = document.getElementById("detailCallout");
+      const zoomLevel = document.getElementById("zoomLevel");
+      const termTooltipLayer = document.getElementById("termTooltipLayer");
+
+      let currentScenario = "success";
+      let currentStep = "build-test-configs";
+      let zoom = 1;
+
+      const glossary = {
+        catalog: "생성 페이지가 처음 로드할 때 `/api/admin/tests/catalog` 응답을 담아두는 로컬 상태입니다. 검사 목록, sub_test, 척도 트리 렌더링의 기준이 됩니다.",
+        managedItems: "관리 화면 목록에 그릴 커스텀 검사 아이템 배열입니다. `/api/admin/custom-tests/management` 응답이 여기에 들어옵니다.",
+        customFields: "생성 모달 안에서 편집 중인 추가 인적사항 정의 배열입니다. 아직 서버에 저장되기 전의 브라우저 상태입니다.",
+        normalizedCustomFields: "브라우저의 `sanitizeAndValidateCustomFields()`를 통과한 추가 인적사항 배열입니다. 빈 옵션 제거와 중복 제거가 적용된 상태입니다.",
+        requestBody: "브라우저가 최종 POST 직전에 조립한 JSON payload입니다. `custom_test_name`, `test_configs`, `additional_profile_fields`를 포함합니다.",
+        pendingCreatePayload: "실시구간 제외 확인 모달이 열렸을 때 임시로 보관하는 생성 payload입니다. 사용자가 진행 버튼을 누르면 이 값으로 POST합니다.",
+        missingVariants: "선택 척도가 하나도 없어 생성에서 빠져야 하는 실시구간 목록입니다. 프런트가 먼저 계산해 확인 모달에 보여줍니다.",
+        test_configs: "검사별 생성 설정 배열입니다. 각 원소는 `test_id`, `selected_scale_codes`, `excluded_sub_test_jsons`를 가집니다.",
+        test_id: "커스텀 검사 구성에서 기준이 되는 parent 검사 코드입니다. 예: `GOLDEN`, `STS`.",
+        selected_scale_codes: "한 검사 안에서 관리자가 선택한 척도 코드 목록입니다. 서버는 이 값과 각 실시구간의 available 코드를 다시 교집합 계산합니다.",
+        selectedCodes: "브라우저가 한 검사에 대해 현재 선택된 척도 코드를 모아둔 임시 배열입니다. 이후 `selected_scale_codes`로 직렬화됩니다.",
+        availableCodes: "특정 sub_test 또는 variant에서 실제로 사용 가능한 척도 코드 목록입니다. 브라우저 카탈로그와 서버 DB 조회 양쪽에서 비교 기준으로 사용됩니다.",
+        excluded_sub_test_jsons: "선택 척도가 없는 실시구간을 제외하기 위해 보내는 `sub_test_json` 문자열 목록입니다.",
+        sub_test_json: "실시구간 조건을 표현하는 JSON입니다. 연령, 성별, 학령 조건 같은 variant 식별 정보가 들어 있습니다.",
+        selected_scales_json: "실제 저장 후 복원 기준이 되는 핵심 JSON 컬럼입니다. test별 variant와 선택 척도 구조가 이 안에 저장됩니다.",
+        normalized_fields: "서비스 레이어에서 정규화가 끝난 추가 인적사항 목록입니다. 중복 제거, 타입 보정, 옵션 정리가 반영된 상태입니다.",
+        resolved_test_configs: "서버가 parent DB를 다시 조회한 뒤 실제 생성 가능한 실시구간만 남겨 정규화한 검사별 variant 결과입니다.",
+        flattened_variants: "검사별 variant 묶음을 한 리스트로 펼친 결과입니다. 저장용 `test_id` 집합과 병합 `sub_test_json`을 만들 때 사용됩니다.",
+        selected_scales_struct_json: "DB 저장 직전 `selected_scales_json` 컬럼에 넣기 위해 만드는 중간 JSON 구조입니다."
+      };
+
+      function detailFor(step) {
+        const base = step.detail || {};
+        const override = (base.scenarioOverrides || {})[currentScenario] || {};
+        return {
+          ...base,
+          ...override
+        };
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;");
+      }
+
+      function formatRichText(raw, { multiline = false } = {}) {
+        const parts = String(raw || "").split(/(`[^`]+`)/g);
+        const html = parts.map((part) => {
+          if (part.startsWith("`") && part.endsWith("`")) {
+            const term = part.slice(1, -1);
+            const description = glossary[term];
+            const codeHtml = `<code>${escapeHtml(term)}</code>`;
+            if (!description) {
+              return codeHtml;
+            }
+            return `<span class="glossary-term" tabindex="0" data-term="${escapeHtml(term)}">${codeHtml}</span>`;
+          }
+          return escapeHtml(part);
+        }).join("");
+        return multiline ? html.replace(/\n/g, "<br>") : html;
+      }
+
+      function hideTermTooltip() {
+        termTooltipLayer.classList.remove("visible");
+        termTooltipLayer.setAttribute("aria-hidden", "true");
+      }
+
+      function showTermTooltip(target) {
+        const term = target.dataset.term || "";
+        const description = glossary[term];
+        if (!description) {
+          hideTermTooltip();
+          return;
+        }
+
+        termTooltipLayer.textContent = description;
+        termTooltipLayer.classList.add("visible");
+        termTooltipLayer.setAttribute("aria-hidden", "false");
+
+        const rect = target.getBoundingClientRect();
+        const layerRect = termTooltipLayer.getBoundingClientRect();
+        const margin = 12;
+        let left = rect.left;
+        let top = rect.top - layerRect.height - 12;
+
+        if (left + layerRect.width > window.innerWidth - margin) {
+          left = window.innerWidth - layerRect.width - margin;
+        }
+        if (left < margin) {
+          left = margin;
+        }
+        if (top < margin) {
+          top = rect.bottom + 12;
+          termTooltipLayer.style.transformOrigin = "top left";
+        } else {
+          termTooltipLayer.style.transformOrigin = "bottom left";
+        }
+
+        termTooltipLayer.style.left = `${left}px`;
+        termTooltipLayer.style.top = `${top}px`;
+      }
+
+      function renderScenarioControls() {
+        scenarioControls.innerHTML = "";
+        Object.entries(scenarios).forEach(([key, scenario]) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `chip ${key === currentScenario ? `active ${scenario.tone}` : ""}`.trim();
+          button.textContent = scenario.label;
+          button.addEventListener("click", () => {
+            currentScenario = key;
+            renderAll();
+          });
+          scenarioControls.appendChild(button);
+        });
+        scenarioSummary.innerHTML = `<strong>${scenarios[currentScenario].label}</strong>${scenarios[currentScenario].summary}`;
+      }
+
+      function activeNeighbors() {
+        const set = new Set();
+        edges.forEach((edge) => {
+          if (!edge.scenarios.includes(currentScenario)) {
+            return;
+          }
+          if (edge.from === currentStep) {
+            set.add(edge.to);
+          }
+          if (edge.to === currentStep) {
+            set.add(edge.from);
+          }
+        });
+        return set;
+      }
+
+      function renderEdges() {
+        edgeLayer.innerHTML = "";
+        edges.forEach((edge) => {
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          path.setAttribute("d", edge.path);
+          const active = edge.scenarios.includes(currentScenario);
+          const connectsCurrent = edge.from === currentStep || edge.to === currentStep;
+          path.setAttribute("class", `${active ? `active ${scenarios[currentScenario].tone}` : ""} ${!active ? "dimmed" : ""}`.trim());
+          if (active && !connectsCurrent) {
+            path.style.opacity = "0.5";
+          }
+          edgeLayer.appendChild(path);
+        });
+      }
+
+      function renderNodes() {
+        nodeLayer.innerHTML = "";
+        const neighbors = activeNeighbors();
+        steps.forEach((step) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `node-card ${step.lane}${step.id === currentStep ? " active" : ""}${neighbors.has(step.id) ? " neighbor" : ""}`;
+          button.style.left = `${step.left}px`;
+          button.style.top = `${step.top}px`;
+          button.innerHTML = `
+            <div>
+              <span class="node-kicker">${escapeHtml(step.stage)} · ${escapeHtml(step.lane)}</span>
+              <h3 class="node-title">${escapeHtml(step.title)}</h3>
+              <p class="node-copy">${escapeHtml(step.summary)}</p>
+            </div>
+            <div class="subnode-grid">
+              ${step.subnodes.map((item) => `<div class="subnode">${escapeHtml(item)}</div>`).join("")}
+            </div>
+          `;
+          button.addEventListener("click", () => {
+            currentStep = step.id;
+            renderAll();
+          });
+          nodeLayer.appendChild(button);
+        });
+      }
+
+      function renderDetail() {
+        const step = steps.find((item) => item.id === currentStep) || steps[0];
+        const detail = detailFor(step);
+        detailStepPill.textContent = detail.stepLabel || step.stage;
+        detailLanePill.textContent = detail.laneLabel || step.lane;
+        detailTitle.textContent = step.title;
+        detailSummary.innerHTML = formatRichText(detail.summary || step.summary, { multiline: true });
+        detailInput.innerHTML = formatRichText(detail.input || "", { multiline: true });
+        detailRequestExample.innerHTML = formatRichText(detail.requestExample || "", { multiline: true });
+        detailResponseExample.innerHTML = formatRichText(detail.responseExample || "", { multiline: true });
+        detailStateExample.innerHTML = formatRichText(detail.stateExample || "", { multiline: true });
+        detailWork.innerHTML = formatRichText(detail.work || "", { multiline: true });
+        detailOutput.innerHTML = formatRichText(detail.output || "", { multiline: true });
+        detailRefs.textContent = (detail.refs || []).join("\n");
+        detailCallout.innerHTML = formatRichText(detail.callout || "", { multiline: true });
+      }
+
+      function renderBranches() {
+        branchGrid.innerHTML = "";
+        (branches[currentScenario] || []).forEach((branch) => {
+          const article = document.createElement("article");
+          article.className = "branch-card";
+          article.innerHTML = `
+            <h3>${escapeHtml(branch.title)}</h3>
+            <ul>${branch.body.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+          `;
+          branchGrid.appendChild(article);
+        });
+      }
+
+      function renderZoom() {
+        graphCanvas.style.transform = `scale(${zoom})`;
+        zoomLevel.textContent = `${Math.round(zoom * 100)}%`;
+      }
+
+      function renderAll() {
+        renderScenarioControls();
+        renderEdges();
+        renderNodes();
+        renderDetail();
+        renderBranches();
+        renderZoom();
+        hideTermTooltip();
+      }
+
+      document.getElementById("zoomInBtn").addEventListener("click", () => {
+        zoom = Math.min(1.4, zoom + 0.1);
+        renderZoom();
+      });
+
+      document.getElementById("zoomOutBtn").addEventListener("click", () => {
+        zoom = Math.max(0.75, zoom - 0.1);
+        renderZoom();
+      });
+
+      document.addEventListener("mouseover", (event) => {
+        const termEl = event.target.closest(".glossary-term");
+        if (!termEl) {
+          hideTermTooltip();
+          return;
+        }
+        showTermTooltip(termEl);
+      });
+
+      document.addEventListener("focusin", (event) => {
+        const termEl = event.target.closest(".glossary-term");
+        if (!termEl) {
+          hideTermTooltip();
+          return;
+        }
+        showTermTooltip(termEl);
+      });
+
+      document.addEventListener("scroll", hideTermTooltip, true);
+      window.addEventListener("resize", hideTermTooltip);
+
+      renderAll();
+    </script>
+  </body>
+</html>

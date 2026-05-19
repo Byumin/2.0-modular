@@ -1,0 +1,125 @@
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.schemas.assessment_links import (
+    RegisterAssessmentClientIn,
+    SaveAssessmentDraftIn,
+    SubmitCustomAssessmentIn,
+    ValidateAssessmentProfileIn,
+)
+from app.services.admin.assessment_links import (
+    get_consent_info_by_token,
+    get_assessment_draft_by_access_link,
+    get_custom_test_by_access_link,
+    register_client_for_custom_test_by_access_link,
+    save_assessment_draft_by_access_link,
+    submit_consent_by_token,
+    submit_custom_test_by_access_link,
+    validate_custom_test_profile_by_access_link,
+)
+
+router = APIRouter()
+
+# URL 인적사항 화면 렌더용 라우터
+@router.get("/api/assessment-links/{access_token}")
+def get_assessment_link_payload(
+    access_token: str,
+    db: Session = Depends(get_db),
+) -> dict:
+    return get_custom_test_by_access_link(db, access_token)
+
+
+@router.post("/api/assessment-links/{access_token}/validate-profile")
+def validate_profile(
+    access_token: str,
+    payload: ValidateAssessmentProfileIn,
+    db: Session = Depends(get_db),
+) -> dict:
+    return validate_custom_test_profile_by_access_link(
+        db, access_token, payload.profile or {},
+        selected_client_id=payload.client_id,
+        responder_choice=payload.responder_choice,
+        allow_retake=payload.allow_retake,
+    )
+
+
+@router.post("/api/assessment-links/{access_token}/register-client")
+def register_client(
+    access_token: str,
+    payload: RegisterAssessmentClientIn,
+    db: Session = Depends(get_db),
+) -> dict:
+    return register_client_for_custom_test_by_access_link(db, access_token, payload.profile or {})
+
+
+@router.post("/api/assessment-links/{access_token}/submit")
+def submit_assessment(
+    access_token: str,
+    payload: SubmitCustomAssessmentIn,
+    db: Session = Depends(get_db),
+) -> dict:
+    return submit_custom_test_by_access_link(
+        db,
+        access_token,
+        payload.responder_name,
+        payload.profile,
+        payload.answers,
+        client_id=payload.client_id,
+        is_ambiguous_match=payload.is_ambiguous_match,
+        responder_choice=payload.responder_choice,
+        candidate_client_ids=payload.candidate_client_ids,
+    )
+
+
+@router.get("/api/assessment-links/{access_token}/draft")
+def get_assessment_draft(
+    access_token: str,
+    client_id: int,
+    db: Session = Depends(get_db),
+) -> dict:
+    return get_assessment_draft_by_access_link(db, access_token, client_id)
+
+
+@router.put("/api/assessment-links/{access_token}/draft")
+def save_assessment_draft(
+    access_token: str,
+    payload: SaveAssessmentDraftIn,
+    db: Session = Depends(get_db),
+) -> dict:
+    return save_assessment_draft_by_access_link(
+        db,
+        access_token,
+        profile=payload.profile,
+        answers=payload.answers,
+        client_id=payload.client_id,
+        current_part_index=payload.current_part_index,
+        current_page=payload.current_page,
+        is_ambiguous_match=payload.is_ambiguous_match,
+        responder_choice=payload.responder_choice,
+        candidate_client_ids=payload.candidate_client_ids,
+    )
+
+
+@router.get("/api/assessment-links/{access_token}/consent")
+def get_consent(
+    access_token: str,
+    db: Session = Depends(get_db),
+) -> dict:
+    return get_consent_info_by_token(db, access_token)
+
+
+from pydantic import BaseModel
+
+class ConsentSubmitIn(BaseModel):
+    client_id: int
+    consented: bool
+
+
+@router.post("/api/assessment-links/{access_token}/consent")
+def submit_consent(
+    access_token: str,
+    payload: ConsentSubmitIn,
+    db: Session = Depends(get_db),
+) -> dict:
+    return submit_consent_by_token(db, access_token, payload.client_id, payload.consented)

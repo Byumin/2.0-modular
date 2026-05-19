@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Runtime Flow Diagrams</title>
+    <style>
+      :root {
+        --bg: #f5f8fc;
+        --card: #ffffff;
+        --text: #1f2937;
+        --muted: #6b7280;
+        --line: #d9e1ec;
+      }
+      body {
+        margin: 0;
+        font-family: "Noto Sans KR", "Pretendard", sans-serif;
+        background: linear-gradient(120deg, #eef5ff 0%, #f7fbff 100%);
+        color: var(--text);
+      }
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 28px;
+      }
+      p {
+        margin: 0 0 20px;
+        color: var(--muted);
+      }
+      .panel {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+        margin-bottom: 18px;
+      }
+      .panel h2 {
+        margin: 0 0 10px;
+        font-size: 18px;
+      }
+      .panel a {
+        color: #1d4ed8;
+        text-decoration: none;
+      }
+      .panel a:hover {
+        text-decoration: underline;
+      }
+      img {
+        width: 100%;
+        height: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Runtime Flow Diagrams</h1>
+      <p>커스텀 검사 생성과 인적사항 기반 문항 로딩 흐름을 정리한 다이어그램 모음입니다.</p>
+
+      <section class="panel">
+        <h2>1) Runtime Sequence</h2>
+        <p>
+          원본: <a href="./assessment-profile-runtime-sequence.mmd">assessment-profile-runtime-sequence.mmd</a>
+          | SVG: <a href="./assessment-profile-runtime-sequence.svg">assessment-profile-runtime-sequence.svg</a>
+        </p>
+        <img src="./assessment-profile-runtime-sequence.svg" alt="Runtime sequence diagram" />
+      </section>
+
+      <section class="panel">
+        <h2>2) Validate Profile Flow</h2>
+        <p>
+          원본: <a href="./assessment-profile-validate-flow.mmd">assessment-profile-validate-flow.mmd</a>
+          | SVG: <a href="./assessment-profile-validate-flow.svg">assessment-profile-validate-flow.svg</a>
+        </p>
+        <p>
+          각 단계는 <strong>함수명 + 소스 경로</strong>를 함께 표기했고, 입력/출력은 대표 payload 예시 형태로 간략히 표시했습니다.
+        </p>
+        <img src="./assessment-profile-validate-flow.svg" alt="Validate profile flow diagram" />
+      </section>
+
+      <section class="panel">
+        <h2>3) Custom Test Create Sequence</h2>
+        <p>
+          원본: <a href="./custom-test-create-runtime-sequence.mmd">custom-test-create-runtime-sequence.mmd</a>
+          | SVG: <a href="./custom-test-create-runtime-sequence.svg">custom-test-create-runtime-sequence.svg</a>
+        </p>
+        <img src="./custom-test-create-runtime-sequence.svg" alt="Custom test create runtime sequence diagram" />
+      </section>
+
+      <section class="panel">
+        <h2>4) Custom Test Create Service Flow</h2>
+        <p>
+          원본: <a href="./custom-test-create-service-flow.mmd">custom-test-create-service-flow.mmd</a>
+          | SVG: <a href="./custom-test-create-service-flow.svg">custom-test-create-service-flow.svg</a>
+        </p>
+        <img src="./custom-test-create-service-flow.svg" alt="Custom test create service flow diagram" />
+      </section>
+
+      <section class="panel">
+        <h2>5) Scoring Submission Runtime Sequence</h2>
+        <p>
+          원본: <a href="./scoring-submission-runtime-sequence.mmd">scoring-submission-runtime-sequence.mmd</a>
+          | SVG: <a href="./scoring-submission-runtime-sequence.svg">scoring-submission-runtime-sequence.svg</a>
+        </p>
+        <p>
+          `admin_custom_test_submission.answers_json` 예시 payload가 어떻게 읽히고, `ScoringContext`로 조립되는지 시퀀스로 정리했습니다.
+        </p>
+        <img src="./scoring-submission-runtime-sequence.svg" alt="Scoring submission runtime sequence diagram" />
+      </section>
+
+      <section class="panel">
+        <h2>6) Scoring Context Build Flow</h2>
+        <p>
+          원본: <a href="./scoring-context-build-flow.mmd">scoring-context-build-flow.mmd</a>
+          | SVG: <a href="./scoring-context-build-flow.svg">scoring-context-build-flow.svg</a>
+        </p>
+        <p>
+          저장된 answers list가 평탄화되고, `assessment_payload`가 재구성된 뒤, 최종적으로 `ScoringContext`가 만들어지는 변환 흐름입니다.
+        </p>
+        <img src="./scoring-context-build-flow.svg" alt="Scoring context build flow diagram" />
+      </section>
+
+      <section class="panel">
+        <h2>7) Choice Score Scoring Flow</h2>
+        <p>
+          원본: <a href="./scoring-choice-score-flow.mmd">scoring-choice-score-flow.mmd</a>
+          | SVG: <a href="./scoring-choice-score-flow.svg">scoring-choice-score-flow.svg</a>
+        </p>
+        <p>
+          `build_choice_score_result(...)` 내부에서 `test_id -> sub_test_json -> scale -> item score` 순서로 어떻게 점수가 계산되는지, 역채점이 `choice_score[item_id][answer_value]`에서 어떻게 반영되는지 예시와 함께 표시합니다.
+        </p>
+        <img src="./scoring-choice-score-flow.svg" alt="Choice score scoring flow diagram" />
+      </section>
+    </main>
+  </body>
+</html>

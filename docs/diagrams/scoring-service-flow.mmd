@@ -1,0 +1,73 @@
+flowchart TD
+    A["외부 호출자
+입력: score_tests(test_ids, context)
+출력 기대: dict[test_id, ScoringResult]"] --> B["score_tests
+app/services/scoring/engine.py
+목적: 검사별 scorer를 선택해 결과 dict 생성"]
+    B --> C["함수 내부 순서
+1. results = {}
+2. test_ids 반복
+3. test_id trim + upper
+4. 빈 값 skip
+5. get_scorer_for_test 호출
+6. scorer.score(context) 호출
+7. results[test_id] 저장
+8. results 반환"]
+    C --> D{"score_tests
+app/services/scoring/engine.py
+정규화한 test_id가 비어 있는가?"}
+    D -- 예 --> E["skip 후 다음 test_id로 이동"]
+    D -- 아니오 --> F["get_scorer_for_test
+app/services/scoring/tests/registry.py
+목적: test_id에 맞는 scorer 인스턴스 선택
+입력: test_id
+출력: BaseScorer"]
+
+    F -.-> F1["_DEFAULT_SCORERS
+STS -> StsScorer()
+GOLDEN -> GoldenScorer()"]
+    F --> G{"get_scorer_for_test
+app/services/scoring/tests/registry.py
+_DEFAULT_SCORERS에 존재하는가?"}
+    G -- 예 --> H["등록된 scorer 반환"]
+    G -- 아니오 --> I["UnsupportedScorer(test_id) 반환
+app/services/scoring/base.py"]
+
+    H --> J["score(context)
+입력: ScoringContext
+출력: ScoringResult"]
+    I --> J
+
+    J --> K{"선택된 scorer 종류"}
+    K -- STS --> L["StsScorer.score
+app/services/scoring/tests/sts.py
+목적: STS 채점 결과 생성
+출력: status=not_implemented"]
+    K -- GOLDEN --> M["GoldenScorer.score
+app/services/scoring/tests/golden.py
+목적: GOLDEN 채점 결과 생성
+출력: status=not_implemented"]
+    K -- Unsupported --> N["UnsupportedScorer.score
+app/services/scoring/base.py
+목적: 미지원 검사 skip 처리
+출력: status=skipped
+meta.reason=unsupported_test_id"]
+
+    L --> O["results[test_id] = result"]
+    M --> O
+    N --> O
+    O --> P{"남은 test_id가 있는가?"}
+    P -- 예 --> C
+    P -- 아니오 --> Q["results 반환
+dict[str, ScoringResult]"]
+
+    R["split_answer_key
+app/services/scoring/utils.py
+목적: answer_key를 test_id, sub_test_json, item_id로 분리
+입력: test_id::sub_test_json::item_id
+출력: test_id, sub_test_json, item_id"] -.-> S["filter_answers_by_test
+app/services/scoring/utils.py
+목적: answers에서 특정 test_id 문항만 추출
+입력: answers, test_id
+출력: filtered answers"]
+    S -.-> J

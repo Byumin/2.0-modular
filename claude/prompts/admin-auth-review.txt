@@ -1,0 +1,23 @@
+Read AGENTS.md first.
+
+Use the orchestrator environment only to run Claude itself.
+Do not assume the project runtime Python is the same environment.
+If project execution becomes necessary, use `.venv/bin/python`.
+
+Then inspect:
+- app/main.py
+- app/router/
+- app/services/admin/
+- app/repositories/
+- static/
+
+Task:
+- Review the admin authentication flow and adjacent admin workspace access flow.
+- Do not modify files.
+- Assume the runtime DB source of truth is the repository root modular.db.
+
+Report:
+1. Bugs or behavioral risks
+2. Weak assumptions or coupling risks
+3. Missing tests or missing verification steps
+4. Files that should be inspected next if uncertainty remains

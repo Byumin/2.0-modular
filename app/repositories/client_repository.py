@@ -1,0 +1,289 @@
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session
+
+from app.db.models import AdminAssessmentLog, AdminClient, AdminClientAssignment, AdminClientRelation, AdminCustomTest
+
+
+def get_assignment_by_admin_client_and_test(
+    db: Session,
+    admin_id: int,
+    client_id: int,
+    custom_test_id: int,
+) -> AdminClientAssignment | None:
+    return (
+        db.query(AdminClientAssignment)
+        .filter(
+            AdminClientAssignment.admin_user_id == admin_id,
+            AdminClientAssignment.admin_client_id == client_id,
+            AdminClientAssignment.admin_custom_test_id == custom_test_id,
+        )
+        .first()
+    )
+
+
+def create_assignment(db: Session, admin_id: int, client_id: int, custom_test_id: int) -> AdminClientAssignment:
+    row = AdminClientAssignment(
+        admin_user_id=admin_id,
+        admin_client_id=client_id,
+        admin_custom_test_id=custom_test_id,
+    )
+    db.add(row)
+    return row
+
+
+def get_assigned_clients_for_profile(
+    db: Session,
+    *,
+    admin_user_id: int,
+    custom_test_id: int,
+) -> list[AdminClient]:
+    return (
+        db.query(AdminClient)
+        .join(
+            AdminClientAssignment,
+            (AdminClientAssignment.admin_client_id == AdminClient.id)
+            & (AdminClientAssignment.admin_user_id == admin_user_id),
+        )
+        .filter(
+            AdminClient.admin_user_id == admin_user_id,
+            AdminClientAssignment.admin_custom_test_id == custom_test_id,
+        )
+        .all()
+    )
+
+
+def list_admin_clients_by_admin(db: Session, *, admin_user_id: int) -> list[AdminClient]:
+    return (
+        db.query(AdminClient)
+        .filter(AdminClient.admin_user_id == admin_user_id)
+        .order_by(AdminClient.id.desc())
+        .all()
+    )
+
+
+def find_admin_client_by_identity(
+    db: Session,
+    *,
+    admin_user_id: int,
+    name: str,
+    gender: str,
+    birth_day,
+) -> AdminClient | None:
+    return (
+        db.query(AdminClient)
+        .filter(
+            AdminClient.admin_user_id == admin_user_id,
+            AdminClient.name == name,
+            AdminClient.gender == gender,
+            AdminClient.birth_day == birth_day,
+        )
+        .order_by(AdminClient.id.asc())
+        .first()
+    )
+
+
+def list_client_assignments_with_test_name(db: Session, *, admin_user_id: int):
+    return (
+        db.query(
+            AdminClientAssignment,
+            AdminCustomTest.custom_test_name,
+            AdminCustomTest.test_id.label("parent_test_id"),
+        )
+        .join(AdminCustomTest, AdminCustomTest.id == AdminClientAssignment.admin_custom_test_id)
+        .filter(
+            AdminClientAssignment.admin_user_id == admin_user_id,
+            AdminCustomTest.is_deleted.is_(False),
+        )
+        .all()
+    )
+
+
+def get_client_assignment_with_test_name(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+):
+    return list_assignments_by_client_with_test_name(
+        db,
+        admin_user_id=admin_user_id,
+        client_id=client_id,
+    )
+
+
+def list_assignments_by_client_with_test_name(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+):
+    return (
+        db.query(
+            AdminClientAssignment,
+            AdminCustomTest.custom_test_name,
+            AdminCustomTest.test_id.label("parent_test_id"),
+        )
+        .join(AdminCustomTest, AdminCustomTest.id == AdminClientAssignment.admin_custom_test_id)
+        .filter(
+            AdminClientAssignment.admin_user_id == admin_user_id,
+            AdminClientAssignment.admin_client_id == client_id,
+            AdminCustomTest.is_deleted.is_(False),
+        )
+        .order_by(AdminClientAssignment.id.desc())
+        .all()
+    )
+
+
+def get_last_assessed_rows(db: Session, *, admin_user_id: int):
+    return (
+        db.query(
+            AdminAssessmentLog.admin_client_id.label("client_id"),
+            func.max(AdminAssessmentLog.assessed_on).label("last_assessed_on"),
+        )
+        .filter(AdminAssessmentLog.admin_user_id == admin_user_id)
+        .group_by(AdminAssessmentLog.admin_client_id)
+        .all()
+    )
+
+
+def get_last_assessed_on_by_client(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+):
+    return (
+        db.query(func.max(AdminAssessmentLog.assessed_on).label("last_assessed_on"))
+        .filter(
+            AdminAssessmentLog.admin_user_id == admin_user_id,
+            AdminAssessmentLog.admin_client_id == client_id,
+        )
+        .first()
+    )
+
+
+def list_assessment_logs_by_client(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+    limit: int = 30,
+):
+    return (
+        db.query(AdminAssessmentLog)
+        .filter(
+            AdminAssessmentLog.admin_user_id == admin_user_id,
+            AdminAssessmentLog.admin_client_id == client_id,
+        )
+        .order_by(AdminAssessmentLog.assessed_on.desc(), AdminAssessmentLog.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+def create_admin_client(
+    db: Session,
+    *,
+    admin_user_id: int,
+    name: str,
+    gender: str,
+    birth_day,
+    memo: str,
+    created_source: str = "admin_manual",
+) -> AdminClient:
+    row = AdminClient(
+        admin_user_id=admin_user_id,
+        name=name,
+        gender=gender,
+        birth_day=birth_day,
+        memo=memo,
+        created_source=created_source,
+    )
+    db.add(row)
+    return row
+
+
+def create_client_relation(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id_a: int,
+    role_a: str,
+    client_id_b: int,
+    role_b: str,
+) -> AdminClientRelation:
+    existing = (
+        db.query(AdminClientRelation)
+        .filter(
+            AdminClientRelation.admin_user_id == admin_user_id,
+            AdminClientRelation.client_id_a == client_id_a,
+            AdminClientRelation.client_id_b == client_id_b,
+        )
+        .first()
+    )
+    if existing:
+        return existing
+    row = AdminClientRelation(
+        admin_user_id=admin_user_id,
+        client_id_a=client_id_a,
+        role_a=role_a,
+        client_id_b=client_id_b,
+        role_b=role_b,
+    )
+    db.add(row)
+    return row
+
+
+def get_client_relations_by_client(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+) -> list[AdminClientRelation]:
+    return (
+        db.query(AdminClientRelation)
+        .filter(
+            AdminClientRelation.admin_user_id == admin_user_id,
+            or_(
+                AdminClientRelation.client_id_a == client_id,
+                AdminClientRelation.client_id_b == client_id,
+            ),
+        )
+        .all()
+    )
+
+
+def get_admin_client_by_id_and_admin(db: Session, *, client_id: int, admin_user_id: int) -> AdminClient | None:
+    return (
+        db.query(AdminClient)
+        .filter(AdminClient.id == client_id, AdminClient.admin_user_id == admin_user_id)
+        .first()
+    )
+
+
+def delete_logs_by_client(db: Session, *, admin_user_id: int, client_id: int) -> None:
+    db.query(AdminAssessmentLog).filter(
+        AdminAssessmentLog.admin_user_id == admin_user_id,
+        AdminAssessmentLog.admin_client_id == client_id,
+    ).delete()
+
+
+def delete_assignments_by_client(db: Session, *, admin_user_id: int, client_id: int) -> None:
+    db.query(AdminClientAssignment).filter(
+        AdminClientAssignment.admin_user_id == admin_user_id,
+        AdminClientAssignment.admin_client_id == client_id,
+    ).delete()
+
+
+def delete_assignment_by_admin_client_and_test(
+    db: Session,
+    *,
+    admin_user_id: int,
+    client_id: int,
+    custom_test_id: int,
+) -> None:
+    db.query(AdminClientAssignment).filter(
+        AdminClientAssignment.admin_user_id == admin_user_id,
+        AdminClientAssignment.admin_client_id == client_id,
+        AdminClientAssignment.admin_custom_test_id == custom_test_id,
+    ).delete()

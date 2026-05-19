@@ -1,0 +1,146 @@
+flowchart TD
+    A["Scorer 입력
+입력:
+- test_id='STS'
+- context.answers_by_test_variant['STS']['{...}']={'3':'4','22':'4'}
+- context.scoring_index_by_test_variant['STS']['{...}']['scales']['CA']={
+  code:'CA',
+  name:'조심성',
+  items:{
+    '3':{'1':1,'2':2,'3':3,'4':4,'5':5},
+    '22':{'1':5,'2':4,'3':3,'4':2,'5':1}
+  }
+}
+출력 기대: ScoringResult"] --> B["build_choice_score_result
+app/services/scoring/utils.py
+목적: choice_score 규칙으로 척도별 총점을 계산"]
+
+    B --> C["함수 내부 순서
+1. test_id 정규화
+2. context.answers_by_test_variant 조회
+3. context.scoring_index_by_test_variant 조회
+4. sub_test_json 반복
+5. scale 반복
+6. items 또는 facets 분기
+7. choice_score[item_id][answer_value] 점수 계산
+8. scale 결과 누적
+9. ScoringResult 반환"]
+
+    C --> D["answers_by_test_variant 조회
+app/services/scoring/utils.py
+목적: 이미 정규화된 응답 row 사용
+입력: context.answers_by_test_variant['STS']
+출력: {'{...}': {'3':'4','22':'4'}}"]
+
+    C --> E["scoring_index_by_test_variant 조회
+app/services/scoring/utils.py
+목적: 이미 정규화된 scale 인덱스 사용
+입력: context.scoring_index_by_test_variant['STS']
+출력: {'{...}': {'selected_scale_codes':['CA'],'scales':{...}}}"]
+
+    D --> F{"build_choice_score_result
+app/services/scoring/utils.py
+해당 test_id 답변이 존재하는가?"}
+    F -- 아니오 --> G["ScoringResult 반환
+status='skipped'
+meta.reason='no_answers_for_test'"]
+    F -- 예 --> H["variant loop 시작
+sub_test_json별 answers_by_item 처리"]
+
+    H --> I["variant_index 조회
+app/services/scoring/utils.py
+목적: sub_test_json별 미리 생성된 scoring index 조회
+입력: context.scoring_index_by_test_variant[test_id][sub_test_json]
+출력: { selected_scale_codes, scales }"]
+
+    I --> J{"build_choice_score_result
+app/services/scoring/utils.py
+variant_index 존재 여부"}
+    J -- 아니오 --> H
+    J -- 예 --> K["indexed scales 반복
+예시:
+{
+ 'CA': {
+   'name':'조심성',
+   'items': {
+     '3': {'1':1,'2':2,'3':3,'4':4,'5':5},
+     '22': {'1':5,'2':4,'3':3,'4':2,'5':1}
+   }
+ }
+}"]
+
+    E --> L{"build_choice_score_result
+app/services/scoring/utils.py
+raw_scale에 items가 있는가?"}
+    K --> L
+    L -- 예 --> M["choice_score loop
+item_id별 문항 점수 계산
+예시:
+- item_id='3', answer_value='4' -> score_map['4']='4'
+- item_id='22', answer_value='4' -> score_map['4']='2'"]
+    L -- 아니오 --> N["facet loop
+app/services/scoring/utils.py
+예시:
+- raw_scale['facets']['T1']['items']
+- raw_scale['facets']['T2']['items']
+facet별 점수 계산 후 top-level scale 합산"]
+
+    M -.-> M1["_parse_numeric_score
+app/services/scoring/utils.py
+목적: 문자열 점수를 int/float로 변환
+입력: '4' / '2'
+출력: 4 / 2"]
+
+    N -.-> N1["_score_choice_score_map
+app/services/scoring/utils.py
+목적: facet의 items 맵을 이용해 facet subtotal 계산
+입력: answers_by_item + facet items
+출력: { total_score, answered_item_count, expected_item_count, item_scores }"]
+
+    M --> O["scale 결과 누적
+app/services/scoring/utils.py
+출력 예시:
+{
+ code:'CA',
+ name:'조심성',
+ total_score:6,
+ answered_item_count:2,
+ expected_item_count:2,
+ item_scores:[
+  {item_id:'3',answer_value:'4',score:4},
+  {item_id:'22',answer_value:'4',score:2}
+ ]
+}"]
+    N --> O["facet 포함 scale 결과 누적
+app/services/scoring/utils.py
+출력 예시:
+{
+ code:'T',
+ name:'사고',
+ total_score:12,
+ facets:{
+   'T1': {...},
+   'T2': {...}
+ }
+}"]
+
+    O --> P{"남은 scale 또는 variant가 있는가?"}
+    P -- 예 --> H
+    P -- 아니오 --> Q{"계산된 scales가 있는가?"}
+    Q -- 아니오 --> R["ScoringResult 반환
+status='skipped'
+meta.reason='no_scorable_scales'"]
+    Q -- 예 --> S["ScoringResult 반환
+app/services/scoring/base.py
+출력 예시:
+{
+ status:'scored',
+ test_id:'STS',
+  scales:{'{sub_test_json}::CA': {...}},
+ meta:{variant_count:1,scale_count:1,scoring_rule:'choice_score_sum'}
+}"]
+
+    T["호출 위치
+StsScorer.score / GoldenScorer.score
+app/services/scoring/tests/sts.py
+app/services/scoring/tests/golden.py"] -.-> B

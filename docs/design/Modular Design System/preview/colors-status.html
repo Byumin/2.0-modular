@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>Status colors</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { padding: 20px; display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; }
+  .stack { display:flex; flex-direction:column; gap:8px; min-width: 150px; }
+  .label { font-size:11px; font-weight:600; color:var(--color-muted-foreground); }
+  .badge { display:inline-flex; align-items:center; padding:2px 10px; font-size:12px; font-weight:600; border-radius:6px; align-self:flex-start; }
+  .b-success { background:hsl(141 78.9% 85.1%); color:hsl(142 76% 26%); }
+  .b-warning { background:hsl(48 96% 89%);    color:hsl(35 91% 33%); }
+  .b-destruct{ background:hsl(0 84.2% 60.2%); color:#fff; }
+  .b-default { background:hsl(215 70% 35%);   color:hsl(210 40% 98%); }
+  .b-secondary{background:hsl(210 40% 96.1%); color:hsl(222.2 47.4% 11.2%); }
+  .b-outline { border:1px solid hsl(214.3 31.8% 91.4%); color:hsl(222.2 84% 4.9%);}
+</style></head><body>
+  <div class="stack"><span class="label">Default</span><span class="badge b-default">운영중</span></div>
+  <div class="stack"><span class="label">Secondary</span><span class="badge b-secondary">중지</span></div>
+  <div class="stack"><span class="label">Outline</span><span class="badge b-outline">초안</span></div>
+  <div class="stack"><span class="label">Success</span><span class="badge b-success">실시완료</span></div>
+  <div class="stack"><span class="label">Warning</span><span class="badge b-warning">미실시</span></div>
+  <div class="stack"><span class="label">Destructive</span><span class="badge b-destruct">삭제</span></div>
+</body></html>
