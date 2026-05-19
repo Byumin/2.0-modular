@@ -78,6 +78,7 @@ interface SessionDraft {
   local_id: string
   title: string
   description: string
+  guide_items: string[]
 }
 
 interface ScaleTreeItem {
@@ -132,6 +133,7 @@ interface CreatePayload {
     session_id: string
     title: string
     description: string
+    guide_items: string[]
     test_ids: string[]
   }>
   additional_profile_fields: Array<{
@@ -142,6 +144,13 @@ interface CreatePayload {
     options: string[]
   }>
 }
+
+const DEFAULT_SESSION_GUIDE_ITEMS = [
+  "정답이나 오답이 없습니다. 평소 자신의 모습에 가장 가까운 응답을 선택하세요.",
+  "너무 오래 고민하지 마시고, 첫 번째 느낌으로 응답해주세요.",
+  "검사 도중 중단하더라도 응답은 자동 저장됩니다.",
+  "모든 문항에 응답해야 결과를 확인할 수 있습니다.",
+]
 
 const progressVariant = (p: string): "secondary" | "success" | "warning" | "destructive" => {
   if (p === "종료") return "secondary"
@@ -374,7 +383,12 @@ export function TestManagement() {
   const [allScaleTestIds, setAllScaleTestIds] = React.useState<Set<string>>(new Set())
   const [selectedScaleKeys, setSelectedScaleKeys] = React.useState<Set<string>>(new Set())
   const [sessionsDraft, setSessionsDraft] = React.useState<SessionDraft[]>([
-    { local_id: "session_1", title: "세션 1", description: "표준화된 검사 안내를 확인한 뒤 응답을 시작합니다." },
+    {
+      local_id: "session_1",
+      title: "세션 1",
+      description: "표준화된 검사 안내를 확인한 뒤 응답을 시작합니다.",
+      guide_items: [...DEFAULT_SESSION_GUIDE_ITEMS],
+    },
   ])
   const [testSessionMap, setTestSessionMap] = React.useState<Record<string, string>>({})
   const [draggingTestId, setDraggingTestId] = React.useState<string | null>(null)
@@ -479,7 +493,12 @@ export function TestManagement() {
     setAllScaleTestIds(new Set())
     setSelectedScaleKeys(new Set())
     setSessionsDraft([
-      { local_id: "session_1", title: "세션 1", description: "표준화된 검사 안내를 확인한 뒤 응답을 시작합니다." },
+      {
+        local_id: "session_1",
+        title: "세션 1",
+        description: "표준화된 검사 안내를 확인한 뒤 응답을 시작합니다.",
+        guide_items: [...DEFAULT_SESSION_GUIDE_ITEMS],
+      },
     ])
     setTestSessionMap({})
     setDraggingTestId(null)
@@ -587,12 +606,40 @@ export function TestManagement() {
         local_id: `session_${Date.now()}_${prev.length + 1}`,
         title: `세션 ${prev.length + 1}`,
         description: "이 세션의 검사 안내를 확인한 뒤 응답을 시작합니다.",
+        guide_items: [...DEFAULT_SESSION_GUIDE_ITEMS],
       },
     ])
   }
 
   const updateSession = (id: string, patch: Partial<SessionDraft>) => {
     setSessionsDraft((prev) => prev.map((session) => session.local_id === id ? { ...session, ...patch } : session))
+  }
+
+  const updateSessionGuideItem = (sessionId: string, index: number, value: string) => {
+    setSessionsDraft((prev) => prev.map((session) => {
+      if (session.local_id !== sessionId) return session
+      return {
+        ...session,
+        guide_items: session.guide_items.map((item, itemIndex) => itemIndex === index ? value : item),
+      }
+    }))
+  }
+
+  const addSessionGuideItem = (sessionId: string) => {
+    setSessionsDraft((prev) => prev.map((session) => {
+      if (session.local_id !== sessionId || session.guide_items.length >= 8) return session
+      return { ...session, guide_items: [...session.guide_items, ""] }
+    }))
+  }
+
+  const removeSessionGuideItem = (sessionId: string, index: number) => {
+    setSessionsDraft((prev) => prev.map((session) => {
+      if (session.local_id !== sessionId) return session
+      return {
+        ...session,
+        guide_items: session.guide_items.filter((_, itemIndex) => itemIndex !== index),
+      }
+    }))
   }
 
   const removeSession = (id: string) => {
@@ -711,6 +758,7 @@ export function TestManagement() {
           session_id: `session_${index + 1}`,
           title,
           description: session.description.trim(),
+          guide_items: session.guide_items.map((item) => item.trim()).filter(Boolean),
           test_ids,
         }
       })
@@ -1263,6 +1311,53 @@ export function TestManagement() {
                                       maxLength={500}
                                       className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                     />
+                                    <div className="rounded-md border border-border bg-muted/20 p-3">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div>
+                                          <p className="text-xs font-semibold">안내사항</p>
+                                          <p className="mt-0.5 text-[11px] text-muted-foreground">수검자 세션 안내 화면의 번호 목록으로 표시됩니다.</p>
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => addSessionGuideItem(session.local_id)}
+                                          disabled={session.guide_items.length >= 8}
+                                        >
+                                          <IconPlus className="size-3.5" />
+                                          항목
+                                        </Button>
+                                      </div>
+                                      <div className="mt-3 grid gap-2">
+                                        {session.guide_items.length === 0 ? (
+                                          <p className="rounded-md border border-dashed bg-background px-3 py-3 text-center text-xs text-muted-foreground">
+                                            안내사항을 추가하지 않으면 기본 안내사항이 표시됩니다.
+                                          </p>
+                                        ) : session.guide_items.map((guideItem, guideIndex) => (
+                                          <div key={guideIndex} className="flex items-start gap-2">
+                                            <span className="mt-2 flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                                              {guideIndex + 1}
+                                            </span>
+                                            <textarea
+                                              value={guideItem}
+                                              onChange={(e) => updateSessionGuideItem(session.local_id, guideIndex, e.target.value)}
+                                              placeholder="안내사항 문구"
+                                              rows={2}
+                                              maxLength={180}
+                                              className="min-h-10 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => removeSessionGuideItem(session.local_id, guideIndex)}
+                                              className="mt-1.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                              aria-label={`안내사항 ${guideIndex + 1} 삭제`}
+                                            >
+                                              <IconX className="size-3.5" />
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
                                   </div>
                                   <div className="mt-2 flex min-h-7 flex-wrap items-center gap-1.5 rounded border border-dashed border-border bg-muted/40 p-1.5">
                                     {sessionTestIds.length === 0 ? (

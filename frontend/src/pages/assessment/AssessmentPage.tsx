@@ -102,6 +102,7 @@ function normalizeAssessmentParts(payload: AssessmentPayload): AssessmentPart[] 
     session_index: Number.isFinite(part.session_index) ? Number(part.session_index) : 0,
     session_title: part.session_title || "세션 1",
     session_description: part.session_description || "",
+    session_guide_items: Array.isArray(part.session_guide_items) ? part.session_guide_items.map(String).filter(Boolean) : [],
     response_options: part.response_options ?? [],
     items: (part.items ?? []).map((item, itemIndex) => ({
       ...item,
@@ -120,6 +121,7 @@ function normalizeAssessmentSessions(payload: AssessmentPayload, parts: Assessme
       session_index: Number.isFinite(session.session_index) ? Number(session.session_index) : index,
       title: String(session.title || `세션 ${index + 1}`),
       description: String(session.description || ""),
+      guide_items: Array.isArray(session.guide_items) ? session.guide_items.map(String).filter(Boolean) : [],
       test_ids: Array.isArray(session.test_ids) ? session.test_ids.map(String) : [],
     }))
     .filter((session) => parts.some((part) => part.session_id === session.session_id))
@@ -135,6 +137,7 @@ function normalizeAssessmentSessions(payload: AssessmentPayload, parts: Assessme
       session_index: 0,
       title: firstPart?.session_title || "세션 1",
       description: firstPart?.session_description || "",
+      guide_items: Array.isArray(firstPart?.session_guide_items) ? firstPart.session_guide_items.map(String).filter(Boolean) : [],
       test_ids: [],
     },
   ]

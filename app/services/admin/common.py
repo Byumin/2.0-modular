@@ -381,6 +381,14 @@ def normalize_custom_test_session_configs(raw: Any, test_configs: list[dict] | N
         seen_session_ids.add(session_id)
         title = str(item.get("title") or f"세션 {len(sessions) + 1}").strip() or f"세션 {len(sessions) + 1}"
         description = str(item.get("description") or "").strip()
+        guide_items_raw = item.get("guide_items", [])
+        if not isinstance(guide_items_raw, list):
+            guide_items_raw = []
+        guide_items = [
+            str(guide_item or "").strip()
+            for guide_item in guide_items_raw
+            if str(guide_item or "").strip()
+        ][:8]
         raw_test_ids = item.get("test_ids", [])
         if not isinstance(raw_test_ids, list):
             raw_test_ids = []
@@ -400,6 +408,7 @@ def normalize_custom_test_session_configs(raw: Any, test_configs: list[dict] | N
                     "session_index": len(sessions),
                     "title": title,
                     "description": description,
+                    "guide_items": guide_items,
                     "test_ids": test_ids,
                 }
             )
@@ -412,6 +421,7 @@ def normalize_custom_test_session_configs(raw: Any, test_configs: list[dict] | N
                 "session_index": len(sessions),
                 "title": f"세션 {len(sessions) + 1}",
                 "description": "",
+                "guide_items": [],
                 "test_ids": remaining or available_test_ids,
             }
         )

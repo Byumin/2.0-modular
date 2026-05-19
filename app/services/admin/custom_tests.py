@@ -525,6 +525,7 @@ def _build_session_configs_payload(payload: CreateCustomTestBatchIn, resolved_te
             "session_id": session.session_id,
             "title": session.title,
             "description": session.description,
+            "guide_items": session.guide_items,
             "test_ids": session.test_ids,
         }
         for session in payload.session_configs

@@ -24,6 +24,7 @@ export interface AssessmentPart {
   session_index?: number
   session_title?: string
   session_description?: string
+  session_guide_items?: string[]
   response_options: ResponseOption[]
   items: QuestionItem[]
   item_count: number
@@ -34,6 +35,7 @@ export interface AssessmentSession {
   session_index: number
   title: string
   description?: string
+  guide_items?: string[]
   test_ids: string[]
 }
 

@@ -739,6 +739,7 @@ def _assemble_parts(parts_buffer: list[dict]) -> list[dict]:
                 "session_index": int(part.get("session_index", 0)),
                 "session_title": part.get("session_title", "세션 1"),
                 "session_description": part.get("session_description", ""),
+                "session_guide_items": part.get("session_guide_items", []),
                 "items": part["items"],
                 "item_count": len(part["items"]),
                 "selected_sub_tests": part["selected_sub_tests"],
@@ -785,6 +786,7 @@ def _append_items_as_render_parts(
                 "session_index": int(session.get("session_index", 0)),
                 "session_title": session.get("title", "세션 1"),
                 "session_description": session.get("description", ""),
+                "session_guide_items": session.get("guide_items", []),
                 "items": list(segment_items),
                 "selected_sub_tests": [selected_sub_test],
             }
@@ -817,6 +819,7 @@ def build_custom_assessment_question_payload(custom_test_row: AdminCustomTest, p
         "session_index": 0,
         "title": "세션 1",
         "description": "",
+        "guide_items": [],
         "test_ids": [],
     }
 

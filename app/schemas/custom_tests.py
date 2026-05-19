@@ -39,6 +39,7 @@ class CreateCustomTestSessionIn(BaseModel):
     session_id: str = Field(min_length=1, max_length=40)
     title: str = Field(min_length=1, max_length=80)
     description: str = Field(default="", max_length=500)
+    guide_items: list[str] = Field(default_factory=list, max_length=8)
     test_ids: list[str] = Field(min_length=1)
 
 

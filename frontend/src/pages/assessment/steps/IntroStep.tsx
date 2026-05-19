@@ -28,6 +28,7 @@ export function IntroStep({ payload, parts, session, onStart, sessionClass = "se
   const testName = payload.custom_test_name || payload.display_name || "검사"
   const sessionTitle = session?.title || "검사 안내"
   const sessionDescription = session?.description?.trim()
+  const guideItems = session?.guide_items?.length ? session.guide_items : TIPS
   const totalQuestions = parts.reduce((s, p) => s + (p.item_count ?? p.items?.length ?? 0), 0)
   const estimatedMinutes = payload.estimated_time_minutes ? `약 ${payload.estimated_time_minutes}분` : "약 10-15분"
   const scaleLabel = responseScaleLabel(parts)
@@ -99,7 +100,7 @@ export function IntroStep({ payload, parts, session, onStart, sessionClass = "se
         <section className="mt-9 rounded-lg border border-white/[0.18] bg-white/[0.12] px-8 py-7 shadow-[0_18px_55px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl sm:px-9">
           <h2 className="text-base font-bold text-white">검사 안내사항</h2>
           <ul className="mt-5 space-y-3.5">
-            {TIPS.map((tip, i) => (
+            {guideItems.map((tip, i) => (
               <li key={i} className="flex items-start gap-3">
                 <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold" style={{ backgroundColor: "var(--sa-l15)", color: "var(--sa-l)" }}>
                   {i + 1}
