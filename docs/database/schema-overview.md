@@ -24,6 +24,7 @@
   - `custom_test_name`
   - `client_intake_mode`
   - `selected_scales_json` — 검사별 실시구간 + 선택 척도 코드 매핑. 구조 아래 참고.
+  - `session_configs_json` — 수검자 실시 세션 구성, 세션 안내 설명, 안내 항목. 구조 아래 참고.
   - `additional_profile_fields_json`
   - `requires_consent`
   - `created_at`
@@ -69,6 +70,33 @@
 ```
 
 런타임에서 프로필 매칭과 문항 번들 조회 모두 이 필드의 `sub_test_json` 키를 기준으로 동작한다.
+
+#### `child_test.session_configs_json` 구조
+
+수검자 검사 실시를 세션별로 나누기 위한 UI/실시 흐름 메타를 담는다. `selected_scales_json`에는 저장하지 않는다.
+
+```json
+[
+  {
+    "session_id": "session_1",
+    "session_index": 0,
+    "title": "세션 1",
+    "description": "세션 시작 전 보여줄 검사 안내 문구",
+    "guide_items": ["안내 항목 1", "안내 항목 2"],
+    "test_ids": ["K-PSI-4-SF", "PAT-2", "PCT"]
+  },
+  {
+    "session_id": "session_2",
+    "session_index": 1,
+    "title": "세션 2",
+    "description": "세션 시작 전 보여줄 검사 안내 문구",
+    "guide_items": ["안내 항목 1"],
+    "test_ids": ["PSES"]
+  }
+]
+```
+
+기존 데이터 호환을 위해 런타임 loader는 `session_configs_json`이 비어 있을 때만 과거 `selected_scales_json.__sessions`를 fallback으로 읽는다.
 
 ### `admin_client`
 - 내담자 정보

@@ -25,6 +25,7 @@ class AdminCustomTest(Base):
     custom_test_name: Mapped[str] = mapped_column(String(120), nullable=False)
     client_intake_mode: Mapped[str] = mapped_column(String(40), nullable=False, default="pre_registered_only")
     selected_scales_json: Mapped[str] = mapped_column(Text, nullable=False)
+    session_configs_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     additional_profile_fields_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     requires_consent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

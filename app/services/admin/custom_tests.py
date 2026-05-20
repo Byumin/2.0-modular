@@ -590,7 +590,7 @@ def create_admin_custom_test_batch(
         ]
         for config in resolved_test_configs
     }
-    selected_scales_struct_json["__sessions"] = _build_session_configs_payload(payload, resolved_test_configs)
+    session_configs_json = _build_session_configs_payload(payload, resolved_test_configs)
     row = AdminCustomTest( # AdminCustomTest 관리자가 만든 커스텀 검사 1건을 나타내는 sqlalchemy 모델, 각 검사별로 하나의 행이 생성됨
         admin_user_id=admin.id,
         test_id=json.dumps(sorted(sys_test_ids), ensure_ascii=False), # 실시 가능한 모든 test_id를 JSON 배열 형태로 저장
@@ -598,6 +598,7 @@ def create_admin_custom_test_batch(
         custom_test_name=trimmed_name,
         client_intake_mode=client_intake_mode,
         selected_scales_json=json.dumps(selected_scales_struct_json, ensure_ascii=False),
+        session_configs_json=json.dumps(session_configs_json, ensure_ascii=False),
         additional_profile_fields_json=serialize_additional_profile_payload(
             normalized_fields,
         ),
@@ -693,14 +694,6 @@ def update_admin_custom_test(
     row.client_intake_mode = client_intake_mode
     row.requires_consent = payload.requires_consent
     if payload.session_configs is not None:
-        selected_raw = {}
-        try:
-            parsed_selected = json.loads(row.selected_scales_json or "{}")
-            if isinstance(parsed_selected, dict):
-                selected_raw = parsed_selected
-        except (TypeError, json.JSONDecodeError):
-            selected_raw = {}
-
         test_configs = load_custom_test_configs(row)
         raw_sessions = [
             {
@@ -712,8 +705,10 @@ def update_admin_custom_test(
             }
             for session in payload.session_configs
         ]
-        selected_raw["__sessions"] = normalize_custom_test_session_configs(raw_sessions, test_configs)
-        row.selected_scales_json = json.dumps(selected_raw, ensure_ascii=False)
+        row.session_configs_json = json.dumps(
+            normalize_custom_test_session_configs(raw_sessions, test_configs),
+            ensure_ascii=False,
+        )
     commit(db)
     return {"message": "검사 설정이 수정되었습니다."}
 

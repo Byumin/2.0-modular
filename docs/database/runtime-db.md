@@ -33,22 +33,28 @@
 
 1. SQLAlchemy 모델 기준 테이블 생성
 2. `child_test.client_intake_mode` 컬럼 보정
-3. `admin_client.created_source` 컬럼 보정
-4. `admin_client_assignment`의 `(admin_user_id, admin_client_id, admin_custom_test_id)` unique index 보정
-5. `admin_custom_test_submission.client_id` 컬럼 보정
-6. `submission_scoring_result` 테이블 생성 및 인덱스 보정
-7. `admin_client.birth_day` 기존 NULL 값 보정
-8. `admin_client` 확장 필드(`phone`, `address`, `is_closed`, `tags_json`) 보정
-9. 내담자 그룹 테이블(`admin_client_group`, `admin_client_group_member`) 보정
-10. 내담자 리포트 테이블(`admin_client_report`) 보정
-11. 동일인 검토 테이블(`admin_client_identity_review`) 보정
-12. `child_test.requires_consent` 컬럼 보정
-13. 관리자 설정 테이블(`admin_settings`) 보정
-14. 개인정보동의 기록 테이블(`client_consent_record`) 보정
-15. 검사 실시 임시저장 테이블(`admin_assessment_draft`) 보정
-16. 제출별 보고서 접근 토큰 회전(`rotate_shared_submission_access_tokens`)
-17. `test_profile_config` 테이블과 프로필 설정 구조 보정
-18. 내담자 관계 테이블(`admin_client_relation`) 보정
+3. `child_test.session_configs_json` 컬럼 보정 및 기존 `selected_scales_json.__sessions` 이관/정리
+4. `child_test` soft delete 컬럼 보정
+5. `admin_client.created_source` 컬럼 보정
+6. `admin_client_assignment`의 `(admin_user_id, admin_client_id, admin_custom_test_id)` unique index 보정
+7. `admin_custom_test_submission.client_id` 컬럼 보정
+8. `submission_scoring_result` 테이블 생성 및 인덱스 보정
+9. `admin_client.birth_day` 기존 NULL 값 보정
+10. `admin_client` 확장 필드(`phone`, `address`, `is_closed`, `tags_json`) 보정
+11. 내담자 그룹 테이블(`admin_client_group`, `admin_client_group_member`) 보정
+12. 내담자 리포트 테이블(`admin_client_report`) 보정
+13. 동일인 검토 테이블(`admin_client_identity_review`) 보정
+14. `child_test.requires_consent` 컬럼 보정
+15. 관리자 설정 테이블(`admin_settings`) 보정
+16. 개인정보동의 기록 테이블(`client_consent_record`) 보정
+17. 검사 실시 임시저장 테이블(`admin_assessment_draft`) 보정
+18. `RUN_STARTUP_DATA_MIGRATIONS=1`일 때만 기존 row 재작성 데이터 migration 실행
+    - `migrate_child_test_sub_test_json_to_structured`
+    - `rotate_shared_submission_access_tokens`
+    - `ensure_test_profile_config_restructure`
+    - `ensure_test_profile_condition_profile_maps`
+19. `test_profile_config` 테이블 생성 보정
+20. 내담자 관계 테이블(`admin_client_relation`) 보정
 
 정확한 최신 실행 순서는 `app/main.py`의 `on_startup()` 함수와 `app/db/schema_migrations.py`를 최종 기준으로 본다.
 

@@ -494,8 +494,11 @@ def load_custom_test_configs(row: AdminCustomTest) -> list[dict]:
 
 
 def load_custom_test_session_configs(row: AdminCustomTest) -> list[dict]:
-    selected_raw = _safe_json_loads(getattr(row, "selected_scales_json", "[]"))
     test_configs = load_custom_test_configs(row)
+    session_raw = _safe_json_loads(getattr(row, "session_configs_json", "[]"))
+    if isinstance(session_raw, list) and session_raw:
+        return normalize_custom_test_session_configs(session_raw, test_configs)
+    selected_raw = _safe_json_loads(getattr(row, "selected_scales_json", "[]"))
     return normalize_custom_test_session_configs(selected_raw, test_configs)
 
 # 

@@ -159,6 +159,91 @@ def ensure_child_test_client_intake_mode_column() -> None:
         )
 
 
+def ensure_child_test_session_configs_column() -> None:
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("child_test")}
+    with engine.begin() as conn:
+        if "session_configs_json" not in columns:
+            conn.exec_driver_sql(
+                """
+                ALTER TABLE child_test
+                ADD COLUMN session_configs_json TEXT NOT NULL DEFAULT '[]'
+                """
+            )
+        rows = conn.exec_driver_sql(
+            """
+            SELECT id, selected_scales_json, session_configs_json
+            FROM child_test
+            WHERE session_configs_json IS NULL
+               OR TRIM(session_configs_json) = ''
+               OR TRIM(session_configs_json) = '[]'
+            """
+        ).fetchall()
+        for row_id, selected_scales_json, session_configs_json in rows:
+            try:
+                existing_sessions = json.loads(session_configs_json or "[]")
+            except (TypeError, json.JSONDecodeError):
+                existing_sessions = []
+            if isinstance(existing_sessions, list) and existing_sessions:
+                continue
+            try:
+                selected = json.loads(selected_scales_json or "{}")
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(selected, dict):
+                continue
+            sessions = selected.get("__sessions")
+            if not isinstance(sessions, list) or not sessions:
+                continue
+            conn.execute(
+                text(
+                    """
+                    UPDATE child_test
+                    SET session_configs_json = :session_configs_json
+                    WHERE id = :row_id
+                    """
+                ),
+                {
+                    "row_id": row_id,
+                    "session_configs_json": json.dumps(sessions, ensure_ascii=False),
+                },
+            )
+        rows = conn.execute(
+            text(
+                """
+                SELECT id, selected_scales_json, session_configs_json
+                FROM child_test
+                WHERE selected_scales_json LIKE :pattern
+                """
+            ),
+            {"pattern": "%__sessions%"},
+        ).fetchall()
+        for row_id, selected_scales_json, session_configs_json in rows:
+            try:
+                session_configs = json.loads(session_configs_json or "[]")
+                selected = json.loads(selected_scales_json or "{}")
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(session_configs, list) or not session_configs:
+                continue
+            if not isinstance(selected, dict) or "__sessions" not in selected:
+                continue
+            selected.pop("__sessions", None)
+            conn.execute(
+                text(
+                    """
+                    UPDATE child_test
+                    SET selected_scales_json = :selected_scales_json
+                    WHERE id = :row_id
+                    """
+                ),
+                {
+                    "row_id": row_id,
+                    "selected_scales_json": json.dumps(selected, ensure_ascii=False),
+                },
+            )
+
+
 def ensure_child_test_soft_delete_columns() -> None:
     inspector = inspect(engine)
     columns = {column["name"] for column in inspector.get_columns("child_test")}
@@ -873,10 +958,14 @@ def migrate_child_test_sub_test_json_to_structured() -> None:
             if not isinstance(selected, dict):
                 continue
             structured: dict[str, list] = {}
-            selected_structured: dict[str, list] = {}
+            selected_structured: dict[str, object] = {
+                key: value
+                for key, value in selected.items()
+                if str(key or "").startswith("__")
+            }
             for test_id, variants in selected.items():
                 test_id_text = str(test_id or "").strip()
-                if not test_id_text:
+                if not test_id_text or test_id_text.startswith("__"):
                     continue
                 seen: list[dict] = []
                 selected_variants: list[dict] = []

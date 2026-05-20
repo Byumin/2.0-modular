@@ -17,6 +17,7 @@ from app.db.schema_migrations import (
     ensure_admin_assessment_draft_table,
     ensure_child_test_client_intake_mode_column,
     ensure_child_test_requires_consent_column,
+    ensure_child_test_session_configs_column,
     ensure_child_test_soft_delete_columns,
     ensure_client_consent_record_table,
     ensure_postgresql_boolean_columns,
@@ -96,9 +97,12 @@ app.include_router(settings_router)
 
 @app.on_event("startup")
 def on_startup() -> None:
+    run_data_migrations = os.getenv("RUN_STARTUP_DATA_MIGRATIONS") == "1"
+
     Base.metadata.create_all(bind=engine)
     ensure_postgresql_boolean_columns()
     ensure_child_test_client_intake_mode_column()
+    ensure_child_test_session_configs_column()
     ensure_child_test_soft_delete_columns()
     ensure_admin_client_created_source_column()
     ensure_admin_client_assignment_unique_index()
@@ -113,10 +117,12 @@ def on_startup() -> None:
     ensure_admin_settings_table()
     ensure_client_consent_record_table()
     ensure_admin_assessment_draft_table()
-    migrate_child_test_sub_test_json_to_structured()
-    rotate_shared_submission_access_tokens()
+    if run_data_migrations:
+        migrate_child_test_sub_test_json_to_structured()
+        rotate_shared_submission_access_tokens()
     ensure_test_profile_config_table()
-    ensure_test_profile_config_restructure()
-    ensure_test_profile_condition_profile_maps()
+    if run_data_migrations:
+        ensure_test_profile_config_restructure()
+        ensure_test_profile_condition_profile_maps()
     ensure_admin_client_relation_table()
     seed_default_admin()
