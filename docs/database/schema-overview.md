@@ -212,6 +212,43 @@
   - `consented`
   - `consented_at`
 
+### `test_profile_config`
+- 검사별 수검자 인적사항 입력 구조와 실시구간 조건 매핑을 저장한다.
+- 주요 필드:
+  - `test_id`
+  - `essential_profile_json`
+  - `optional_profile_json`
+
+#### `essential_profile_json.condition_profile_map` 구조
+
+`condition_profile_map`은 `sub_test_json`의 조건 키를 실제 입력 profile 필드와 연결한다.
+
+```json
+{
+  "condition_profile_map": {
+    "age_range": {
+      "type": "age_range",
+      "profile_field": "child_birth_day",
+      "as_of_field": "exam_date"
+    },
+    "gender": {
+      "type": "enum",
+      "profile_field": "child_gender"
+    },
+    "informant": {
+      "type": "enum",
+      "profile_field": "informant"
+    }
+  }
+}
+```
+
+- `type: "age_range"`: `sub_test_json`의 `[년, 월, 일]` 범위를 `profile_field`의 생년월일로 계산한다.
+- `type: "enum"`: `sub_test_json`의 허용값 목록과 `profile_field` 값을 비교한다.
+- `as_of_field`: 나이 계산 기준일 필드다. 보통 `exam_date`를 사용한다.
+- 매핑이 없는 기존 검사는 런타임 fallback으로 `birth_day`, `gender`, `informant`, `school_age`를 사용한다.
+- 예: `K-PSI-4-SF`는 `age_range -> parent_birth_day`, `PAT-2`와 `PCT`는 `age_range -> child_birth_day`로 매핑한다.
+
 ## Important Relationship Summary
 - `admin_user` -> 모든 관리자 도메인 데이터의 상위 소유자
 - `child_test` -> 커스텀 검사 본체

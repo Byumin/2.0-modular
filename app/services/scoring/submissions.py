@@ -259,7 +259,7 @@ def _load_submission_scoring_bundle(
     flattened_answers = _flatten_submission_answers(answers_payload.get("answers", {}))
     test_configs = load_custom_test_configs(custom_test)
     test_ids, test_id_text = summarize_custom_test_ids(test_configs, custom_test.test_id)
-    assessment_payload = build_custom_assessment_question_payload(custom_test, profile)
+    assessment_payload = build_custom_assessment_question_payload(custom_test, profile, db=db)
     answers_by_test_variant = _build_answers_by_test_variant(flattened_answers)
     scoring_index_by_test_variant = _build_scoring_index_by_test_variant(assessment_payload)
 

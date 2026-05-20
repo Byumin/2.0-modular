@@ -124,8 +124,8 @@ def _clean_profile(profile: dict[str, Any] | None) -> dict[str, Any]:
     return {str(k): _sanitize_profile_value(v) for k, v in (profile or {}).items()}
 
 
-def _valid_item_ids_for_profile(custom_test: AdminCustomTest, profile: dict[str, Any]) -> set[str]:
-    assessment_payload = build_custom_assessment_question_payload(custom_test, profile)
+def _valid_item_ids_for_profile(db: Session, custom_test: AdminCustomTest, profile: dict[str, Any]) -> set[str]:
+    assessment_payload = build_custom_assessment_question_payload(custom_test, profile, db=db)
     return {
         str(item.get("id", "")).strip()
         for item in assessment_payload["items"]
@@ -228,7 +228,102 @@ def _to_age_tuple(raw: Any, default: tuple[int, int, int]) -> tuple[int, int, in
     return parts[0], parts[1], parts[2]
 
 
-def _profile_matches_sub_test(profile: dict[str, Any], sub_test_json: str) -> bool:
+def _load_condition_profile_maps(db: Session, test_ids: list[str]) -> dict[str, dict[str, dict]]:
+    normalized_ids = [str(test_id).strip() for test_id in test_ids if str(test_id).strip()]
+    if not normalized_ids:
+        return {}
+    placeholders = ",".join(f":id{i}" for i in range(len(normalized_ids)))
+    params = {f"id{i}": test_id for i, test_id in enumerate(normalized_ids)}
+    rows = db.execute(
+        text(f"SELECT test_id, essential_profile_json FROM test_profile_config WHERE test_id IN ({placeholders})"),
+        params,
+    ).fetchall()
+
+    maps: dict[str, dict[str, dict]] = {}
+    for test_id, raw_config in rows:
+        try:
+            config = json.loads(raw_config or "{}")
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(config, dict):
+            continue
+        condition_map = config.get("condition_profile_map")
+        if not isinstance(condition_map, dict):
+            continue
+        normalized_map = {
+            str(condition_key): mapping
+            for condition_key, mapping in condition_map.items()
+            if str(condition_key).strip() and isinstance(mapping, dict)
+        }
+        if normalized_map:
+            maps[str(test_id)] = normalized_map
+    return maps
+
+
+def _profile_value_for_condition(
+    profile: dict[str, Any],
+    condition_key: str,
+    condition_profile_map: dict[str, dict] | None,
+    fallback_field: str,
+) -> Any:
+    mapping = (condition_profile_map or {}).get(condition_key)
+    if isinstance(mapping, dict):
+        profile_field = str(mapping.get("profile_field", "")).strip()
+        if profile_field:
+            value = profile.get(profile_field)
+            if str(value or "").strip():
+                return value
+            if "_" in profile_field:
+                fallback_suffix = profile_field.split("_", 1)[1]
+                return profile.get(fallback_suffix)
+    return profile.get(fallback_field)
+
+
+def _as_of_value_for_condition(
+    profile: dict[str, Any],
+    condition_key: str,
+    condition_profile_map: dict[str, dict] | None,
+) -> Any:
+    mapping = (condition_profile_map or {}).get(condition_key)
+    if isinstance(mapping, dict):
+        as_of_field = str(mapping.get("as_of_field", "")).strip()
+        if as_of_field:
+            return profile.get(as_of_field)
+    return profile.get("exam_date")
+
+
+def _matches_enum_condition(raw_value: Any, raw_allowed: Any) -> bool:
+    value = str(raw_value or "").strip().lower()
+    if isinstance(raw_allowed, list) and raw_allowed:
+        allowed = {str(x).strip().lower() for x in raw_allowed if str(x).strip()}
+        return bool(value) and value in allowed
+    if isinstance(raw_allowed, str) and raw_allowed.strip():
+        return bool(value) and value == raw_allowed.strip().lower()
+    return True
+
+
+def _matches_age_range_condition(raw_birth_day: Any, raw_as_of: Any, age_range: Any) -> bool:
+    if not isinstance(age_range, dict):
+        return True
+    birth_day = _safe_parse_date(raw_birth_day)
+    if birth_day is None:
+        return False
+    as_of = _safe_parse_date(raw_as_of) or date.today()
+    age_now = _age_detail(birth_day, as_of)
+    start = _to_age_tuple(age_range.get("start_inclusive"), (0, 0, 0))
+    end = _to_age_tuple(age_range.get("end_exclusive"), (999, 0, 0))
+    if age_now < start:
+        return False
+    if age_now >= end:
+        return False
+    return True
+
+
+def _profile_matches_sub_test(
+    profile: dict[str, Any],
+    sub_test_json: str,
+    condition_profile_map: dict[str, dict] | None = None,
+) -> bool:
     try:
         parsed = json.loads(sub_test_json or "{}")
     except json.JSONDecodeError:
@@ -236,32 +331,46 @@ def _profile_matches_sub_test(profile: dict[str, Any], sub_test_json: str) -> bo
     if not isinstance(parsed, dict):
         return False
 
-    profile_gender = str(profile.get("gender", "")).strip().lower()
-    genders = parsed.get("gender")
-    if isinstance(genders, list) and genders:
-        allowed = {str(x).strip().lower() for x in genders if str(x).strip()}
-        if not profile_gender or profile_gender not in allowed:
-            return False
+    handled_keys: set[str] = set()
+    for condition_key, mapping in (condition_profile_map or {}).items():
+        if condition_key not in parsed or not isinstance(mapping, dict):
+            continue
+        condition_type = str(mapping.get("type", "")).strip()
+        if condition_type == "age_range":
+            if not _matches_age_range_condition(
+                _profile_value_for_condition(profile, condition_key, condition_profile_map, "birth_day"),
+                _as_of_value_for_condition(profile, condition_key, condition_profile_map),
+                parsed.get(condition_key),
+            ):
+                return False
+            handled_keys.add(condition_key)
+        elif condition_type == "enum":
+            if not _matches_enum_condition(
+                _profile_value_for_condition(profile, condition_key, condition_profile_map, condition_key),
+                parsed.get(condition_key),
+            ):
+                return False
+            handled_keys.add(condition_key)
 
-    profile_informant = str(profile.get("informant", "")).strip().lower()
-    informants = parsed.get("informant")
-    if isinstance(informants, list) and informants:
-        allowed_informants = {str(x).strip().lower() for x in informants if str(x).strip()}
-        if not profile_informant or profile_informant not in allowed_informants:
-            return False
+    if "gender" not in handled_keys:
+        profile_gender = str(profile.get("gender", "")).strip().lower()
+        genders = parsed.get("gender")
+        if isinstance(genders, list) and genders:
+            allowed = {str(x).strip().lower() for x in genders if str(x).strip()}
+            if not profile_gender or profile_gender not in allowed:
+                return False
 
-    birth_day = _safe_parse_date(profile.get("birth_day"))
+    if "informant" not in handled_keys:
+        profile_informant = str(profile.get("informant", "")).strip().lower()
+        informants = parsed.get("informant")
+        if isinstance(informants, list) and informants:
+            allowed_informants = {str(x).strip().lower() for x in informants if str(x).strip()}
+            if not profile_informant or profile_informant not in allowed_informants:
+                return False
+
     age_range = parsed.get("age_range")
-    if isinstance(age_range, dict):
-        if birth_day is None:
-            return False
-        as_of = _safe_parse_date(profile.get("exam_date")) or date.today()
-        age_now = _age_detail(birth_day, as_of)
-        start = _to_age_tuple(age_range.get("start_inclusive"), (0, 0, 0))
-        end = _to_age_tuple(age_range.get("end_exclusive"), (999, 0, 0))
-        if age_now < start:
-            return False
-        if age_now >= end:
+    if "age_range" not in handled_keys and isinstance(age_range, dict):
+        if not _matches_age_range_condition(profile.get("birth_day"), profile.get("exam_date"), age_range):
             return False
 
     school_raw = (
@@ -273,28 +382,40 @@ def _profile_matches_sub_test(profile: dict[str, Any], sub_test_json: str) -> bo
         or parsed.get("grade")
         or parsed.get("school_age_range")
     )
-    profile_school_age = str(profile.get("school_age", "")).strip()
-    if isinstance(school_raw, list) and school_raw:
-        allowed_school = {str(x).strip() for x in school_raw if str(x).strip()}
-        if not profile_school_age or profile_school_age not in allowed_school:
-            return False
-    elif isinstance(school_raw, str) and school_raw.strip():
-        if not profile_school_age or profile_school_age != school_raw.strip():
-            return False
-    elif isinstance(school_raw, dict) and school_raw:
-        if not profile_school_age:
-            return False
+    school_keys = {"school_ages", "school_age", "school_grades", "school_grade", "grades", "grade", "school_age_range"}
+    if not handled_keys.intersection(school_keys):
+        profile_school_age = str(profile.get("school_age", "")).strip()
+        if isinstance(school_raw, list) and school_raw:
+            allowed_school = {str(x).strip() for x in school_raw if str(x).strip()}
+            if not profile_school_age or profile_school_age not in allowed_school:
+                return False
+        elif isinstance(school_raw, str) and school_raw.strip():
+            if not profile_school_age or profile_school_age != school_raw.strip():
+                return False
+        elif isinstance(school_raw, dict) and school_raw:
+            if not profile_school_age:
+                return False
 
     return True
 
-def _select_sub_test_variant_for_profile(variants: list[dict], profile: dict[str, Any], *, test_id: str = "") -> dict:
+def _select_sub_test_variant_for_profile(
+    variants: list[dict],
+    profile: dict[str, Any],
+    *,
+    test_id: str = "",
+    condition_profile_map: dict[str, dict] | None = None,
+) -> dict:
     prefix = f"({test_id}) " if test_id else ""
     if not variants:
         raise HTTPException(status_code=400, detail=f"{prefix}실시 가능한 검사 구간이 없습니다.")
 
     variant_by_json = {item["sub_test_json"]: item for item in variants if item.get("sub_test_json")}
     variant_jsons = list(variant_by_json.keys())
-    matches = [sub_test_json for sub_test_json in variant_jsons if _profile_matches_sub_test(profile, sub_test_json)]
+    matches = [
+        sub_test_json
+        for sub_test_json in variant_jsons
+        if _profile_matches_sub_test(profile, sub_test_json, condition_profile_map)
+    ]
     if not matches:
         raise HTTPException(status_code=400, detail=f"{prefix}입력한 인적정보와 일치하는 검사 구간이 없습니다.")
 
@@ -364,14 +485,23 @@ def build_custom_assessment_profile_payload(custom_test_row: AdminCustomTest) ->
         raise HTTPException(status_code=404, detail="검사 구성 정보를 찾을 수 없습니다.")
     return _build_custom_assessment_profile_meta(custom_test_row, test_configs)
 
-def _resolve_active_variants(test_configs: list[dict], profile: dict[str, Any]) -> list[dict]:
+def _resolve_active_variants(
+    test_configs: list[dict],
+    profile: dict[str, Any],
+    condition_profile_maps: dict[str, dict[str, dict]] | None = None,
+) -> list[dict]:
     resolved: list[dict] = []
     for config in test_configs:
         test_id = str(config.get("test_id", "")).strip()
         variants = config.get("sub_test_variants", [])
         if not test_id or not variants:
             continue
-        active_variant = _select_sub_test_variant_for_profile(variants, profile or {}, test_id=test_id)
+        active_variant = _select_sub_test_variant_for_profile(
+            variants,
+            profile or {},
+            test_id=test_id,
+            condition_profile_map=(condition_profile_maps or {}).get(test_id),
+        )
         selected_sub_test_json = str(active_variant.get("sub_test_json", "")).strip()
         if not selected_sub_test_json:
             continue
@@ -802,13 +932,18 @@ def _append_items_as_render_parts(
     flush_segment(segment_start, len(items), segment_render_type)
 
 # 입력 인적사항에 맞는 검사 구간 찾아서, 해당 검사 구간에 맞는 문항 payload 반환
-def build_custom_assessment_question_payload(custom_test_row: AdminCustomTest, profile: dict[str, Any]) -> dict:
+def build_custom_assessment_question_payload(
+    custom_test_row: AdminCustomTest,
+    profile: dict[str, Any],
+    db: Session | None = None,
+) -> dict:
     test_configs = load_custom_test_configs(custom_test_row)
     if not test_configs:
         raise HTTPException(status_code=404, detail="검사 구성 정보를 찾을 수 없습니다.")
 
     base_payload = _build_custom_assessment_profile_meta(custom_test_row, test_configs)
-    resolved_variants = _resolve_active_variants(test_configs, profile or {})
+    condition_profile_maps = _load_condition_profile_maps(db, base_payload.get("test_ids") or []) if db is not None else {}
+    resolved_variants = _resolve_active_variants(test_configs, profile or {}, condition_profile_maps)
     session_configs = load_custom_test_session_configs(custom_test_row)
     session_by_test_id: dict[str, dict] = {}
     for session in session_configs:
@@ -1074,6 +1209,7 @@ def validate_custom_test_profile_by_access_link(
     if custom_test is None:
         raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
 
+    assessment_payload = build_custom_assessment_question_payload(custom_test, profile or {}, db=db)
     client_intake_mode = normalize_client_intake_mode(getattr(custom_test, "client_intake_mode", ""))
     client, error_message, error_code, candidates = find_assigned_client_for_profile_with_code(
         db,
@@ -1154,8 +1290,6 @@ def validate_custom_test_profile_by_access_link(
                 },
             )
 
-    # client 확정 → 문항 payload 빌드
-    assessment_payload = build_custom_assessment_question_payload(custom_test, profile or {})
     draft = get_assessment_draft(
         db,
         admin_user_id=link.admin_user_id,
@@ -1277,7 +1411,7 @@ def save_assessment_draft_by_access_link(
         _raise_assessment_error(403, "이 검사에 배정된 내담자가 아닙니다.")
 
     clean_profile = _clean_profile(profile)
-    valid_item_ids = _valid_item_ids_for_profile(custom_test, clean_profile)
+    valid_item_ids = _valid_item_ids_for_profile(db, custom_test, clean_profile)
     if not valid_item_ids:
         raise HTTPException(status_code=400, detail="문항 데이터가 없습니다.")
     cleaned_answers = _clean_answers_for_items(answers, valid_item_ids)
@@ -1413,7 +1547,7 @@ def submit_custom_test_by_access_link(
 
     clean_profile = _clean_profile(profile)
 
-    assessment_payload = build_custom_assessment_question_payload(custom_test, clean_profile)
+    assessment_payload = build_custom_assessment_question_payload(custom_test, clean_profile, db=db)
     valid_item_ids = {
         str(item.get("id", "")).strip()
         for item in assessment_payload["items"]

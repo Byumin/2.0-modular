@@ -502,6 +502,35 @@ _EDUCATION_OPTIONS = [
     "전문대학 졸업", "4년제 대학 또는 그 이상 졸업", "해당 없음",
 ]
 
+_CONDITION_PROFILE_MAP_SEED: dict[str, dict] = {
+    "K-PSI-4-SF": {
+        "age_range": {"type": "age_range", "profile_field": "parent_birth_day", "as_of_field": "exam_date"},
+        "gender": {"type": "enum", "profile_field": "parent_gender"},
+    },
+    "PAT-2": {
+        "age_range": {"type": "age_range", "profile_field": "child_birth_day", "as_of_field": "exam_date"},
+        "gender": {"type": "enum", "profile_field": "child_gender"},
+        "informant": {"type": "enum", "profile_field": "informant"},
+    },
+    "PCT": {
+        "age_range": {"type": "age_range", "profile_field": "child_birth_day", "as_of_field": "exam_date"},
+        "gender": {"type": "enum", "profile_field": "child_gender"},
+    },
+    "PSES": {
+        "age_range": {"type": "age_range", "profile_field": "parent_birth_day", "as_of_field": "exam_date"},
+        "gender": {"type": "enum", "profile_field": "parent_gender"},
+    },
+}
+
+
+def _profile_seed_payload(test_id: str, config: dict) -> dict:
+    payload = dict(config)
+    condition_profile_map = _CONDITION_PROFILE_MAP_SEED.get(test_id)
+    if condition_profile_map:
+        payload["condition_profile_map"] = condition_profile_map
+    return payload
+
+
 _ESSENTIAL_SEED: dict[str, dict] = {
     "PAT-2": {
         "sections": [
@@ -614,7 +643,7 @@ def ensure_test_profile_config_table() -> None:
             seed_rows = [
                 (
                     tid,
-                    json.dumps(cfg, ensure_ascii=False),
+                    json.dumps(_profile_seed_payload(tid, cfg), ensure_ascii=False),
                     json.dumps(_optional_seed.get(tid, {}), ensure_ascii=False),
                 )
                 for tid, cfg in _ESSENTIAL_SEED.items()
@@ -637,6 +666,55 @@ def ensure_test_profile_config_table() -> None:
                     }
                     for test_id, essential_profile_json, optional_profile_json in seed_rows
                 ],
+            )
+
+
+def ensure_test_profile_condition_profile_maps() -> None:
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "test_profile_config" not in tables:
+        return
+    columns = {col["name"] for col in inspector.get_columns("test_profile_config")}
+    if "essential_profile_json" not in columns:
+        return
+
+    test_ids = list(_CONDITION_PROFILE_MAP_SEED.keys())
+    placeholders = ",".join(f":id{i}" for i in range(len(test_ids)))
+    params = {f"id{i}": test_id for i, test_id in enumerate(test_ids)}
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                f"""
+                SELECT test_id, essential_profile_json
+                FROM test_profile_config
+                WHERE test_id IN ({placeholders})
+                """
+            ),
+            params,
+        ).fetchall()
+        for test_id, raw_config in rows:
+            try:
+                config = json.loads(raw_config or "{}")
+            except json.JSONDecodeError:
+                config = {}
+            if not isinstance(config, dict):
+                config = {}
+            desired = _CONDITION_PROFILE_MAP_SEED.get(str(test_id), {})
+            if not desired or config.get("condition_profile_map") == desired:
+                continue
+            config["condition_profile_map"] = desired
+            conn.execute(
+                text(
+                    """
+                    UPDATE test_profile_config
+                    SET essential_profile_json = :essential_profile_json
+                    WHERE test_id = :test_id
+                    """
+                ),
+                {
+                    "test_id": test_id,
+                    "essential_profile_json": json.dumps(config, ensure_ascii=False),
+                },
             )
 
 

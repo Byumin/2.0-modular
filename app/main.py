@@ -25,6 +25,7 @@ from app.db.schema_migrations import (
     ensure_submission_client_id_column,
     ensure_submission_scoring_result_table,
     ensure_test_profile_config_table,
+    ensure_test_profile_condition_profile_maps,
     ensure_test_profile_config_restructure,
 )
 from app.db.session import Base, engine
@@ -116,5 +117,6 @@ def on_startup() -> None:
     rotate_shared_submission_access_tokens()
     ensure_test_profile_config_table()
     ensure_test_profile_config_restructure()
+    ensure_test_profile_condition_profile_maps()
     ensure_admin_client_relation_table()
     seed_default_admin()

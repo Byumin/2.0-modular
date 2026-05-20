@@ -17,11 +17,12 @@ const TIPS = [
   "모든 문항에 응답해야 결과를 확인할 수 있습니다.",
 ]
 
-function responseScaleLabel(parts: AssessmentPart[]) {
-  const options = parts.find((part) => part.response_options?.length)?.response_options ?? []
-  const scoredOptions = options.filter((option) => option.label !== "무응답")
-  if (!scoredOptions.length) return "응답 척도"
-  return `${scoredOptions.length}점 척도`
+function formatEstimatedTime(totalQuestions: number) {
+  if (totalQuestions <= 0) return "약 0분"
+  const minMinutes = Math.ceil((totalQuestions * 20) / 60)
+  const maxMinutes = Math.ceil((totalQuestions * 30) / 60)
+  if (minMinutes === maxMinutes) return `약 ${minMinutes}분`
+  return `약 ${minMinutes}-${maxMinutes}분`
 }
 
 export function IntroStep({ payload, parts, session, onStart, sessionClass = "session-teal" }: Props) {
@@ -30,8 +31,7 @@ export function IntroStep({ payload, parts, session, onStart, sessionClass = "se
   const sessionDescription = session?.description?.trim()
   const guideItems = session?.guide_items?.length ? session.guide_items : TIPS
   const totalQuestions = parts.reduce((s, p) => s + (p.item_count ?? p.items?.length ?? 0), 0)
-  const estimatedMinutes = payload.estimated_time_minutes ? `약 ${payload.estimated_time_minutes}분` : "약 10-15분"
-  const scaleLabel = responseScaleLabel(parts)
+  const estimatedMinutes = formatEstimatedTime(totalQuestions)
 
   return (
     <div
@@ -84,7 +84,7 @@ export function IntroStep({ payload, parts, session, onStart, sessionClass = "se
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
               </svg>
-              총 {totalQuestions}문항 · {scaleLabel}
+              총 {totalQuestions}문항
             </span>
             <span className="h-3 w-px bg-white/15" />
             <span className="flex items-center gap-1.5">
