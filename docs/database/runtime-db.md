@@ -1,18 +1,29 @@
 # Runtime DB
 
-## Runtime Database
-현재 코드 기준 기본 런타임 DB는 RDS PostgreSQL이다.
+이 문서는 DB 운영 기준의 source of truth로 사용한다.
 
-근거:
-- `app/db/session.py`
-- `.env`의 `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
-- `DATABASE_URL`이 명시되면 그 값을 우선 사용한다.
+## 환경별 DB 분기
+
+앱은 `APP_ENV` 환경변수에 따라 다른 `.env` 파일을 로드하고 그에 맞는 DB에 접속한다.
+
+| `APP_ENV` | 환경 파일 | 실행 위치 | DB |
+|-----------|----------|-----------|----|
+| `local.dev` (기본값) | `.env.local.dev` | 로컬 Mac | SQLite (`modular.db`) |
+| `local.prod` | `.env.local.prod` | 로컬 Mac | RDS (SSH 터널, 포트 15432) |
+| `ec2.prod` | `.env.ec2.prod` | EC2 서버 | RDS PostgreSQL (직접 접속) |
+
+- 세 파일 모두 git 추적 제외 (`.gitignore`의 `.env.*` 패턴)
+- `APP_ENV` 미지정 시 `local.dev`로 동작 (`modular.db` 사용)
+- 분기 코드: `app/db/session.py`
+
+## Runtime Database
+운영 기준(`ec2.prod`) DB는 RDS PostgreSQL이다.
+
+`DATABASE_URL`이 env 파일에 명시되면 그 값을 우선 사용하고, 없으면 `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD`로 URL을 조합한다.
 
 ## Single DB Rule
-앞으로 운영 기준 DB 연결은 RDS PostgreSQL 하나로 통일한다.
-루트 `modular.db`는 RDS 전환 전 운영 스냅샷/마이그레이션 원본으로만 취급하고, 앱 런타임 기준으로 사용하지 않는다.
-
-이 문서는 DB 운영 기준의 source of truth로 사용한다.
+운영(`ec2.prod`) 기준 DB 연결은 RDS PostgreSQL 하나로 통일한다.
+로컬 `modular.db`는 개발 전용이며, RDS 스냅샷을 복사해 초기 데이터를 구성한다.
 
 ## Runtime Code Path
 실행 시 DB 관련 기준 코드는 아래 순서로 본다.

@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 import argparse
-import sqlite3
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent.parent
-SCHEMA_PATH = ROOT / "docs" / "modular_schema.sql"
 DEFAULT_DB_PATH = ROOT / "modular.db"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Create a SQLite DB from docs/modular_schema.sql.",
+        description="Create a SQLite DB using SQLAlchemy models (local.dev용).",
     )
     parser.add_argument(
         "--output",
@@ -32,7 +29,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     db_path = args.output.resolve()
-    schema_sql = SCHEMA_PATH.read_text(encoding="utf-8")
+
     if db_path.exists():
         if not args.force:
             print(
@@ -44,13 +41,17 @@ def main() -> None:
         db_path.unlink()
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
-    try:
-        conn.execute("PRAGMA foreign_keys = ON;")
-        conn.executescript(schema_sql)
-        conn.commit()
-    finally:
-        conn.close()
+
+    import os
+    os.environ.setdefault("APP_ENV", "local.dev")
+    # DATABASE_URL을 직접 지정해 session.py의 env 파일 로드보다 우선 적용
+    os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
+
+    from sqlalchemy import create_engine
+    from app.db.models import Base  # noqa: F401 — 모든 모델 임포트
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    Base.metadata.create_all(engine)
 
     print(db_path)
 

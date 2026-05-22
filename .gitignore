@@ -1,6 +1,7 @@
 .venv/
 .venv-claude/
 .env
+.env.*
 playwright-report/
 .playwright-browsers/
 test-results/

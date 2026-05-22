@@ -164,6 +164,28 @@
 
 ---
 
+### TD-009 · 🟠 · `open`
+**어드민 세션 메모리 저장 — 프로세스 재시작/멀티 워커 시 세션 소멸**
+
+- **파일**: `app/services/admin/auth.py:14`
+- **코드**: `ADMIN_SESSIONS: dict[str, int] = {}`
+- **문제**: 서버 재시작 시 모든 로그인 세션 소멸 → 강제 로그아웃. gunicorn 멀티 워커 또는 다중 서버 환경에서 세션 공유 불가.
+- **권장 수정**: Redis 기반 세션 스토어, 또는 DB 테이블(`admin_session`)에 token → admin_id 매핑 저장
+- **발견일**: 2026-04-11
+
+---
+
+### TD-010 · 🟠 · `open`
+**SHA256 패스워드 해싱 — Salt 없음**
+
+- **파일**: `app/services/admin/auth.py:17-18`
+- **코드**: `hashlib.sha256(raw.encode("utf-8")).hexdigest()`
+- **문제**: Salt 없는 단순 SHA256 → 레인보우 테이블·사전 공격 취약.
+- **권장 수정**: `passlib[bcrypt]` 또는 `argon2-cffi` 도입. 로그인 성공 시 구 해시 감지 → 새 해시로 교체.
+- **발견일**: 2026-04-11
+
+---
+
 ## 변경 이력
 
 | 날짜 | 항목 | 내용 |
@@ -176,3 +198,4 @@
 | 2026-05-06 | TD-005-B, TD-005-C | wontfix — 설계 철학에 따라 채택 안 함 |
 | 2026-05-06 | TD-007 | resolved — _normalize_json_for_match 헬퍼로 양쪽 정규화 후 비교 |
 | 2026-05-06 | TD-008 | resolved — test_id 키워드 파라미터 추가, 에러 메시지에 prefix 포함 |
+| 2026-05-21 | TD-009, TD-010 | docs/debug/security-debt.md에서 이관 |

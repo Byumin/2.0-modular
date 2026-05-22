@@ -11,12 +11,13 @@
 ## 먼저 고를 것
 서버를 띄우기 전에 목적부터 고른다.
 
-| 목적 | 실행 모드 | 접속 주소 | 소스 변경 반영 | 사용할 때 |
+| 목적 | 실행 모드 | 접속 주소 | DB | 사용할 때 |
 | --- | --- | --- | --- | --- |
-| 화면을 개발하면서 바로 확인 | 로컬 개발 모드 | `http://localhost:5120` | React 변경 즉시 반영 | 관리자/수검자 UI 작업 |
-| API만 확인하거나 빌드된 화면 확인 | 로컬 통합 확인 모드 | `http://127.0.0.1:8120` | React는 빌드 후 반영 | API, 빌드 산출물, 라우팅 확인 |
-| 프런트 산출물만 만들기 | 프런트 빌드 | 접속 주소 없음 | `frontend/dist` 생성 | 통합 확인 또는 운영 배포 전 |
-| 실제 사용자가 접속 | 운영 도메인 모드 | 실제 운영 도메인 | 빌드 후 배포/재시작 필요 | 운영 서비스 |
+| 화면을 개발하면서 바로 확인 | 로컬 개발 모드 | `http://localhost:5120` | SQLite (`local.dev`) | 관리자/수검자 UI 작업 |
+| API만 확인하거나 빌드된 화면 확인 | 로컬 통합 확인 모드 | `http://127.0.0.1:8120` | SQLite (`local.dev`) | API, 빌드 산출물, 라우팅 확인 |
+| 로컬에서 운영 DB 테스트 | 로컬 RDS 연결 모드 | `http://127.0.0.1:8120` | RDS (`local.prod`, SSH 터널) | 운영 데이터 확인, 배포 전 검증 |
+| 프런트 산출물만 만들기 | 프런트 빌드 | 접속 주소 없음 | — | 통합 확인 또는 운영 배포 전 |
+| 실제 사용자가 접속 | 운영 도메인 모드 | 실제 운영 도메인 | RDS (`ec2.prod`) | 운영 서비스 |
 
 ## 고정 포트
 이 저장소의 로컬 포트는 고정한다.
@@ -29,6 +30,10 @@
 
 ## 로컬 개발 모드
 목적은 React 화면을 수정하면서 바로 확인하는 것이다.
+
+- **APP_ENV**: `local.dev` (기본값, 자동 적용)
+- **env 파일**: `.env.local.dev`
+- **DB**: 로컬 SQLite (`modular.db`)
 
 ```bash
 npm run dev
@@ -52,6 +57,10 @@ npm run dev:frontend
 ## 로컬 통합 확인 모드
 목적은 FastAPI가 빌드된 React SPA까지 직접 서빙하는 상태를 확인하는 것이다.
 
+- **APP_ENV**: `local.dev` (기본값, 자동 적용)
+- **env 파일**: `.env.local.dev`
+- **DB**: 로컬 SQLite (`modular.db`)
+
 ```bash
 npm run dev:api
 ```
@@ -68,6 +77,22 @@ npm run dev:api
 
 주의할 점은 React 소스가 바로 반영되지 않는다는 것이다. 이 모드는 현재 소스 파일이 아니라 마지막으로 생성된 `frontend/dist`를 본다. React 변경을 이 주소에서 확인하려면 먼저 프런트를 다시 빌드한다.
 
+## 로컬 RDS 연결 모드
+목적은 로컬에서 운영 RDS에 직접 연결해 데이터를 확인하거나 배포 전 검증하는 것이다.
+
+- **APP_ENV**: `local.prod`
+- **env 파일**: `.env.local.prod`
+- **DB**: RDS PostgreSQL (SSH 터널 경유)
+- **사전 조건**: SSH 터널이 열려 있어야 한다
+
+```bash
+# 1. SSH 터널 열기 (터널이 이미 열려 있으면 생략)
+ssh -i <키페어.pem> -L 15432:<RDS_ENDPOINT>:5432 ubuntu@<EC2_IP> -N -f
+
+# 2. 서버 실행
+npm run prod:api
+```
+
 ## 프런트 빌드
 목적은 FastAPI 통합 확인이나 운영 배포에 사용할 React 산출물을 만드는 것이다.
 
@@ -81,6 +106,10 @@ npm run build:frontend
 
 ## 운영 도메인 모드
 목적은 실제 사용자가 구매/연결 완료된 도메인으로 서비스에 접속하게 하는 것이다.
+
+- **APP_ENV**: `ec2.prod`
+- **env 파일**: `.env.ec2.prod` (EC2 서버에 직접 생성)
+- **DB**: RDS PostgreSQL (VPC 내부 직접 접속, 터널 불필요)
 
 - 운영 도메인: `https://<production-domain>`
 - 기록 상태: 실제 도메인 값은 이 문서에 아직 확인 반영되지 않았다.
@@ -101,8 +130,9 @@ npm run build:frontend
    - FastAPI 내부 포트 `8120`은 reverse proxy가 접근하면 되므로 외부에 직접 열 필요는 없다.
 
 3. 운영 서버에 환경 변수를 준비한다.
-   - `.env`에 RDS 접속 정보와 필요한 런타임 값을 둔다.
-   - `.env` 파일 자체와 DB 비밀번호는 GitHub에 올리지 않는다.
+   - EC2 서버에 `.env.ec2.prod` 파일을 직접 생성하고 RDS 접속 정보를 입력한다.
+   - 앱 실행 시 `APP_ENV=ec2.prod`를 지정한다.
+   - `.env.*` 파일 자체와 DB 비밀번호는 GitHub에 올리지 않는다.
 
 4. 프런트 산출물을 빌드한다.
 
@@ -118,7 +148,7 @@ npm run build:frontend
    - 예시는 다음과 같다.
 
    ```bash
-   .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8120
+   APP_ENV=ec2.prod .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8120
    ```
 
    실제 운영에서는 `systemd`, process manager, 컨테이너, 배포 스크립트 중 하나로 위 프로세스가 재부팅 후에도 살아나게 관리한다.

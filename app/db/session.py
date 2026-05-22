@@ -7,7 +7,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-ENV_FILE = BASE_DIR / ".env"
+
+_APP_ENV = os.environ.get("APP_ENV", "local.dev")
+_ENV_FILE_MAP = {
+    "local.dev":  BASE_DIR / ".env.local.dev",
+    "local.prod": BASE_DIR / ".env.local.prod",
+    "ec2.prod":   BASE_DIR / ".env.ec2.prod",
+}
+ENV_FILE = _ENV_FILE_MAP.get(_APP_ENV, BASE_DIR / ".env.local.dev")
 
 
 def _load_env_file() -> None:

@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Cookie, Depends, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -7,6 +9,9 @@ from app.schemas.auth import AdminLoginIn
 from app.services.admin.auth import admin_login, admin_logout, get_current_admin
 
 router = APIRouter()
+
+# HTTPS가 적용된 환경(local.prod, ec2.prod)에서만 secure 쿠키를 전송한다.
+_SECURE_COOKIE = os.environ.get("APP_ENV", "local.dev") != "local.dev"
 
 
 @router.post("/api/admin/login")
@@ -18,7 +23,7 @@ def login(payload: AdminLoginIn, db: Session = Depends(get_db)) -> JSONResponse:
         value=result["token"],
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=_SECURE_COOKIE,
         max_age=60 * 60 * 8,
     )
     return response

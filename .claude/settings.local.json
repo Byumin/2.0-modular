@@ -13,7 +13,8 @@
       "Bash(/mnt/c/Users/user/workspace/2.0-modular/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8120)",
       "Read(//tmp/**)",
       "Bash(npx playwright *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(.venv/bin/python *)"
     ]
   }
 }

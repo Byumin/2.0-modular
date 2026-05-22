@@ -675,6 +675,15 @@ export function QuestionStep({
 
           {saveStatusText && <p className="ml-auto text-[11px] text-[#6d7d79] sm:hidden">{saveStatusText}</p>}
 
+          {/* Mobile: mode switch icon button */}
+          <button
+            type="button"
+            onClick={() => handleViewModeChange("step")}
+            className="ml-auto shrink-0 rounded-lg border border-[#e2e8f0] px-2.5 py-1.5 text-[11px] font-medium text-[#5f6f73] transition-colors hover:bg-[#f5f7fa] sm:hidden"
+          >
+            집중형
+          </button>
+
           {/* Right: stepper */}
           <nav className="ml-auto hidden items-center gap-1 sm:flex" aria-label="검사 단계">
             {(["인적사항", "검사 실시", "제출 완료"] as const).map((label, i) => {
@@ -734,11 +743,24 @@ export function QuestionStep({
                   페이지 {page + 1} / {totalPages}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-[#8a9a96]">
+              {/* Desktop hint */}
+              <div className="hidden items-center gap-1.5 text-xs text-[#8a9a96] lg:flex">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5">
                   <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
                 </svg>
                 가장 가까운 응답을 선택하세요
+              </div>
+              {/* Mobile prev/next page buttons */}
+              <div className="flex items-center gap-1 lg:hidden">
+                <button type="button" onClick={handlePrev} disabled={isFirstPage}
+                  className="flex size-8 items-center justify-center rounded-lg border border-[#e8ebee] bg-white text-[#8a9a96] transition-colors hover:bg-[#f0f2f5] disabled:opacity-30">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4"><polyline points="15 18 9 12 15 6" /></svg>
+                </button>
+                <span className="min-w-[3rem] text-center text-xs text-[#8a9a96]">{page + 1} / {totalPages}</span>
+                <button type="button" onClick={handleNext} disabled={isLastPage && isLastPart}
+                  className="flex size-8 items-center justify-center rounded-lg border border-[#e8ebee] bg-white text-[#8a9a96] transition-colors hover:bg-[#f0f2f5] disabled:opacity-30">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4"><polyline points="9 18 15 12 9 6" /></svg>
+                </button>
               </div>
             </div>
 
@@ -813,6 +835,20 @@ export function QuestionStep({
                 {error || "모든 문항에 응답해주세요."}
               </div>
             )}
+
+            {/* Mobile submit button — visible only below lg breakpoint */}
+            <div className="mt-4 lg:hidden">
+              <button type="button" onClick={handleSubmitClick}
+                disabled={submitting || !allAnswered()}
+                className="h-12 w-full rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-30"
+                style={{ backgroundColor: "var(--sa)" }}
+              >
+                {submitting ? submittingLabel : submitLabel}
+              </button>
+              {!allAnswered() && (
+                <p className="mt-1.5 text-center text-xs text-[#b0bab7]">모든 문항 응답 후 제출</p>
+              )}
+            </div>
           </div>
 
           {/* Compact sidebar */}

@@ -98,11 +98,36 @@ npm run build:frontend
 
 ---
 
-## 운영 DB
+## 환경 파일 구조
 
-- RDS PostgreSQL
-- `.env`의 `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` 기준으로 접속
-- 루트 `modular.db`는 RDS 전환 전 스냅샷/마이그레이션 원본이며 앱 런타임 DB가 아니다.
+앱 실행 시 `APP_ENV` 환경변수 값에 따라 로드할 `.env` 파일이 결정된다.
+
+| `APP_ENV` | 로드 파일 | 실행 위치 | DB |
+|-----------|----------|----------|----|
+| `local.dev` (기본값) | `.env.local.dev` | 로컬 Mac | SQLite (`modular.db`) |
+| `local.prod` | `.env.local.prod` | 로컬 Mac | RDS (SSH 터널 경유) |
+| `ec2.prod` | `.env.ec2.prod` | EC2 서버 | RDS (직접 접속) |
+
+- `APP_ENV`를 지정하지 않으면 `local.dev`로 동작한다.
+- 세 파일 모두 `.gitignore`에 의해 git 추적에서 제외된다.
+- 로컬에서 RDS 접속 시 SSH 터널이 필요하다 (포트 15432).
+
+### npm 스크립트와 APP_ENV 매핑
+
+| 명령 | APP_ENV | DB |
+|------|---------|----|
+| `npm run dev` | `local.dev` | SQLite |
+| `npm run dev:api` | `local.dev` | SQLite |
+| `npm run prod:api` | `local.prod` | RDS (SSH 터널) |
+| EC2: `APP_ENV=ec2.prod uvicorn ...` | `ec2.prod` | RDS (직접) |
+
+### SSH 터널 (local.prod 사용 시)
+
+```bash
+ssh -i <키페어.pem> -L 15432:<RDS_ENDPOINT>:5432 ubuntu@<EC2_IP> -N -f
+```
+
+터널이 열린 상태에서 `npm run prod:api`를 실행해야 RDS에 접속된다.
 
 ---
 
