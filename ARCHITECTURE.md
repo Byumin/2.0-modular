@@ -195,7 +195,7 @@ Claude 리뷰 JSON 결과는 `artifacts/`가 아니라 `claude/reviews/runs/`에
 
 ## Data and State
 - DB는 RDS PostgreSQL 기반으로 사용된다.
-- 운영 기준 DB 연결은 `APP_ENV=ec2.prod` 환경에서 `.env.ec2.prod`의 RDS 접속 정보로 통일한다. 환경별 분기는 `app/db/session.py` 참조.
+- 운영 기준 DB 연결은 `APP_ENV=ec2.prod` 환경에서 `env.ec2.prod`의 RDS 접속 정보로 통일한다. 환경별 분기는 `app/db/session.py` 참조.
 - ORM은 SQLAlchemy를 사용한다.
 - 요청/응답 검증은 Pydantic이 담당한다.
 - 관리자 인증 상태는 `admin_session` 쿠키로 전달된다.

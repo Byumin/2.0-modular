@@ -17,7 +17,10 @@ def _react_index() -> FileResponse:
             status_code=503,
             detail="React frontend build is missing. Run `npm run build` in frontend/ first.",
         )
-    return FileResponse(index_file)
+    return FileResponse(
+        index_file,
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 @router.get("/")

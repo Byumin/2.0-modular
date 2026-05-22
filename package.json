@@ -8,6 +8,7 @@
     "dev": "APP_ENV=local.dev concurrently \"npm run dev:api\" \"npm run dev:frontend\"",
     "dev:api": "APP_ENV=local.dev .venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8120",
     "prod:api": "APP_ENV=local.prod .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8120",
+    "ec2:api": "APP_ENV=ec2.prod .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8120",
     "dev:frontend": "npm --prefix frontend run dev",
     "build:frontend": "npm --prefix frontend run build",
     "test": "echo \"Error: no test specified\" && exit 1",

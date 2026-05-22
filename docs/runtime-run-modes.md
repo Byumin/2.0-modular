@@ -32,7 +32,7 @@
 목적은 React 화면을 수정하면서 바로 확인하는 것이다.
 
 - **APP_ENV**: `local.dev` (기본값, 자동 적용)
-- **env 파일**: `.env.local.dev`
+- **env 파일**: `env.local.dev`
 - **DB**: 로컬 SQLite (`modular.db`)
 
 ```bash
@@ -58,7 +58,7 @@ npm run dev:frontend
 목적은 FastAPI가 빌드된 React SPA까지 직접 서빙하는 상태를 확인하는 것이다.
 
 - **APP_ENV**: `local.dev` (기본값, 자동 적용)
-- **env 파일**: `.env.local.dev`
+- **env 파일**: `env.local.dev`
 - **DB**: 로컬 SQLite (`modular.db`)
 
 ```bash
@@ -81,7 +81,7 @@ npm run dev:api
 목적은 로컬에서 운영 RDS에 직접 연결해 데이터를 확인하거나 배포 전 검증하는 것이다.
 
 - **APP_ENV**: `local.prod`
-- **env 파일**: `.env.local.prod`
+- **env 파일**: `env.local.prod`
 - **DB**: RDS PostgreSQL (SSH 터널 경유)
 - **사전 조건**: SSH 터널이 열려 있어야 한다
 
@@ -108,7 +108,7 @@ npm run build:frontend
 목적은 실제 사용자가 구매/연결 완료된 도메인으로 서비스에 접속하게 하는 것이다.
 
 - **APP_ENV**: `ec2.prod`
-- **env 파일**: `.env.ec2.prod` (EC2 서버에 직접 생성)
+- **env 파일**: `env.ec2.prod` (EC2 서버에 직접 생성)
 - **DB**: RDS PostgreSQL (VPC 내부 직접 접속, 터널 불필요)
 
 - 운영 도메인: `https://<production-domain>`
@@ -130,9 +130,9 @@ npm run build:frontend
    - FastAPI 내부 포트 `8120`은 reverse proxy가 접근하면 되므로 외부에 직접 열 필요는 없다.
 
 3. 운영 서버에 환경 변수를 준비한다.
-   - EC2 서버에 `.env.ec2.prod` 파일을 직접 생성하고 RDS 접속 정보를 입력한다.
+   - EC2 서버에 `env.ec2.prod` 파일을 직접 생성하고 RDS 접속 정보를 입력한다.
    - 앱 실행 시 `APP_ENV=ec2.prod`를 지정한다.
-   - `.env.*` 파일 자체와 DB 비밀번호는 GitHub에 올리지 않는다.
+   - `env.*` 파일 자체와 DB 비밀번호는 GitHub에 올리지 않는다.
 
 4. 프런트 산출물을 빌드한다.
 
@@ -145,7 +145,14 @@ npm run build:frontend
 5. FastAPI 앱을 운영 서버에서 실행한다.
    - 운영 엔트리포인트는 `app.main:app`이다.
    - 개발 편의용 `--reload`는 운영 장기 실행 프로세스에는 쓰지 않는다.
+   - EC2에서 `APP_ENV` 없이 직접 `uvicorn`을 실행하면 기본값 `local.dev`가 적용되어 `env.local.dev`의 SQLite 설정을 보게 된다. 운영 RDS로 띄울 때는 반드시 `APP_ENV=ec2.prod` 또는 `npm run ec2:api`를 사용한다.
    - 예시는 다음과 같다.
+
+   ```bash
+   npm run ec2:api
+   ```
+
+   내부적으로 실행되는 명령은 다음과 같다.
 
    ```bash
    APP_ENV=ec2.prod .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8120
@@ -157,6 +164,13 @@ npm run build:frontend
    - `https://<production-domain>` 요청을 `http://127.0.0.1:8120`으로 전달한다.
    - `/`, `/admin/*`, `/assessment/custom/{token}`, `/report/*`, `/api/*`, `/static/*`, `/artifacts/*`가 FastAPI로 전달되어야 한다.
    - TLS 인증서를 적용해 `https`로 접속되게 한다.
+   - Caddy 설정이나 unit 파일 변경 후에는 아래처럼 systemd 상태를 갱신하고 재시작한다.
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl restart caddy
+   systemctl is-active caddy
+   ```
 
 7. 운영 도메인으로 확인한다.
    - 관리자 화면: `https://<production-domain>/admin`
@@ -179,7 +193,7 @@ npm run build:frontend
 
 다만 아래 값은 GitHub 문서에 쓰지 않는다.
 
-- 실제 `.env` 값
+- 실제 `env.*` 값
 - RDS 호스트명
 - DB 사용자명/비밀번호
 - 운영 서버 IP

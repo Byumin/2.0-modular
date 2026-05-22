@@ -100,16 +100,17 @@ npm run build:frontend
 
 ## 환경 파일 구조
 
-앱 실행 시 `APP_ENV` 환경변수 값에 따라 로드할 `.env` 파일이 결정된다.
+앱 실행 시 `APP_ENV` 환경변수 값에 따라 로드할 `env.*` 파일이 결정된다.
 
 | `APP_ENV` | 로드 파일 | 실행 위치 | DB |
 |-----------|----------|----------|----|
-| `local.dev` (기본값) | `.env.local.dev` | 로컬 Mac | SQLite (`modular.db`) |
-| `local.prod` | `.env.local.prod` | 로컬 Mac | RDS (SSH 터널 경유) |
-| `ec2.prod` | `.env.ec2.prod` | EC2 서버 | RDS (직접 접속) |
+| `local.dev` (기본값) | `env.local.dev` | 로컬 Mac | SQLite (`modular.db`) |
+| `local.prod` | `env.local.prod` | 로컬 Mac | RDS (SSH 터널 경유) |
+| `ec2.prod` | `env.ec2.prod` | EC2 서버 | RDS (직접 접속) |
 
 - `APP_ENV`를 지정하지 않으면 `local.dev`로 동작한다.
 - 세 파일 모두 `.gitignore`에 의해 git 추적에서 제외된다.
+- EC2에서 `APP_ENV` 없이 직접 `uvicorn`을 실행하면 기본값 `local.dev`로 동작하므로 RDS가 아니라 로컬 SQLite를 보게 된다.
 - 로컬에서 RDS 접속 시 SSH 터널이 필요하다 (포트 15432).
 
 ### npm 스크립트와 APP_ENV 매핑
@@ -119,7 +120,13 @@ npm run build:frontend
 | `npm run dev` | `local.dev` | SQLite |
 | `npm run dev:api` | `local.dev` | SQLite |
 | `npm run prod:api` | `local.prod` | RDS (SSH 터널) |
-| EC2: `APP_ENV=ec2.prod uvicorn ...` | `ec2.prod` | RDS (직접) |
+| `npm run ec2:api` | `ec2.prod` | RDS (직접) |
+
+EC2에서 FastAPI만 직접 실행해야 한다면 아래처럼 `APP_ENV=ec2.prod`를 반드시 붙인다.
+
+```bash
+APP_ENV=ec2.prod .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8120
+```
 
 ### SSH 터널 (local.prod 사용 시)
 

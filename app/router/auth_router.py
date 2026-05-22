@@ -33,7 +33,7 @@ def login(payload: AdminLoginIn, db: Session = Depends(get_db)) -> JSONResponse:
 def logout(admin_session: str | None = Cookie(default=None)) -> Response:
     result = admin_logout(admin_session)
     response = JSONResponse(result)
-    response.delete_cookie("admin_session")
+    response.delete_cookie("admin_session", secure=_SECURE_COOKIE, samesite="lax")
     return response
 
 
