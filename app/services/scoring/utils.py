@@ -198,68 +198,70 @@ def build_choice_score_result(test_id: str, context: ScoringContext) -> ScoringR
                 continue
 
             indexed_items = raw_scale.get("items")
-            if isinstance(indexed_items, dict):
+            indexed_facets = raw_scale.get("facets")
+            has_items = isinstance(indexed_items, dict)
+            has_facets = isinstance(indexed_facets, dict)
+            if not has_items and not has_facets:
+                continue
+
+            facet_results: dict[str, Any] = {}
+            facet_total: int | float = 0
+            facet_answered = 0
+            facet_expected = 0
+            facet_combined_item_scores: list[dict[str, Any]] = []
+
+            if has_facets:
+                for facet_code, raw_facet in indexed_facets.items():
+                    facet_code_text = str(facet_code).strip()
+                    if not facet_code_text or not isinstance(raw_facet, dict):
+                        continue
+                    facet_items = raw_facet.get("items")
+                    if not isinstance(facet_items, dict):
+                        continue
+                    scored_facet = _score_choice_score_map(
+                        answers_by_item=answers_by_item,
+                        choice_score=facet_items,
+                    )
+                    facet_results[facet_code_text] = {
+                        "code": facet_code_text,
+                        "name": str(raw_facet.get("name", facet_code_text)),
+                        **scored_facet,
+                    }
+                    facet_total += scored_facet["total_score"]
+                    facet_answered += scored_facet["answered_item_count"]
+                    facet_expected += scored_facet["expected_item_count"]
+                    for item_score in scored_facet["item_scores"]:
+                        facet_combined_item_scores.append(
+                            {
+                                **item_score,
+                                "facet_code": facet_code_text,
+                            }
+                        )
+
+            scale_entry: dict[str, Any] = {
+                "code": code_text,
+                "name": str(raw_scale.get("name", code_text)),
+                "sub_test_json": sub_test_json,
+            }
+
+            if has_items:
+                # B척도 flat choice_score 사용 (척도레벨 역채점 반영본)
                 scored = _score_choice_score_map(
                     answers_by_item=answers_by_item,
                     choice_score=indexed_items,
                 )
-                scales[f"{sub_test_json}::{code_text}"] = {
-                    "code": code_text,
-                    "name": str(raw_scale.get("name", code_text)),
-                    "sub_test_json": sub_test_json,
-                    **scored,
-                }
-                scored_scale_count += 1
-                continue
+                scale_entry.update(scored)
+            else:
+                # facet 합산으로 부모척도 원점수 산출
+                scale_entry["total_score"] = facet_total
+                scale_entry["answered_item_count"] = facet_answered
+                scale_entry["expected_item_count"] = facet_expected
+                scale_entry["item_scores"] = facet_combined_item_scores
 
-            indexed_facets = raw_scale.get("facets")
-            if not isinstance(indexed_facets, dict):
-                continue
+            if facet_results:
+                scale_entry["facets"] = facet_results
 
-            facet_results: dict[str, Any] = {}
-            total_score: int | float = 0
-            answered_item_count = 0
-            expected_item_count = 0
-            combined_item_scores: list[dict[str, Any]] = []
-
-            for facet_code, raw_facet in indexed_facets.items():
-                facet_code_text = str(facet_code).strip()
-                if not facet_code_text or not isinstance(raw_facet, dict):
-                    continue
-                facet_items = raw_facet.get("items")
-                if not isinstance(facet_items, dict):
-                    continue
-
-                scored_facet = _score_choice_score_map(
-                    answers_by_item=answers_by_item,
-                    choice_score=facet_items,
-                )
-                facet_results[facet_code_text] = {
-                    "code": facet_code_text,
-                    "name": str(raw_facet.get("name", facet_code_text)),
-                    **scored_facet,
-                }
-                total_score += scored_facet["total_score"]
-                answered_item_count += scored_facet["answered_item_count"]
-                expected_item_count += scored_facet["expected_item_count"]
-                for item_score in scored_facet["item_scores"]:
-                    combined_item_scores.append(
-                        {
-                            **item_score,
-                            "facet_code": facet_code_text,
-                        }
-                    )
-
-            scales[f"{sub_test_json}::{code_text}"] = {
-                "code": code_text,
-                "name": str(raw_scale.get("name", code_text)),
-                "sub_test_json": sub_test_json,
-                "total_score": total_score,
-                "answered_item_count": answered_item_count,
-                "expected_item_count": expected_item_count,
-                "item_scores": combined_item_scores,
-                "facets": facet_results,
-            }
+            scales[f"{sub_test_json}::{code_text}"] = scale_entry
             scored_scale_count += 1
 
     if not scales:

@@ -139,14 +139,6 @@ def _build_variant_scoring_index(
         choice_score = _normalize_choice_score_map(raw_scale.get("choice_score"))
         facet_scale = raw_scale.get("facet_scale") # 없으면 none 반환
 
-        if choice_score:
-            scales[code_text] = {
-                "code": code_text,
-                "name": str(raw_scale.get("name", code_text)),
-                "items": choice_score,
-            }
-            continue
-
         facets: dict[str, Any] = {}
         if isinstance(facet_scale, dict): # facet_scale이 dict 형태인 경우에만 처리
             for facet_code, raw_facet in facet_scale.items():
@@ -161,12 +153,19 @@ def _build_variant_scoring_index(
                     "name": str(raw_facet.get("name", facet_code_text)),
                     "items": facet_choice_score,
                 }
+
+        if not choice_score and not facets:
+            continue
+
+        scale_entry: dict[str, Any] = {
+            "code": code_text,
+            "name": str(raw_scale.get("name", code_text)),
+        }
+        if choice_score:
+            scale_entry["items"] = choice_score
         if facets:
-            scales[code_text] = {
-                "code": code_text,
-                "name": str(raw_scale.get("name", code_text)),
-                "facets": facets,
-            }
+            scale_entry["facets"] = facets
+        scales[code_text] = scale_entry
 
     return {
         "selected_scale_codes": sorted(selected_scale_codes),
