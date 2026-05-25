@@ -17,7 +17,7 @@ from app.services.admin.auth import get_current_admin
 from app.services.admin.common import load_custom_test_configs, summarize_custom_test_ids
 from app.services.scoring.base import ScoringContext, ScoringResult
 from app.services.scoring.engine import ScoringEngine
-from app.services.scoring.utils import split_answer_key
+from app.services.scoring.utils import build_scoring_scale_index, split_answer_key
 
 
 def _flatten_submission_answers(raw_answers: Any) -> dict[str, str]:
@@ -84,32 +84,6 @@ def _build_answers_by_test_variant(flattened_answers: dict[str, str]) -> dict[st
     return grouped
 
 
-def _normalize_choice_score_map(raw_choice_score: Any) -> dict[str, dict[str, int | float]]:
-    # db.parent_test.scale_struct 내 척도 구조에서 choice_score 맵을 선택번호:점수 형태를 정규화하여
-    # item_id_text : dict[str, int | float] 형태로 변환
-    normalized: dict[str, dict[str, int | float]] = {}
-    if not isinstance(raw_choice_score, dict):
-        return normalized
-    for item_id, raw_score_map in raw_choice_score.items():
-        item_id_text = str(item_id).strip()
-        if not item_id_text or not isinstance(raw_score_map, dict):
-            continue
-        score_map: dict[str, int | float] = {}
-        for answer_value, raw_score in raw_score_map.items():
-            answer_text = str(answer_value).strip()
-            score_text = str(raw_score).strip()
-            if not answer_text or not score_text:
-                continue
-            try:
-                number = float(score_text)
-            except ValueError:
-                continue
-            score_map[answer_text] = int(number) if number.is_integer() else number
-        if score_map:
-            normalized[item_id_text] = score_map
-    return normalized
-
-
 def _build_variant_scoring_index(
     *,
     test_id: str,
@@ -126,50 +100,9 @@ def _build_variant_scoring_index(
     if not isinstance(scale_struct, dict):
         return {"selected_scale_codes": sorted(selected_scale_codes), "scales": {}}
 
-    scales: dict[str, Any] = {}
-    for code, raw_scale in scale_struct.items():
-        code_text = str(code).strip()
-        if not code_text:
-            continue
-        if selected_scale_codes and code_text not in selected_scale_codes:
-            continue
-        if not isinstance(raw_scale, dict):
-            continue
-
-        choice_score = _normalize_choice_score_map(raw_scale.get("choice_score"))
-        facet_scale = raw_scale.get("facet_scale") # 없으면 none 반환
-
-        facets: dict[str, Any] = {}
-        if isinstance(facet_scale, dict): # facet_scale이 dict 형태인 경우에만 처리
-            for facet_code, raw_facet in facet_scale.items():
-                facet_code_text = str(facet_code).strip()
-                if not facet_code_text or not isinstance(raw_facet, dict):
-                    continue
-                facet_choice_score = _normalize_choice_score_map(raw_facet.get("choice_score"))
-                if not facet_choice_score:
-                    continue
-                facets[facet_code_text] = {
-                    "code": facet_code_text,
-                    "name": str(raw_facet.get("name", facet_code_text)),
-                    "items": facet_choice_score,
-                }
-
-        if not choice_score and not facets:
-            continue
-
-        scale_entry: dict[str, Any] = {
-            "code": code_text,
-            "name": str(raw_scale.get("name", code_text)),
-        }
-        if choice_score:
-            scale_entry["items"] = choice_score
-        if facets:
-            scale_entry["facets"] = facets
-        scales[code_text] = scale_entry
-
     return {
         "selected_scale_codes": sorted(selected_scale_codes),
-        "scales": scales,
+        "scales": build_scoring_scale_index(scale_struct, selected_scale_codes),
     }
 
 

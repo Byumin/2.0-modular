@@ -59,8 +59,12 @@
 | STS | `tests/sts.py` | |
 | GOLDEN | `tests/golden.py` | |
 | PET | `tests/pet.py` | norm 기반 T점수/백분위/범주 변환 포함 |
+| PCT | `tests/pct.py` | norm 기반 T점수/백분위/범주 변환 포함 |
+| PAT-2 | `tests/pat2.py` | 원점수 합산 후 연령×보고자 유형별 백분위/수준 변환 |
+| K-PSI-4-SF | `tests/kpsi4_sf.py` | 원점수 합산 후 T점수/백분위/수준 변환, 무응답 무효화 규칙 제외 |
 
 새 검사 추가 시: `BaseScorer` 상속 → `score()` 구현 → `registry.py` 등록.
+새 채점 소스 분석과 DB 비교 절차는 [scoring-implementation-playbook.md](scoring-implementation-playbook.md)를 따른다.
 
 ## 해석문구 조회
 
@@ -93,6 +97,7 @@
 ## Related Documents
 - [docs/features/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/README.md)
 - [docs/features/report-dashboard.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/report-dashboard.md)
+- [docs/features/scoring-implementation-playbook.md](scoring-implementation-playbook.md)
 - [docs/features/assessment-link-flow.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/assessment-link-flow.md)
 - [docs/features/client-management.md](/mnt/c/Users/user/workspace/2.0-modular/docs/features/client-management.md)
 - [docs/diagrams/README.md](/mnt/c/Users/user/workspace/2.0-modular/docs/diagrams/README.md)

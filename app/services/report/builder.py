@@ -67,6 +67,9 @@ def _calc_age_text(birth_day: str, ref_date: date | None = None) -> str:
 def _build_facet_rows(
     interpret_map: dict[str, Any],
     facets: dict[str, Any],
+    *,
+    test_id: str,
+    parent_code: str,
 ) -> list[dict[str, Any]]:
     rows = []
     for _key, facet in facets.items():
@@ -76,6 +79,9 @@ def _build_facet_rows(
         category = facet.get("category")
         raw_score = facet.get("total_score")
         rows.append({
+            "id": f"{test_id}:{parent_code}:{code}",
+            "test_id": test_id,
+            "parent_code": parent_code,
             "code": code,
             "name": facet.get("name", code),
             "raw_score": raw_score,
@@ -90,6 +96,8 @@ def _build_facet_rows(
 def _build_scale_rows(
     interpret_map: dict[str, Any],
     scales: dict[str, Any],
+    *,
+    test_id: str,
 ) -> list[dict[str, Any]]:
     rows = []
     for _key, scale in scales.items():
@@ -100,6 +108,8 @@ def _build_scale_rows(
         raw_score = scale.get("total_score")
         facets_raw = scale.get("facets") or {}
         rows.append({
+            "id": f"{test_id}:{code}",
+            "test_id": test_id,
             "code": code,
             "name": scale.get("name", code),
             "raw_score": raw_score,
@@ -109,9 +119,61 @@ def _build_scale_rows(
             "interpretation": _get_interpretation(interpret_map, code, category, raw_score),
             "answered_item_count": scale.get("answered_item_count"),
             "expected_item_count": scale.get("expected_item_count"),
-            "facets": _build_facet_rows(interpret_map, facets_raw) if isinstance(facets_raw, dict) else [],
+            "facets": _build_facet_rows(
+                interpret_map,
+                facets_raw,
+                test_id=test_id,
+                parent_code=code,
+            ) if isinstance(facets_raw, dict) else [],
         })
     return rows
+
+
+def _scoring_result_has_scales(scoring_result: SubmissionScoringResult | None) -> bool:
+    if scoring_result is None:
+        return False
+    try:
+        result_json = json.loads(scoring_result.result_json or "{}")
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(result_json, dict):
+        return False
+    for test_result in result_json.values():
+        if not isinstance(test_result, dict):
+            continue
+        scales = test_result.get("scales")
+        if isinstance(scales, dict) and scales:
+            return True
+    return False
+
+
+def _latest_scoring_result(db: Session, submission_id: int) -> SubmissionScoringResult | None:
+    return (
+        db.query(SubmissionScoringResult)
+        .filter_by(submission_id=submission_id)
+        .order_by(SubmissionScoringResult.id.desc())
+        .first()
+    )
+
+
+def _ensure_scoring_result(
+    db: Session,
+    *,
+    submission: AdminCustomTestSubmission,
+    admin_user_id: int,
+) -> SubmissionScoringResult | None:
+    scoring_result = _latest_scoring_result(db, submission.id)
+    if _scoring_result_has_scales(scoring_result):
+        return scoring_result
+
+    from app.services.scoring.submissions import score_submission_by_id
+
+    score_submission_by_id(
+        db,
+        admin_user_id=admin_user_id,
+        submission_id=submission.id,
+    )
+    return _latest_scoring_result(db, submission.id)
 
 
 def build_report_from_scoring(
@@ -150,7 +212,7 @@ def build_report_from_scoring(
         if not isinstance(test_result, dict):
             continue
         scales = test_result.get("scales", {})
-        all_scales.extend(_build_scale_rows(interpret_map, scales))
+        all_scales.extend(_build_scale_rows(interpret_map, scales, test_id=tid_upper))
 
     gender_label = {"male": "남자", "female": "여자"}.get(profile.get("gender", ""), profile.get("gender", ""))
 
@@ -186,29 +248,14 @@ def get_public_report_by_submission_id(
     if custom_test is None:
         return {"error": "not_found"}
 
-    scoring_result = (
-        db.query(SubmissionScoringResult)
-        .filter_by(submission_id=submission.id)
-        .order_by(SubmissionScoringResult.id.desc())
-        .first()
-    )
-
-    if scoring_result is None:
-        from app.services.scoring.submissions import score_submission_by_id
-        try:
-            score_submission_by_id(
-                db,
-                admin_user_id=submission.admin_user_id,
-                submission_id=submission.id,
-            )
-            scoring_result = (
-                db.query(SubmissionScoringResult)
-                .filter_by(submission_id=submission.id)
-                .order_by(SubmissionScoringResult.id.desc())
-                .first()
-            )
-        except Exception:
-            return {"error": "scoring_failed"}
+    try:
+        scoring_result = _ensure_scoring_result(
+            db,
+            submission=submission,
+            admin_user_id=submission.admin_user_id,
+        )
+    except Exception:
+        return {"error": "scoring_failed"}
 
     if scoring_result is None:
         return {"error": "scoring_failed"}
@@ -239,24 +286,14 @@ def get_report_by_submission_id(
     if custom_test is None:
         return {"error": "not_found"}
 
-    scoring_result = (
-        db.query(SubmissionScoringResult)
-        .filter_by(submission_id=submission.id)
-        .order_by(SubmissionScoringResult.id.desc())
-        .first()
-    )
-    if scoring_result is None:
-        from app.services.scoring.submissions import score_submission_by_id
-        try:
-            score_submission_by_id(db, admin_user_id=admin_user_id, submission_id=submission.id)
-            scoring_result = (
-                db.query(SubmissionScoringResult)
-                .filter_by(submission_id=submission.id)
-                .order_by(SubmissionScoringResult.id.desc())
-                .first()
-            )
-        except Exception:
-            return {"error": "scoring_failed"}
+    try:
+        scoring_result = _ensure_scoring_result(
+            db,
+            submission=submission,
+            admin_user_id=admin_user_id,
+        )
+    except Exception:
+        return {"error": "scoring_failed"}
 
     if scoring_result is None:
         return {"error": "scoring_failed"}

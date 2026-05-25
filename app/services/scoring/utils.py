@@ -105,6 +105,94 @@ def _parse_numeric_score(raw_value: Any) -> int | float | None:
     return number
 
 
+def normalize_choice_score_map(raw_choice_score: Any) -> dict[str, dict[str, int | float]]:
+    normalized: dict[str, dict[str, int | float]] = {}
+    if not isinstance(raw_choice_score, dict):
+        return normalized
+    for item_id, raw_score_map in raw_choice_score.items():
+        item_id_text = str(item_id).strip()
+        if not item_id_text or not isinstance(raw_score_map, dict):
+            continue
+        score_map: dict[str, int | float] = {}
+        for answer_value, raw_score in raw_score_map.items():
+            answer_text = str(answer_value).strip()
+            score_text = str(raw_score).strip()
+            if not answer_text or not score_text:
+                continue
+            parsed_score = _parse_numeric_score(score_text)
+            if parsed_score is None:
+                continue
+            score_map[answer_text] = parsed_score
+        if score_map:
+            normalized[item_id_text] = score_map
+    return normalized
+
+
+def build_scoring_scale_index(
+    scale_struct: dict[str, Any],
+    selected_scale_codes: set[str] | None = None,
+) -> dict[str, Any]:
+    selected_codes = {
+        str(code).strip()
+        for code in (selected_scale_codes or set())
+        if str(code).strip()
+    }
+    scales: dict[str, Any] = {}
+
+    for code, raw_scale in scale_struct.items():
+        code_text = str(code).strip()
+        if not code_text or not isinstance(raw_scale, dict):
+            continue
+
+        choice_score = normalize_choice_score_map(raw_scale.get("choice_score"))
+        facet_scale = raw_scale.get("facet_scale")
+        raw_facets = facet_scale if isinstance(facet_scale, dict) else {}
+        facet_codes = {str(facet_code).strip() for facet_code in raw_facets if str(facet_code).strip()}
+
+        parent_selected = not selected_codes or code_text in selected_codes
+        selected_facets = facet_codes.intersection(selected_codes)
+        all_facets_selected = bool(facet_codes) and facet_codes.issubset(selected_codes)
+        include_parent = parent_selected or bool(selected_facets)
+        if not include_parent:
+            continue
+
+        facets: dict[str, Any] = {}
+        for facet_code, raw_facet in raw_facets.items():
+            facet_code_text = str(facet_code).strip()
+            if not facet_code_text or not isinstance(raw_facet, dict):
+                continue
+            include_facet = parent_selected or facet_code_text in selected_codes
+            if not include_facet:
+                continue
+            facet_choice_score = normalize_choice_score_map(raw_facet.get("choice_score"))
+            if not facet_choice_score:
+                continue
+            facets[facet_code_text] = {
+                "code": facet_code_text,
+                "name": str(raw_facet.get("name", facet_code_text)),
+                "items": facet_choice_score,
+            }
+
+        if not choice_score and not facets:
+            continue
+
+        scale_entry: dict[str, Any] = {
+            "code": code_text,
+            "name": str(raw_scale.get("name", code_text)),
+            "selection_scope": "parent" if parent_selected else "facet",
+        }
+        if choice_score and (parent_selected or all_facets_selected):
+            scale_entry["items"] = choice_score
+        elif choice_score:
+            scale_entry["items"] = choice_score
+            scale_entry["partial_parent_selection"] = True
+        if facets:
+            scale_entry["facets"] = facets
+        scales[code_text] = scale_entry
+
+    return scales
+
+
 def _score_choice_score_map(
     *,
     answers_by_item: dict[str, str],
@@ -180,7 +268,11 @@ def build_choice_score_result(test_id: str, context: ScoringContext) -> ScoringR
                 continue
             if not isinstance(scale_struct, dict):
                 continue
-            variant_index = {"selected_scale_codes": sorted(selected_codes_by_variant.get(sub_test_json, set())), "scales": scale_struct}
+            selected_for_variant = selected_codes_by_variant.get(sub_test_json, set())
+            variant_index = {
+                "selected_scale_codes": sorted(selected_for_variant),
+                "scales": build_scoring_scale_index(scale_struct, selected_for_variant),
+            }
 
         variant_count += 1
         selected_codes = set(variant_index.get("selected_scale_codes", [])) or selected_codes_by_variant.get(sub_test_json, set())
@@ -192,9 +284,13 @@ def build_choice_score_result(test_id: str, context: ScoringContext) -> ScoringR
             code_text = str(code).strip()
             if not code_text:
                 continue
-            if selected_codes and code_text not in selected_codes:
-                continue
             if not isinstance(raw_scale, dict):
+                continue
+            if (
+                selected_codes
+                and code_text not in selected_codes
+                and raw_scale.get("selection_scope") != "facet"
+            ):
                 continue
 
             indexed_items = raw_scale.get("items")

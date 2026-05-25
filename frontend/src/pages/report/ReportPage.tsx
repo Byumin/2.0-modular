@@ -9,6 +9,9 @@ import {
 // ── 타입 ─────────────────────────────────────────────────────────────────────
 
 interface FacetRow {
+  id?: string
+  test_id?: string
+  parent_code?: string
   code: string
   name: string
   raw_score: number | null
@@ -19,6 +22,8 @@ interface FacetRow {
 }
 
 interface ScaleRow {
+  id?: string
+  test_id?: string
   code: string
   name: string
   raw_score: number | null
@@ -49,8 +54,8 @@ interface ReportData {
 
 type NavNode =
   | { type: "overview" }
-  | { type: "scale"; code: string }
-  | { type: "facet"; scaleCode: string; facetCode: string }
+  | { type: "scale"; id: string }
+  | { type: "facet"; scaleId: string; facetId: string }
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -77,8 +82,29 @@ type CategoryStyle = {
   label: string       // 뱃지용 border
 }
 
+// 우려/주의가 필요한 카테고리 (부정)
+const NEGATIVE_CATEGORIES = new Set([
+  "매우 낮음", "낮음",
+  "매우 높음", "높음",
+  "미흡함", "지나침",
+])
+// 이상적/양호한 카테고리 (긍정)
+const POSITIVE_CATEGORIES = new Set([
+  "이상적임",
+])
+
+type CategoryTone = "negative" | "neutral" | "positive"
+
+function categoryTone(c: string | null): CategoryTone {
+  if (!c) return "neutral"
+  if (NEGATIVE_CATEGORIES.has(c)) return "negative"
+  if (POSITIVE_CATEGORIES.has(c)) return "positive"
+  return "neutral"
+}
+
 function categoryStyle(c: string | null): CategoryStyle {
-  if (c === "낮음") return {
+  const tone = categoryTone(c)
+  if (tone === "negative") return {
     badge:  "bg-red-50   text-red-700   ring-1 ring-red-200",
     dot:    "bg-red-500",
     card:   "bg-red-50/40",
@@ -86,7 +112,7 @@ function categoryStyle(c: string | null): CategoryStyle {
     value:  "text-red-700",
     label:  "border-red-200",
   }
-  if (c === "높음") return {
+  if (tone === "positive") return {
     badge:  "bg-blue-50  text-blue-700  ring-1 ring-blue-200",
     dot:    "bg-blue-500",
     card:   "bg-blue-50/40",
@@ -110,10 +136,18 @@ function tPosPercent(t: number) {
 
 function navEqual(a: NavNode, b: NavNode) {
   if (a.type !== b.type) return false
-  if (a.type === "scale"  && b.type === "scale")  return a.code === b.code
+  if (a.type === "scale"  && b.type === "scale")  return a.id === b.id
   if (a.type === "facet"  && b.type === "facet")
-    return a.scaleCode === b.scaleCode && a.facetCode === b.facetCode
+    return a.scaleId === b.scaleId && a.facetId === b.facetId
   return true
+}
+
+function scaleKey(scale: ScaleRow) {
+  return scale.id || `${scale.test_id || "TEST"}:${scale.code}`
+}
+
+function facetKey(scale: ScaleRow, facet: FacetRow) {
+  return facet.id || `${scaleKey(scale)}:${facet.code}`
 }
 
 function tZoneLabel(t: number | null): string {
@@ -340,10 +374,11 @@ function OverviewPanel({ data, onNavigate }: { data: ReportData; onNavigate: (n:
       <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory">
         {data.scales.map((s) => {
           const cs = categoryStyle(s.category)
+          const id = scaleKey(s)
           return (
             <button
-              key={s.code}
-              onClick={() => onNavigate({ type: "scale", code: s.code })}
+              key={id}
+              onClick={() => onNavigate({ type: "scale", id })}
               className={`shrink-0 w-[240px] snap-start text-left rounded-xl border border-l-4 ${cs.border} border-border ${cs.card} p-4 shadow-sm hover:shadow-md transition-all duration-150 group`}
             >
               <div className="flex items-center justify-between mb-2">
@@ -414,11 +449,12 @@ function OverviewPanel({ data, onNavigate }: { data: ReportData; onNavigate: (n:
           <tbody>
             {data.scales.map((s) => {
               const cs = categoryStyle(s.category)
+              const scaleId = scaleKey(s)
               return (
-                <React.Fragment key={s.code}>
+                <React.Fragment key={scaleId}>
                   <tr
                     className="border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer"
-                    onClick={() => onNavigate({ type: "scale", code: s.code })}
+                    onClick={() => onNavigate({ type: "scale", id: scaleId })}
                   >
                     <td className="px-5 py-3">
                       <span className="font-semibold text-foreground text-xs">{s.name}</span>
@@ -435,8 +471,9 @@ function OverviewPanel({ data, onNavigate }: { data: ReportData; onNavigate: (n:
                   </tr>
                   {s.facets.map((f) => {
                     const fc = categoryStyle(f.category)
+                    const id = facetKey(s, f)
                     return (
-                      <tr key={f.code} className="border-b border-border/30 bg-muted/5 hover:bg-muted/20 transition-colors">
+                      <tr key={id} className="border-b border-border/30 bg-muted/5 hover:bg-muted/20 transition-colors">
                         <td className="px-5 py-2.5 pl-10">
                           <span className="text-[11px] text-muted-foreground">↳ {f.name}</span>
                           <span className="ml-2 text-[10px] font-mono text-muted-foreground/50">{f.code}</span>
@@ -522,7 +559,7 @@ function ScalePanel({ scale }: { scale: ScaleRow }) {
             {scale.facets.map((f) => {
               const fc = categoryStyle(f.category)
               return (
-                <div key={f.code} className="flex items-center justify-between py-3">
+                <div key={facetKey(scale, f)} className="flex items-center justify-between py-3">
                   <div>
                     <span className="text-xs font-medium text-foreground">{f.name}</span>
                     <span className="ml-2 text-[10px] font-mono text-muted-foreground">{f.code}</span>
@@ -590,6 +627,29 @@ function FacetPanel({ facet, parentName }: { facet: FacetRow; parentName: string
 
 // ── 사이드바 ──────────────────────────────────────────────────────────────────
 
+function CategoryBadge({ category, active }: { category: string; active: boolean }) {
+  const cs = categoryStyle(category)
+  const tone = categoryTone(category)
+  const icon = tone === "negative" ? "⚠" : tone === "positive" ? "✓" : "·"
+  return (
+    <span className={`shrink-0 inline-flex items-center gap-0.5 text-[9px] rounded-full px-1.5 py-0.5 font-semibold ${active ? "bg-white/20 text-white" : cs.badge}`}>
+      <span className="text-[8px] leading-none">{icon}</span>
+      {category}
+    </span>
+  )
+}
+
+function groupScalesByTest(scales: ScaleRow[]): { testId: string; scales: ScaleRow[] }[] {
+  const groups: { testId: string; scales: ScaleRow[] }[] = []
+  for (const scale of scales) {
+    const tid = scale.test_id || "UNKNOWN"
+    const last = groups[groups.length - 1]
+    if (last && last.testId === tid) last.scales.push(scale)
+    else groups.push({ testId: tid, scales: [scale] })
+  }
+  return groups
+}
+
 function Sidebar({
   data,
   selected,
@@ -604,7 +664,7 @@ function Sidebar({
   onToggleCollapse: () => void
 }) {
   const [expanded, setExpanded] = React.useState<Set<string>>(
-    () => new Set(data.scales.map((s) => s.code))
+    () => new Set(data.scales.map((s) => scaleKey(s)))
   )
 
   function toggleExpand(code: string, e: React.MouseEvent) {
@@ -617,6 +677,7 @@ function Sidebar({
   }
 
   const overviewNode: NavNode = { type: "overview" }
+  const scaleGroups = React.useMemo(() => groupScalesByTest(data.scales), [data.scales])
 
   return (
     <aside
@@ -651,84 +712,84 @@ function Sidebar({
             <span>전체 요약</span>
           </button>
 
-          {/* 구분선 */}
-          <div className="pt-2 pb-1 px-3">
-            <p className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest">척도</p>
-          </div>
-
-          {/* 척도 트리 */}
-          {data.scales.map((scale) => {
-            const scaleNode: NavNode = { type: "scale", code: scale.code }
-            const isScaleActive = navEqual(selected, scaleNode)
-            const isFacetActive = selected.type === "facet" && selected.scaleCode === scale.code
-            const isHighlighted = isScaleActive || isFacetActive
-            const isOpen = expanded.has(scale.code)
-            const hasFacets = scale.facets.length > 0
-            const cs = categoryStyle(scale.category)
-
-            return (
-              <div key={scale.code}>
-                <button
-                  onClick={() => {
-                    onSelect(scaleNode)
-                    if (hasFacets && !isOpen) setExpanded((prev) => new Set([...prev, scale.code]))
-                  }}
-                  className={`w-full flex items-center gap-2 rounded-md px-3 py-2.5 text-xs transition-colors ${
-                    isScaleActive
-                      ? "bg-[#2d3580] text-white font-semibold shadow-sm"
-                      : isHighlighted
-                      ? "bg-[#2d3580]/5 text-[#2d3580] font-medium"
-                      : "text-foreground hover:bg-muted/50"
-                  }`}
-                >
-                  {hasFacets ? (
-                    <span
-                      className={`text-[10px] transition-transform duration-150 shrink-0 ${isOpen ? "rotate-90" : ""} ${isScaleActive ? "text-white/70" : "text-muted-foreground"}`}
-                      onClick={(e) => toggleExpand(scale.code, e)}
-                    >▶</span>
-                  ) : (
-                    <span className={`size-1.5 rounded-full shrink-0 ${isScaleActive ? "bg-white" : cs.dot}`} />
-                  )}
-                  <span className="flex-1 text-left leading-snug truncate">{scale.name}</span>
-                  {scale.category && (
-                    <span className={`shrink-0 text-[9px] rounded-full px-1.5 py-0.5 font-semibold ${isScaleActive ? "bg-white/20 text-white" : cs.badge}`}>
-                      {scale.category}
-                    </span>
-                  )}
-                </button>
-
-                {/* 하위척도 */}
-                {hasFacets && isOpen && (
-                  <div className="ml-3 mt-0.5 mb-1 space-y-0.5 border-l-2 border-border/40 pl-2">
-                    {scale.facets.map((facet) => {
-                      const facetNode: NavNode = { type: "facet", scaleCode: scale.code, facetCode: facet.code }
-                      const isFacActive = navEqual(selected, facetNode)
-                      const fc = categoryStyle(facet.category)
-                      return (
-                        <button
-                          key={facet.code}
-                          onClick={() => onSelect(facetNode)}
-                          className={`w-full flex items-center gap-2 rounded-md px-2.5 py-2 text-xs transition-colors ${
-                            isFacActive
-                              ? "bg-[#2d3580] text-white font-semibold shadow-sm"
-                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                          }`}
-                        >
-                          <span className={`size-1 rounded-full shrink-0 ${isFacActive ? "bg-white" : fc.dot}`} />
-                          <span className="flex-1 text-left truncate">{facet.name}</span>
-                          {facet.category && (
-                            <span className={`shrink-0 text-[9px] rounded-full px-1.5 py-0.5 font-medium ${isFacActive ? "bg-white/20 text-white" : fc.badge}`}>
-                              {facet.category}
-                            </span>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
+          {/* 검사별 척도 그룹 */}
+          {scaleGroups.map((group, gIdx) => (
+            <div key={group.testId} className={gIdx > 0 ? "pt-2 mt-2 border-t border-border/60" : ""}>
+              {/* 검사 헤더 */}
+              <div className="px-3 pt-2 pb-1.5 flex items-center gap-1.5">
+                <span className="text-[9px] font-bold text-[#2d3580] uppercase tracking-widest">{group.testId}</span>
+                <span className="text-[9px] text-muted-foreground/60">· {group.scales.length}개</span>
               </div>
-            )
-          })}
+
+              {/* 그룹 내 척도 트리 */}
+              {group.scales.map((scale) => {
+                const scaleId = scaleKey(scale)
+                const scaleNode: NavNode = { type: "scale", id: scaleId }
+                const isScaleActive = navEqual(selected, scaleNode)
+                const isFacetActive = selected.type === "facet" && selected.scaleId === scaleId
+                const isHighlighted = isScaleActive || isFacetActive
+                const isOpen = expanded.has(scaleId)
+                const hasFacets = scale.facets.length > 0
+                const cs = categoryStyle(scale.category)
+
+                return (
+                  <div key={scaleId}>
+                    <button
+                      onClick={() => {
+                        onSelect(scaleNode)
+                        if (hasFacets && !isOpen) setExpanded((prev) => new Set([...prev, scaleId]))
+                      }}
+                      className={`w-full flex items-center gap-2 rounded-md px-3 py-2.5 text-xs transition-colors ${
+                        isScaleActive
+                          ? "bg-[#2d3580] text-white font-semibold shadow-sm"
+                          : isHighlighted
+                          ? "bg-[#2d3580]/5 text-[#2d3580] font-medium"
+                          : "text-foreground hover:bg-muted/50"
+                      }`}
+                    >
+                      {hasFacets ? (
+                        <span
+                          className={`text-[10px] transition-transform duration-150 shrink-0 ${isOpen ? "rotate-90" : ""} ${isScaleActive ? "text-white/70" : "text-muted-foreground"}`}
+                          onClick={(e) => toggleExpand(scaleId, e)}
+                        >▶</span>
+                      ) : (
+                        <span className={`size-1.5 rounded-full shrink-0 ${isScaleActive ? "bg-white" : cs.dot}`} />
+                      )}
+                      <span className="flex-1 text-left leading-snug truncate">{scale.name}</span>
+                      {scale.category && <CategoryBadge category={scale.category} active={isScaleActive} />}
+                    </button>
+
+                    {/* 하위척도 */}
+                    {hasFacets && isOpen && (
+                      <div className="ml-3 mt-0.5 mb-1 space-y-0.5 border-l-2 border-border/40 pl-2">
+                        {scale.facets.map((facet) => {
+                          const facetId = facetKey(scale, facet)
+                          const facetNode: NavNode = { type: "facet", scaleId, facetId }
+                          const isFacActive = navEqual(selected, facetNode)
+                          const fc = categoryStyle(facet.category)
+                          return (
+                            <button
+                              key={facetId}
+                              onClick={() => onSelect(facetNode)}
+                              className={`w-full flex items-center gap-2 rounded-md px-2.5 py-2 text-xs transition-colors ${
+                                isFacActive
+                                  ? "bg-[#2d3580] text-white font-semibold shadow-sm"
+                                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                              }`}
+                            >
+                              <span className={`size-1 rounded-full shrink-0 ${isFacActive ? "bg-white" : fc.dot}`} />
+                              <span className="flex-1 text-left truncate">{facet.name}</span>
+                              {facet.category && <CategoryBadge category={facet.category} active={isFacActive} />}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ))}
         </nav>
       )}
 
@@ -745,12 +806,13 @@ function Sidebar({
             title="전체 요약"
           >☰</button>
           {data.scales.map((scale) => {
-            const scaleNode: NavNode = { type: "scale", code: scale.code }
-            const isActive = navEqual(selected, scaleNode) || (selected.type === "facet" && selected.scaleCode === scale.code)
+            const scaleId = scaleKey(scale)
+            const scaleNode: NavNode = { type: "scale", id: scaleId }
+            const isActive = navEqual(selected, scaleNode) || (selected.type === "facet" && selected.scaleId === scaleId)
             const cs = categoryStyle(scale.category)
             return (
               <button
-                key={scale.code}
+                key={scaleId}
                 onClick={() => { onToggleCollapse(); onSelect(scaleNode) }}
                 className={`size-8 rounded-md flex items-center justify-center text-[10px] font-bold transition-colors ${
                   isActive ? "bg-[#2d3580] text-white" : `${cs.card} hover:opacity-80`
@@ -825,13 +887,13 @@ function ReportDashboard({ data }: { data: ReportData }) {
     if (selected.type === "overview")
       return <OverviewPanel data={data} onNavigate={setSelected} />
     if (selected.type === "scale") {
-      const scale = data.scales.find((s) => s.code === selected.code)
+      const scale = data.scales.find((s) => scaleKey(s) === selected.id)
       if (!scale) return null
       return <ScalePanel scale={scale} />
     }
     if (selected.type === "facet") {
-      const scale = data.scales.find((s) => s.code === selected.scaleCode)
-      const facet = scale?.facets.find((f) => f.code === selected.facetCode)
+      const scale = data.scales.find((s) => scaleKey(s) === selected.scaleId)
+      const facet = scale?.facets.find((f) => facetKey(scale, f) === selected.facetId)
       if (!scale || !facet) return null
       return <FacetPanel facet={facet} parentName={scale.name} />
     }

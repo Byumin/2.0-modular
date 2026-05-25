@@ -13,8 +13,8 @@
 
 ## Status (2026-05-23 현재)
 - ✅ PCT 완료 (구현 + RDS 데이터 반영 + end-to-end 검증)
-- ⬜ PAT-2 미착수
-- ⬜ K-PSI-4-SF 미착수
+- ✅ PAT-2 완료 (구현 + 로컬/RDS interpret 반영 + 단위 검증)
+- ✅ K-PSI-4-SF 완료 (구현 + 로컬/RDS interpret 반영 + 단위 검증, 무응답 무효화 제외)
 - ⬜ PSES 미착수 (엑셀 미수령)
 
 ---
@@ -163,18 +163,20 @@ conn.close()
 
 ### PAT-2 (다음 차례)
 - 엑셀 시트: `PAT-2 로직`
-- 주요 특이사항: 연령×성별 norm 분리 (PAT-2 normcondition 행이 많음)
+- 주요 특이사항: 연령×보고자 유형 norm 분리 (PAT-2 normcondition 행이 많음)
   - `PAT-2_000000_030000_MO`, `_FA`, `_ETC`
   - `PAT-2_030000_070000_MO`, `_FA`, `_ETC`
   - `PAT-2_070000_100000_MO`, `_FA`, `_ETC`
   - 이후 13세 구간, 16세 구간 등으로 세분화
-- Scorer가 응답자 프로필(나이/성별/응답자관계 informant)로 condition_id를 선택해 norm 조회해야 함
+- Scorer가 응답자 프로필(나이/응답자관계 informant)로 condition_id를 선택해 norm 조회해야 함
+- `gender` 조건은 `male/female` 전체 허용이라 PAT-2 규준 분기축으로 보지 않는다.
 - PET는 `condition_id = "PET_ALL"` 한 개만 쓰지만 PAT-2는 다중. **공통 헬퍼 함수 필요할 수 있음.**
 - 척도 구조 / 역채점 / 해석문구도 엑셀에서 추출 필요
 
 ### K-PSI-4-SF
 - 엑셀 시트: `K-PSI-4 로직`
 - 단축형, 단일 norm 예상 (`K-PSI-4-SF_ALL`)
+- 무응답 무효화 로직은 사용자 확인에 따라 구현 범위에서 제외
 
 ### PSES
 - 엑셀 미수령
