@@ -1,4 +1,3 @@
-import hashlib
 import os
 import secrets
 
@@ -12,10 +11,6 @@ from app.services.admin.modular_auth import (
 )
 
 ADMIN_SESSIONS: dict[str, int] = {}
-
-
-def make_password_hash(raw: str) -> str:
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def seed_default_admin() -> None:

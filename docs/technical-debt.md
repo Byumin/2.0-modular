@@ -175,14 +175,22 @@
 
 ---
 
-### TD-010 · 🟠 · `open`
+### TD-010 · 🟠 · `resolved` (2026-05-25)
 **SHA256 패스워드 해싱 — Salt 없음**
 
-- **파일**: `app/services/admin/auth.py:17-18`
-- **코드**: `hashlib.sha256(raw.encode("utf-8")).hexdigest()`
+- **파일**: `app/services/admin/modular_auth.py` (실제 사용처). `app/services/admin/auth.py`에 있던 `make_password_hash`는 dead code였음.
+- **이전 코드**: `hashlib.sha256(raw.encode("utf-8")).hexdigest()`
 - **문제**: Salt 없는 단순 SHA256 → 레인보우 테이블·사전 공격 취약.
-- **권장 수정**: `passlib[bcrypt]` 또는 `argon2-cffi` 도입. 로그인 성공 시 구 해시 감지 → 새 해시로 교체.
+- **수정 내용**:
+  - `bcrypt==5.0.0` 도입 (`requirements.txt`)
+  - `make_modular_password_hash`를 bcrypt 기반으로 교체
+  - `_verify_password` 헬퍼: bcrypt prefix(`$2a$`/`$2b$`/`$2y$`)면 bcrypt, 64자 hex면 레거시 SHA256으로 검증
+  - `verify_modular_admin_login`에서 레거시 SHA256으로 인증 성공 시 자동으로 bcrypt 재해싱 후 DB 저장 (무중단 마이그레이션)
+  - `update_modular_admin_password_hash` 레포지토리 함수 추가
+  - dead `make_password_hash`(auth.py) 제거
+  - bcrypt 72바이트 제한 안전 처리 (`_truncate`)
 - **발견일**: 2026-04-11
+- **해결일**: 2026-05-25
 
 ---
 
@@ -199,3 +207,4 @@
 | 2026-05-06 | TD-007 | resolved — _normalize_json_for_match 헬퍼로 양쪽 정규화 후 비교 |
 | 2026-05-06 | TD-008 | resolved — test_id 키워드 파라미터 추가, 에러 메시지에 prefix 포함 |
 | 2026-05-21 | TD-009, TD-010 | docs/debug/security-debt.md에서 이관 |
+| 2026-05-25 | TD-010 | resolved — bcrypt 적용 + 레거시 SHA256 자동 재해싱 마이그레이션 |

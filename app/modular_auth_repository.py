@@ -74,3 +74,11 @@ def create_modular_admin_user(*, username: str, password_hash: str, created_at: 
     if row is None:
         raise RuntimeError("failed to create modular admin user")
     return row
+
+
+def update_modular_admin_password_hash(admin_id: int, password_hash: str) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE admin_user SET password_hash = :password_hash WHERE id = :admin_id"),
+            {"password_hash": password_hash, "admin_id": admin_id},
+        )
