@@ -59,11 +59,22 @@
 - Change: 서버 검증 중 발견된 프런트 lint error 2건을 수정했다.
 - Reason: `ReportPage.tsx`의 unused expression과 `QuestionStep.tsx`의 unused parameter 때문에 lint가 실패했다.
 
+### Update 6
+- Time: 2026-05-25
+- Change: `origin/scoring-pct-implementation`의 추가 최신 2커밋을 `ec2-production-snapshot`에 fast-forward 병합했다.
+- Reason: 최신 원격 브랜치에 bcrypt 비밀번호 해싱 및 EC2 systemd/deploy 경로 보정 변경이 추가되었다.
+
+### Update 7
+- Time: 2026-05-25
+- Change: 새 의존성 `bcrypt==5.0.0`를 `.venv`에 설치하고 정적/런타임 검증을 수행했다.
+- Reason: 병합된 인증 코드가 bcrypt를 import하므로 운영 startup 전에 의존성 설치 여부를 확인해야 했다.
+
 ## Result
 - `ec2-production-snapshot`가 `origin/scoring-pct-implementation`의 최신 커밋 `baa94e5d`까지 fast-forward 되었다.
 - 충돌은 발생하지 않았다.
 - 로컬 브랜치는 아직 `origin/ec2-production-snapshot`보다 3커밋 앞서 있으며, 원격 `origin/ec2-production-snapshot`에는 push하지 않았다.
 - 서버 런타임 검증 중 lint error 2건을 발견했고, `frontend/src/pages/report/ReportPage.tsx`, `frontend/src/pages/assessment/steps/QuestionStep.tsx`에서 수정했다.
+- 추가 병합 후 `ec2-production-snapshot`는 최신 커밋 `31ce837b`까지 반영되었고, `origin/ec2-production-snapshot`보다 2커밋 앞서 있다.
 
 ## Verification
 - Checked:
@@ -84,10 +95,14 @@
   - `GET /api/admin/clients` -> 200
   - `GET /api/admin/report/45` -> 200, K-PSI-4-SF/PAT-2/PCT scale/facet 포함
   - `npm --prefix frontend run lint` -> error 0, 기존 Fast Refresh warning 3건
+  - `bcrypt==5.0.0` import 확인
+  - `npm run ec2:api` startup complete 확인
+  - `GET /health` -> 200
 - Not checked:
   - 실제 EC2 systemd/운영 서비스 재시작
   - 브라우저 화면 스크린샷 기반 UI 회귀 확인: Playwright Chromium 설치가 현재 OS 조합에서 실패했고 시스템 브라우저도 없음
   - 채점 POST 재실행: 운영 RDS에 scoring_result row를 추가로 쓰는 동작이라 read-only 검증으로 대체
+  - 새 uvicorn 프로세스의 8120 bind 완료: 기존 8120 프로세스가 사용 중이어서 startup complete 후 bind 단계에서 종료됨
 
 ## Retrospective
 ### Classification
