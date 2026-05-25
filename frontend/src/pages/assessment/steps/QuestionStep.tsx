@@ -907,7 +907,7 @@ export function QuestionStep({
                   <div className="grid grid-cols-5 gap-1">
                     {parts.flatMap((part, pi) =>
                       (part.items ?? []).map((item, idx) => {
-                        const globalIdx = part.items ? part.items.slice(0, idx).reduce((acc, _) => acc + 1, 0) : idx
+                        const globalIdx = part.items ? part.items.slice(0, idx).reduce((acc) => acc + 1, 0) : idx
                         const bundleIdx = (partBundles[pi] ?? []).findIndex(b => b.items.some(i => i.id === item.id))
                         const isOnCurrentPage = pi === partIndex && bundleIdx === page
                         return (
