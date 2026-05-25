@@ -55,6 +55,12 @@ def get_modular_admin_by_id(admin_id: int) -> ModularAdminUser | None:
     return _to_admin_user(row)
 
 
+def modular_admin_exists() -> bool:
+    with engine.connect() as conn:
+        row = conn.execute(text("SELECT 1 FROM admin_user LIMIT 1")).fetchone()
+    return row is not None
+
+
 def create_modular_admin_user(*, username: str, password_hash: str, created_at: str) -> ModularAdminUser:
     with engine.begin() as conn:
         conn.execute(

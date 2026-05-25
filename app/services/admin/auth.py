@@ -4,6 +4,7 @@ import secrets
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.modular_auth_repository import modular_admin_exists
 from app.services.admin.modular_auth import (
     ensure_default_modular_admin,
     get_modular_current_admin,
@@ -14,8 +15,14 @@ ADMIN_SESSIONS: dict[str, int] = {}
 
 
 def seed_default_admin() -> None:
-    default_id = os.getenv("DEFAULT_ADMIN_ID", "admin")
-    default_pw = os.getenv("DEFAULT_ADMIN_PW", "admin1234")
+    default_id = os.getenv("DEFAULT_ADMIN_ID")
+    default_pw = os.getenv("DEFAULT_ADMIN_PW")
+    if not default_id or not default_pw:
+        if modular_admin_exists():
+            return
+        raise RuntimeError(
+            "DEFAULT_ADMIN_ID and DEFAULT_ADMIN_PW are required when no admin user exists."
+        )
     ensure_default_modular_admin(default_id, default_pw)
 
 
