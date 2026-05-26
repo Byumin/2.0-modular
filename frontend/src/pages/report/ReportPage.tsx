@@ -273,7 +273,20 @@ const CHART_PER_ITEM_PX = 160
 const CHART_MIN_PX = 480
 const CHART_HEIGHT = 260
 
-function ProfileChart({ items }: { items: { name: string; t_score: number | null }[] }) {
+interface ProfileChartItem {
+  name: string
+  t_score: number | null
+  category?: string | null
+  percentile?: number | null
+}
+
+function ProfileChart({
+  items,
+  onItemClick,
+}: {
+  items: ProfileChartItem[]
+  onItemClick?: (index: number) => void
+}) {
   const data = items.filter((i) => i.t_score !== null)
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [containerW, setContainerW] = React.useState(0)
@@ -297,11 +310,13 @@ function ProfileChart({ items }: { items: { name: string; t_score: number | null
 
   // 척도가 적을 때 양 끝에 빈 항목 추가 → 데이터 점이 안쪽으로, ReferenceArea는 전체 폭 유지
   const padCount = data.length <= 2 ? 2 : data.length <= 4 ? 1 : 0
-  const paddedData = [
+  const paddedData: ProfileChartItem[] = [
     ...Array.from({ length: padCount }, (_, i) => ({ name: `__l${i}`, t_score: null })),
     ...data,
     ...Array.from({ length: padCount }, (_, i) => ({ name: `__r${i}`, t_score: null })),
   ]
+
+  const needsRotation = data.length > 5
 
   return (
     <div ref={containerRef} className="overflow-x-auto">
@@ -309,16 +324,19 @@ function ProfileChart({ items }: { items: { name: string; t_score: number | null
         <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
           <LineChart data={paddedData} margin={{ top: 28, right: 40, bottom: 8, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-            <ReferenceArea y1={20} y2={40} fill="#fee2e2" fillOpacity={0.35} />
-            <ReferenceArea y1={40} y2={60} fill="#e2e8f0" fillOpacity={0.45} />
-            <ReferenceArea y1={60} y2={80} fill="#dbeafe" fillOpacity={0.35} />
+            <ReferenceArea y1={20} y2={40} fill={T_ZONES[0].bg} fillOpacity={0.40} />
+            <ReferenceArea y1={40} y2={60} fill={T_ZONES[2].bg} fillOpacity={0.50} />
+            <ReferenceArea y1={60} y2={80} fill={T_ZONES[4].bg} fillOpacity={0.40} />
             <ReferenceLine y={50} stroke="#94a3b8" strokeDasharray="5 3" strokeWidth={1} />
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 12, fill: "#374151", fontWeight: 500 }}
+              tick={{ fontSize: needsRotation ? 10 : 11, fill: "#374151", fontWeight: 500 }}
               tickFormatter={(v: string) => v.startsWith("__") ? "" : v}
               tickLine={false} axisLine={false}
               interval={0}
+              angle={needsRotation ? -25 : 0}
+              textAnchor={needsRotation ? "end" : "middle"}
+              height={needsRotation ? 52 : 30}
             />
             <YAxis
               domain={[20, 80]}
@@ -328,8 +346,29 @@ function ProfileChart({ items }: { items: { name: string; t_score: number | null
               width={32}
             />
             <Tooltip
-              formatter={(v) => [`T = ${v}`, "T점수"]}
-              contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null
+                const item = payload[0].payload as ProfileChartItem
+                if (item.t_score === null) return null
+                const zone = tZoneLabel(item.t_score)
+                const zoneEntry = T_ZONES.find((z) => item.t_score! >= z.from && item.t_score! < z.to)
+                  ?? T_ZONES[T_ZONES.length - 1]
+                return (
+                  <div className="rounded-xl border border-border bg-white px-3 py-2.5 shadow-lg text-xs space-y-1" style={{ minWidth: 160 }}>
+                    <p className="font-semibold text-foreground leading-snug">{item.name}</p>
+                    <p className="text-muted-foreground">
+                      T점수: <span className="font-bold" style={{ color: BRAND }}>{item.t_score}</span>
+                      <span className="ml-1.5" style={{ color: zoneEntry.text }}>({zone})</span>
+                    </p>
+                    {item.percentile != null && (
+                      <p className="text-muted-foreground">백분위: {item.percentile}%ile</p>
+                    )}
+                    {item.category && (
+                      <p style={{ color: categoryStyle(item.category).value }}>{item.category}</p>
+                    )}
+                  </div>
+                )
+              }}
               cursor={{ stroke: "#e2e8f0", strokeWidth: 1 }}
             />
             <Line
@@ -338,7 +377,16 @@ function ProfileChart({ items }: { items: { name: string; t_score: number | null
               stroke={BRAND}
               strokeWidth={2.5}
               dot={{ fill: BRAND, r: 6, strokeWidth: 2, stroke: "#fff" }}
-              activeDot={{ r: 8, strokeWidth: 2, stroke: "#fff" }}
+              activeDot={{
+                r: 9,
+                strokeWidth: 2,
+                stroke: "#fff",
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                onClick: (_e: any, payload: any) => {
+                  if (onItemClick && payload?.index != null) onItemClick(payload.index as number)
+                },
+                style: { cursor: onItemClick ? "pointer" : "default" },
+              } as unknown as object}
               label={{ dataKey: "t_score", position: "top", fontSize: 11, fill: BRAND, fontWeight: 600, dy: -6 }}
             />
           </LineChart>
@@ -363,6 +411,14 @@ function PanelBreadcrumb({ items }: { items: string[] }) {
   )
 }
 
+// ── 요약 카드 그리드 클래스 헬퍼 ─────────────────────────────────────────────
+
+function summaryGridClass(count: number): string {
+  if (count <= 3) return "grid grid-cols-1 sm:grid-cols-3 gap-4"
+  if (count === 4) return "grid grid-cols-2 sm:grid-cols-4 gap-4"
+  return "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"
+}
+
 // ── 패널: 전체 요약 ───────────────────────────────────────────────────────────
 
 function OverviewPanel({ data, onNavigate }: { data: ReportData; onNavigate: (n: NavNode) => void }) {
@@ -370,8 +426,8 @@ function OverviewPanel({ data, onNavigate }: { data: ReportData; onNavigate: (n:
     <div className="space-y-6 animate-in fade-in-0 duration-200">
       <PanelBreadcrumb items={["전체 요약"]} />
 
-      {/* 척도 요약 카드 — 가로 스크롤 */}
-      <div className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory">
+      {/* 척도 요약 카드 — 반응형 그리드 */}
+      <div className={summaryGridClass(data.scales.length)}>
         {data.scales.map((s) => {
           const cs = categoryStyle(s.category)
           const id = scaleKey(s)
@@ -379,7 +435,7 @@ function OverviewPanel({ data, onNavigate }: { data: ReportData; onNavigate: (n:
             <button
               key={id}
               onClick={() => onNavigate({ type: "scale", id })}
-              className={`shrink-0 w-[240px] snap-start text-left rounded-xl border border-l-4 ${cs.border} border-border ${cs.card} p-4 shadow-sm hover:shadow-md transition-all duration-150 group`}
+              className={`w-full text-left rounded-xl border border-l-4 ${s.category ? cs.border + " " + cs.card : "border-l-slate-200 bg-white hover:border-l-[#2d3580]/40"} border-border p-4 shadow-sm hover:shadow-md transition-all duration-150 group`}
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-mono text-muted-foreground">{s.code}</span>
@@ -389,7 +445,7 @@ function OverviewPanel({ data, onNavigate }: { data: ReportData; onNavigate: (n:
                   </span>
                 )}
               </div>
-              <p className="text-xs font-semibold text-foreground leading-snug mb-3 group-hover:text-[#2d3580] transition-colors">
+              <p className="text-sm font-semibold text-foreground leading-snug mb-3 group-hover:text-[#2d3580] transition-colors">
                 {s.name}
               </p>
               <div className="flex items-end justify-between">
@@ -422,12 +478,27 @@ function OverviewPanel({ data, onNavigate }: { data: ReportData; onNavigate: (n:
               <p className="text-[11px] text-muted-foreground mt-0.5">평균(M) = 50, 표준편차(SD) = 10</p>
             </div>
             <div className="flex gap-3 text-[10px]">
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm bg-red-100" />낮음</span>
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm bg-slate-100" />보통</span>
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded-sm bg-blue-100" />높음</span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-2 rounded-sm" style={{ background: T_ZONES[0].bg }} />낮음 영역
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-2 rounded-sm" style={{ background: T_ZONES[2].bg }} />평균 영역
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-2 rounded-sm" style={{ background: T_ZONES[4].bg }} />높음 영역
+              </span>
             </div>
           </div>
-          <ProfileChart items={data.scales.map((s) => ({ name: s.name, t_score: s.t_score }))} />
+          <ProfileChart
+            items={data.scales.map((s) => ({ name: s.name, t_score: s.t_score, category: s.category, percentile: s.percentile }))}
+            onItemClick={(rawIdx) => {
+              const filtered = data.scales.filter((s) => s.t_score !== null)
+              const pc = filtered.length <= 2 ? 2 : filtered.length <= 4 ? 1 : 0
+              const realIdx = rawIdx - pc
+              const scale = filtered[realIdx]
+              if (scale) onNavigate({ type: "scale", id: scaleKey(scale) })
+            }}
+          />
         </div>
       )}
 
@@ -554,7 +625,7 @@ function ScalePanel({ scale }: { scale: ScaleRow }) {
             <h3 className="text-xs font-semibold text-foreground">하위척도 프로파일</h3>
             <span className="text-[10px] text-muted-foreground">{scale.facets.length}개 하위척도</span>
           </div>
-          <ProfileChart items={scale.facets.map((f) => ({ name: f.name, t_score: f.t_score }))} />
+          <ProfileChart items={scale.facets.map((f) => ({ name: f.name, t_score: f.t_score, category: f.category, percentile: f.percentile }))} />
           <div className="mt-4 divide-y divide-border/50">
             {scale.facets.map((f) => {
               const fc = categoryStyle(f.category)
@@ -682,6 +753,10 @@ function Sidebar({
 
   const overviewNode: NavNode = { type: "overview" }
   const scaleGroups = React.useMemo(() => groupScalesByTest(data.scales), [data.scales])
+  const scaleIndexMap = React.useMemo(
+    () => new Map(data.scales.map((s, i) => [scaleKey(s), i + 1])),
+    [data.scales]
+  )
 
   return (
     <aside
@@ -720,9 +795,9 @@ function Sidebar({
           {scaleGroups.map((group, gIdx) => (
             <div key={group.testId} className={gIdx > 0 ? "pt-2 mt-2 border-t border-border/60" : ""}>
               {/* 검사 헤더 */}
-              <div className="px-3 pt-2 pb-1.5 flex items-center gap-1.5">
-                <span className="text-[9px] font-bold text-[#2d3580] uppercase tracking-widest">{group.testId}</span>
-                <span className="text-[9px] text-muted-foreground/60">· {group.scales.length}개</span>
+              <div className="px-3 pt-2 pb-1.5 flex items-center gap-1.5 sticky top-0 z-10 bg-white">
+                <span className="text-[10px] font-bold text-[#2d3580] uppercase tracking-widest">{group.testId}</span>
+                <span className="text-[10px] text-muted-foreground">· {group.scales.length}개</span>
               </div>
 
               {/* 그룹 내 척도 트리 */}
@@ -737,7 +812,10 @@ function Sidebar({
                 const cs = categoryStyle(scale.category)
 
                 return (
-                  <div key={scaleId}>
+                  <div key={scaleId} className="relative">
+                    {isScaleActive && (
+                      <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full" style={{ background: BRAND }} />
+                    )}
                     <button
                       onClick={() => {
                         onSelect(scaleNode)
@@ -823,7 +901,7 @@ function Sidebar({
                 }`}
                 title={scale.name}
               >
-                <span className={isActive ? "text-white" : cs.value.replace("text-", "")}>{scale.code.slice(-2)}</span>
+                <span className={isActive ? "text-white" : cs.value.replace("text-", "")}>{scaleIndexMap.get(scaleId) ?? "·"}</span>
               </button>
             )
           })}
@@ -853,18 +931,30 @@ function Header({ data }: { data: ReportData }) {
 
       <div className="flex items-center gap-4 shrink-0">
         {/* 수검자 정보 */}
-        <div className="hidden sm:flex items-center gap-0 text-xs divide-x divide-border">
+        <div className="hidden sm:flex items-center gap-5 shrink-0">
           {data.profile.name && (
-            <span className="pr-3 font-semibold text-foreground">{data.profile.name}</span>
+            <div className="flex flex-col items-start">
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/70">이름</span>
+              <span className="text-xs font-semibold text-foreground leading-tight">{data.profile.name}</span>
+            </div>
           )}
           {data.profile.gender && (
-            <span className="px-3 text-muted-foreground">{data.profile.gender}</span>
+            <div className="flex flex-col items-start">
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/70">성별</span>
+              <span className="text-xs text-muted-foreground leading-tight">{data.profile.gender}</span>
+            </div>
           )}
           {data.profile.age_text && (
-            <span className="px-3 text-muted-foreground">{data.profile.age_text}</span>
+            <div className="flex flex-col items-start">
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/70">나이</span>
+              <span className="text-xs text-muted-foreground leading-tight">{data.profile.age_text}</span>
+            </div>
           )}
           {data.profile.birth_day && (
-            <span className="pl-3 text-muted-foreground">{data.profile.birth_day}</span>
+            <div className="flex flex-col items-start">
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/70">생년월일</span>
+              <span className="text-xs text-muted-foreground leading-tight">{data.profile.birth_day}</span>
+            </div>
           )}
         </div>
 
