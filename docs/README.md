@@ -30,6 +30,7 @@
 | 작업 종류 | 먼저 볼 문서 | 추가 확인 | 검증 기록 |
 | --- | --- | --- | --- |
 | 코드 수정/버그 수정/리팩토링 | `AGENTS.md` -> `docs/exec-plans/README.md` | `ARCHITECTURE.md`, 관련 `docs/features/*` | 실행계획 `Verification` |
+| 로컬 실행/프론트 반영 불일치 | `AGENTS.md` -> `docs/runtime-run-modes.md` | 실제 URL, 포트, 번들 파일명, 서버 프로세스 | 캡처와 `curl`/번들 확인 결과 |
 | DB 확인/마이그레이션 | `AGENTS.md` -> `docs/database/runtime-db.md` | `docs/database/schema-overview.md`, `ARCHITECTURE.md` | RDS 확인 결과 |
 | UI/디자인 수정 | `AGENTS.md` -> `DESIGN.md` | `QUALIT_SCORE.md`, `scripts/README_CAPTURE.md` | 전/후 스크린샷 |
 | 기능 흐름 설명/디버깅 설명 | `AGENTS.md` -> `docs/debug/explanation-rule.md` | 관련 소스와 기능 문서 | 확인한 경로와 근거 |

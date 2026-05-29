@@ -3,6 +3,8 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
+from app.db.session import engine
+
 BASE_DIR = Path(__file__).resolve().parents[2]
 REACT_DIST_DIR = BASE_DIR / "frontend" / "dist"
 
@@ -56,4 +58,9 @@ def admin_spa_page(path: str) -> FileResponse:
 
 @router.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "router+service", "ui": "react", "db": "postgresql"}
+    return {
+        "status": "ok",
+        "service": "router+service",
+        "ui": "react",
+        "db": engine.dialect.name,
+    }

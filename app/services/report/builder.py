@@ -23,6 +23,52 @@ def _load_interpret_map(db: Session, test_id: str) -> dict[str, Any]:
         return {}
 
 
+def _load_test_names(db: Session, test_ids: list[str]) -> dict[str, str]:
+    normalized_ids = [str(test_id).strip().upper() for test_id in test_ids if str(test_id).strip()]
+    if not normalized_ids:
+        return {}
+    placeholders = ", ".join(f":id{i}" for i in range(len(normalized_ids)))
+    params = {f"id{i}": test_id for i, test_id in enumerate(normalized_ids)}
+    rows = db.execute(
+        sqlalchemy.text(f'SELECT id, name FROM test WHERE id IN ({placeholders})'),
+        params,
+    ).fetchall()
+    return {str(row[0]).strip().upper(): str(row[1] or "").strip() for row in rows}
+
+
+def _load_scale_valence_map(db: Session, test_id: str) -> dict[str, str]:
+    rows = db.execute(
+        sqlalchemy.text('SELECT struct FROM scale WHERE "test.id" = :tid'),
+        {"tid": test_id},
+    ).fetchall()
+    valence_map: dict[str, str] = {}
+    for row in rows:
+        try:
+            scale_struct = json.loads(row[0] or "{}")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(scale_struct, dict):
+            continue
+        for code, raw_scale in scale_struct.items():
+            if not isinstance(raw_scale, dict):
+                continue
+            code_text = str(code).strip()
+            score_valence = str(raw_scale.get("score_valence", "")).strip()
+            if code_text and score_valence:
+                valence_map[code_text] = score_valence
+            facets = raw_scale.get("facet_scale")
+            if not isinstance(facets, dict):
+                continue
+            for facet_code, raw_facet in facets.items():
+                if not isinstance(raw_facet, dict):
+                    continue
+                facet_code_text = str(facet_code).strip()
+                facet_valence = str(raw_facet.get("score_valence", "")).strip()
+                if facet_code_text and facet_valence:
+                    valence_map[facet_code_text] = facet_valence
+    return valence_map
+
+
 def _get_interpretation(
     interpret_map: dict[str, Any],
     code: str,
@@ -66,6 +112,7 @@ def _calc_age_text(birth_day: str, ref_date: date | None = None) -> str:
 
 def _build_facet_rows(
     interpret_map: dict[str, Any],
+    valence_map: dict[str, str],
     facets: dict[str, Any],
     *,
     test_id: str,
@@ -88,6 +135,7 @@ def _build_facet_rows(
             "t_score": facet.get("t_score"),
             "percentile": facet.get("percentile"),
             "category": category,
+            "score_valence": facet.get("score_valence") or valence_map.get(code),
             "interpretation": _get_interpretation(interpret_map, code, category, raw_score),
         })
     return rows
@@ -95,6 +143,7 @@ def _build_facet_rows(
 
 def _build_scale_rows(
     interpret_map: dict[str, Any],
+    valence_map: dict[str, str],
     scales: dict[str, Any],
     *,
     test_id: str,
@@ -116,11 +165,13 @@ def _build_scale_rows(
             "t_score": scale.get("t_score"),
             "percentile": scale.get("percentile"),
             "category": category,
+            "score_valence": scale.get("score_valence") or valence_map.get(code),
             "interpretation": _get_interpretation(interpret_map, code, category, raw_score),
             "answered_item_count": scale.get("answered_item_count"),
             "expected_item_count": scale.get("expected_item_count"),
             "facets": _build_facet_rows(
                 interpret_map,
+                valence_map,
                 facets_raw,
                 test_id=test_id,
                 parent_code=code,
@@ -205,14 +256,16 @@ def build_report_from_scoring(
         test_ids = [str(custom_test.test_id)]
 
     all_scales: list[dict[str, Any]] = []
+    test_names = _load_test_names(db, test_ids)
     for tid in test_ids:
         tid_upper = str(tid).strip().upper()
         interpret_map = _load_interpret_map(db, tid_upper)
+        valence_map = _load_scale_valence_map(db, tid_upper)
         test_result = result_json.get(tid_upper, {})
         if not isinstance(test_result, dict):
             continue
         scales = test_result.get("scales", {})
-        all_scales.extend(_build_scale_rows(interpret_map, scales, test_id=tid_upper))
+        all_scales.extend(_build_scale_rows(interpret_map, valence_map, scales, test_id=tid_upper))
 
     gender_label = {"male": "남자", "female": "여자"}.get(profile.get("gender", ""), profile.get("gender", ""))
 
@@ -226,6 +279,7 @@ def build_report_from_scoring(
             "birth_day": birth_day,
             "age_text": _calc_age_text(birth_day, test_date),
         },
+        "test_names": test_names,
         "scales": all_scales,
     }
 

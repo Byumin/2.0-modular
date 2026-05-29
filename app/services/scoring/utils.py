@@ -128,6 +128,13 @@ def normalize_choice_score_map(raw_choice_score: Any) -> dict[str, dict[str, int
     return normalized
 
 
+def normalize_score_valence(raw_value: Any) -> str | None:
+    value = str(raw_value or "").strip().lower()
+    if value in {"positive", "negative", "neutral"}:
+        return value
+    return None
+
+
 def build_scoring_scale_index(
     scale_struct: dict[str, Any],
     selected_scale_codes: set[str] | None = None,
@@ -167,11 +174,15 @@ def build_scoring_scale_index(
             facet_choice_score = normalize_choice_score_map(raw_facet.get("choice_score"))
             if not facet_choice_score:
                 continue
-            facets[facet_code_text] = {
+            facet_entry = {
                 "code": facet_code_text,
                 "name": str(raw_facet.get("name", facet_code_text)),
                 "items": facet_choice_score,
             }
+            facet_valence = normalize_score_valence(raw_facet.get("score_valence"))
+            if facet_valence:
+                facet_entry["score_valence"] = facet_valence
+            facets[facet_code_text] = facet_entry
 
         if not choice_score and not facets:
             continue
@@ -181,6 +192,9 @@ def build_scoring_scale_index(
             "name": str(raw_scale.get("name", code_text)),
             "selection_scope": "parent" if parent_selected else "facet",
         }
+        scale_valence = normalize_score_valence(raw_scale.get("score_valence"))
+        if scale_valence:
+            scale_entry["score_valence"] = scale_valence
         if choice_score and (parent_selected or all_facets_selected):
             scale_entry["items"] = choice_score
         elif choice_score:
@@ -318,11 +332,15 @@ def build_choice_score_result(test_id: str, context: ScoringContext) -> ScoringR
                         answers_by_item=answers_by_item,
                         choice_score=facet_items,
                     )
-                    facet_results[facet_code_text] = {
+                    facet_result = {
                         "code": facet_code_text,
                         "name": str(raw_facet.get("name", facet_code_text)),
                         **scored_facet,
                     }
+                    facet_valence = normalize_score_valence(raw_facet.get("score_valence"))
+                    if facet_valence:
+                        facet_result["score_valence"] = facet_valence
+                    facet_results[facet_code_text] = facet_result
                     facet_total += scored_facet["total_score"]
                     facet_answered += scored_facet["answered_item_count"]
                     facet_expected += scored_facet["expected_item_count"]
@@ -339,6 +357,9 @@ def build_choice_score_result(test_id: str, context: ScoringContext) -> ScoringR
                 "name": str(raw_scale.get("name", code_text)),
                 "sub_test_json": sub_test_json,
             }
+            scale_valence = normalize_score_valence(raw_scale.get("score_valence"))
+            if scale_valence:
+                scale_entry["score_valence"] = scale_valence
 
             if has_items:
                 # B척도 flat choice_score 사용 (척도레벨 역채점 반영본)
