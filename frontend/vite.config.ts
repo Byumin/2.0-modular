@@ -6,6 +6,15 @@ import path from 'path'
 const BACKEND_ORIGIN = 'http://127.0.0.1:8120'
 
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        entryFileNames: `assets/[name]-[hash]-v2.js`,
+        chunkFileNames: `assets/[name]-[hash]-v2.js`,
+        assetFileNames: `assets/[name]-[hash]-v2.[ext]`,
+      },
+    },
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -13,9 +22,10 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,
     port: 5120,
     strictPort: true,
-    allowedHosts: ['inpsyt-norm.com', 'www.inpsyt-norm.com'],
+    allowedHosts: true,
     proxy: {
       // API 호출
       '/api': {

@@ -1,6 +1,88 @@
-# Execution Plan
+# 실행 계획: 검사 결과 페이지 전면 재구성
 
-## Task Title
+- 날짜: 2026-05-26
+- 작업자: Claude (Sonnet 4.6)
+- 브랜치: feat/report-page-revamp
+- 파일: `frontend/src/pages/report/ReportPage.tsx`
+
+---
+
+## 1. 목표
+
+`docs/design/reference/report-ui-ux/` 디자인 레퍼런스(variantA)를 기준으로 검사 결과 화면을 전면 재구성한다.
+
+---
+
+## 2. 현황 분석
+
+### 현재 데이터 형태 (백엔드 API)
+
+각 scale에 `test_id` 포함 → 프론트에서 검사별 그룹화 가능  
+`direction` 정보 없음 → 프론트 lookup table로 보완  
+`definition`, `purpose`, `meta` 없음 → 해당 섹션 생략
+
+### 현재 UI 문제점
+- 다중 검사 탭 없음 (단일 플랫 구조)
+- 방향성 기반 색상 없음 (T>60=red, T<40=blue 고정)
+- 사이드바 + 패널 구조로 검사 간 비교 불가
+- recharts 의존 (SVG 직접 제어 불가)
+- BellCurve, ZoneBar 없음
+
+---
+
+## 3. 변경 범위
+
+### 백엔드 (변경 없음)
+
+### 프론트엔드 (전면 재작성)
+**파일**: `frontend/src/pages/report/ReportPage.tsx`
+
+### 신규 컴포넌트
+
+| 컴포넌트 | 설명 |
+|---|---|
+| ProfileHeader | 수검자 정보 헤더 + 인쇄 버튼 |
+| KPIStrip | 상단 요약 카드 |
+| TabBar | 전체비교 + 검사별 탭 |
+| OverviewTab | 핵심발견 + 검사간비교 차트 + CrossTestBreakdown |
+| TestTab | 개별 검사 탭 (결과 차트 + 척도 해석) |
+| ZoneBar | T점수 수평 바 |
+| TestComparisonChart | 검사별 세로 막대 그래프 (SVG) |
+| CrossTestBreakdown | 모든 척도 ZoneBar 리스트 |
+| TestHierarchyChart | 계층 차트 (SVG) |
+| TestInterpretationList | 척도별 해석 문구 |
+| DetailDrawer | 슬라이드인 상세 패널 |
+| Highlights | 주의 척도 자동 추출 |
+
+### 제거 사항
+- recharts 의존 제거 (순수 SVG로 대체)
+- 기존 Sidebar 컴포넌트 제거
+- 기존 OverviewPanel, ScalePanel, FacetPanel 제거
+
+### 유지 사항
+- 동일 API 엔드포인트
+- isReportData() 타입 가드
+- ReportPage, AdminReportPage export 시그니처
+
+---
+
+## 4. 검증 계획
+
+- [ ] 로딩/에러 상태 렌더링
+- [ ] 전체비교 탭: KPIStrip, Highlights, TestComparisonChart, CrossTestBreakdown
+- [ ] 검사별 탭: TestHierarchyChart, TestInterpretationList
+- [ ] DetailDrawer 열기/닫기
+- [ ] 인쇄 버튼 동작
+
+---
+
+## 5. 결과
+
+| 항목 | 상태 |
+|---|---|
+| 실행 계획 작성 | ✅ |
+| 코드 구현 | ✅ |
+| 검증 | ✅ |
 - ReportPage(수검자용 토큰 기반 검사 리포트) 화면 개선
 
 ## Request Summary

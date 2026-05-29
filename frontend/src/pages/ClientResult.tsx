@@ -26,6 +26,7 @@ interface ClientSummary {
 }
 
 interface AssessmentLog {
+  id: number
   custom_test_name?: string
   assessed_on: string | null
   scale_scores?: ScaleScore[]
@@ -75,15 +76,25 @@ export function ClientResult() {
       .then((r) => r.json())
       .then((data) => {
         const item = data.item || data
+        const logs = (item.assessment_logs ?? []) as AssessmentLog[]
+        const latestCompletedLog = logs
+          .filter((log) => log.assessed_on && Number.isFinite(Number(log.id)))
+          .sort((a, b) => {
+            const aTime = a.assessed_on ? new Date(a.assessed_on).getTime() : 0
+            const bTime = b.assessed_on ? new Date(b.assessed_on).getTime() : 0
+            return bTime - aTime
+          })[0]
+        if (latestCompletedLog) {
+          navigate(`/admin/report/${latestCompletedLog.id}`, { replace: true })
+          return
+        }
         setSummary({
           name: item.name,
           gender: item.gender,
           birth_day: item.birth_day,
           age: item.age,
         })
-        const groups: TestResultGroup[] = (
-          (item.assessment_logs ?? []) as AssessmentLog[]
-        ).map((log) => ({
+        const groups: TestResultGroup[] = logs.map((log) => ({
           test_name: log.custom_test_name ?? "검사",
           assessed_on: log.assessed_on,
           scales: log.scale_scores ?? [],
@@ -92,7 +103,7 @@ export function ClientResult() {
       })
       .catch(() => setError("결과를 불러올 수 없습니다."))
       .finally(() => setLoading(false))
-  }, [id])
+  }, [id, navigate])
 
   // 파생값 계산 (요약 스트립용)
   const totalTests = results.length

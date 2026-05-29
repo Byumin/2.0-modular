@@ -21,6 +21,7 @@
 - 실행 계획/회고 문서: [docs/exec-plans/README.md](docs/exec-plans/README.md)
 - UI 검증과 스크린샷 기준: [QUALIT_SCORE.md](QUALIT_SCORE.md)
 - 디자인/폰트/UI/UX/테마 기준: [DESIGN.md](DESIGN.md)
+- 로컬 실행/프론트 반영/예전 UI 런타임 문제: [docs/runtime-run-modes.md](docs/runtime-run-modes.md)
 
 ## Start Checklist
 모든 작업은 아래 순서로 확인한다. 상세 규칙은 링크된 source-of-truth 문서에서만 관리한다.
@@ -29,6 +30,7 @@
 2. 코드 수정/리팩토링/DB/문서 체계 변경이면 `docs/exec-plans/`에 실행계획을 만든다.
 3. 작업 종류별 source 문서를 확인한다.
    - 구조/DB/엔트리포인트: `ARCHITECTURE.md`, `docs/database/runtime-db.md`
+   - 로컬 서버/포트/프론트 반영 문제: `docs/runtime-run-modes.md`
    - UI/디자인: `DESIGN.md`, `QUALIT_SCORE.md`
    - 기능 흐름 설명/디버깅: `docs/debug/explanation-rule.md`
    - 문서 추가/정리: `docs/doc-governance.md`

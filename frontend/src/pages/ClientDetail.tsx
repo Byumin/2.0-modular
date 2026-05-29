@@ -503,6 +503,11 @@ export function ClientDetail() {
   const age = ageText(client.birth_day)
   const inProgressLogs = client.assessment_logs.filter((l) => !l.assessed_on)
   const completedLogs = client.assessment_logs.filter((l) => !!l.assessed_on)
+  const latestCompletedLog = [...completedLogs].sort((a, b) => {
+    const aTime = a.assessed_on ? new Date(a.assessed_on).getTime() : 0
+    const bTime = b.assessed_on ? new Date(b.assessed_on).getTime() : 0
+    return bTime - aTime
+  })[0]
 
   return (
     <div className="flex flex-col gap-6 p-6 overflow-auto">
@@ -537,9 +542,11 @@ export function ClientDetail() {
             <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={() => setShowAssign(!showAssign)}>
               검사 예약
             </Button>
-            <Button size="sm" className="h-9 gap-1.5" asChild>
-              <Link to={`/admin/clients/${id}/result`}>검사 실시</Link>
-            </Button>
+            {latestCompletedLog && (
+              <Button size="sm" className="h-9 gap-1.5" asChild>
+                <Link to={`/admin/report/${latestCompletedLog.id}`}>최근 결과 확인</Link>
+              </Button>
+            )}
           </div>
         </div>
 

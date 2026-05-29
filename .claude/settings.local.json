@@ -14,7 +14,10 @@
       "Read(//tmp/**)",
       "Bash(npx playwright *)",
       "Bash(node *)",
-      "Bash(.venv/bin/python *)"
+      "Bash(.venv/bin/python *)",
+      "Bash(git fetch *)",
+      "Bash(npm --prefix frontend run build)",
+      "Bash(npm run *)"
     ]
   }
 }
