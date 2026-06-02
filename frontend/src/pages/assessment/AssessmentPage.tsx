@@ -177,8 +177,6 @@ export function AssessmentPage() {
   const [completedSubmissionId, setCompletedSubmissionId] = React.useState<number | null>(null)
   const [completedReportAccessToken, setCompletedReportAccessToken] = React.useState<string | null>(null)
   const [error, setError] = React.useState("")
-  const [modalProfile, setModalProfile] = React.useState<Profile | null>(null)
-  const [registering, setRegistering] = React.useState(false)
 
   // Ambiguous match state
   const [ambiguousProfile, setAmbiguousProfile] = React.useState<Profile | null>(null)
@@ -284,14 +282,14 @@ export function AssessmentPage() {
   async function proceedToQuestionStep(
     profile: Profile,
     options: {
-      reopenAutoCreateModal?: boolean
+      autoRegisterOnAutoCreateRequired?: boolean
       client_id?: number | null
       responder_choice?: "existing" | "new" | null
       candidate_client_ids?: number[]
       allow_retake?: boolean
     } = {}
   ) {
-    const { reopenAutoCreateModal = true, client_id, responder_choice, candidate_client_ids, allow_retake = false } = options
+    const { autoRegisterOnAutoCreateRequired = true, client_id, responder_choice, candidate_client_ids, allow_retake = false } = options
     setError("")
     if (!allow_retake) {
       setRetakePrompt(null)
@@ -362,9 +360,16 @@ export function AssessmentPage() {
     } catch (err) {
       const apiError = err as ApiError
       if (apiError.code === AUTO_CREATE_CONFIRM_REQUIRED_CODE) {
-        if (reopenAutoCreateModal) {
-          setModalProfile(profile)
-          setError(apiError.message || "내담자 등록 또는 연결 확인이 필요합니다.")
+        if (autoRegisterOnAutoCreateRequired) {
+          try {
+            await api(`/api/assessment-links/${token}/register-client`, {
+              method: "POST",
+              body: JSON.stringify({ profile }),
+            })
+            await proceedToQuestionStep(profile, { autoRegisterOnAutoCreateRequired: false })
+          } catch (registerError) {
+            setError(registerError instanceof Error ? registerError.message : "내담자 등록과 배정에 실패했습니다.")
+          }
         } else {
           setError("내담자 등록은 완료됐지만 검사 배정 확인이 다시 필요합니다. 잠시 후 다시 시도해주세요.")
         }
@@ -411,25 +416,6 @@ export function AssessmentPage() {
       setError(apiError.message || "배정된 내담자 확인에 실패했습니다.")
     } finally {
       setProfileLoading(false)
-    }
-  }
-
-  async function handleRegisterClient() {
-    if (!modalProfile || registering) return
-    setRegistering(true)
-    setError("내담자 등록과 검사 배정을 진행하는 중입니다.")
-    try {
-      await api(`/api/assessment-links/${token}/register-client`, {
-        method: "POST",
-        body: JSON.stringify({ profile: modalProfile }),
-      })
-      const profile = modalProfile
-      setModalProfile(null)
-      await proceedToQuestionStep(profile, { reopenAutoCreateModal: false })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "내담자 등록과 배정에 실패했습니다.")
-    } finally {
-      setRegistering(false)
     }
   }
 
@@ -765,40 +751,6 @@ export function AssessmentPage() {
         </div>
 
       </div>
-
-      {modalProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f2a2c]/35 px-4 backdrop-blur-sm">
-          <section className="assessment-modal-fit overflow-hidden rounded-2xl border border-[#dfe5e3] bg-white shadow-2xl">
-            <div className="h-[3px] bg-[#175e63]" />
-            <div className="p-6">
-              <h2 className="text-lg font-semibold text-[#161d1b]">내담자 연결 확인</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                기존 내담자를 재사용하거나 신규 내담자로 등록해 현재 검사에 연결합니다.
-              </p>
-              <p className="mt-4 rounded-lg border border-[#e4ebe9] bg-[#eef2f4]/60 p-3 text-sm text-[#3a4a47]">{profileSummary(modalProfile)}</p>
-              {error && <p className="mt-3 text-sm text-muted-foreground">{error}</p>}
-              <div className="mt-6 flex justify-end gap-2">
-                <button
-                  type="button"
-                  disabled={registering}
-                  onClick={() => setModalProfile(null)}
-                  className="h-10 rounded-lg border border-[#dfe5e3] bg-white px-4 text-sm font-medium text-[#3a4a47] transition-colors hover:bg-[#f3f5f4] disabled:opacity-50"
-                >
-                  취소
-                </button>
-                <button
-                  type="button"
-                  disabled={registering}
-                  onClick={handleRegisterClient}
-                  className="h-10 rounded-lg bg-[#175e63] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#124b4f] disabled:opacity-50"
-                >
-                  {registering ? "등록 중..." : "예"}
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
-      )}
 
       {ambiguousProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f2a2c]/35 px-4 backdrop-blur-sm">
