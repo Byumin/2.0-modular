@@ -117,6 +117,7 @@ export function QuestionStep({
   const [showMissingHighlight, setShowMissingHighlight] = React.useState(false)
   const [viewMode, setViewMode] = React.useState<ViewMode>("cards")
   const questionAreaRef = React.useRef<HTMLDivElement | null>(null)
+  const quickNavRef = React.useRef<HTMLDivElement | null>(null)
   const pendingScrollRef = React.useRef<"first" | string | null>("first")
   const answersRef = React.useRef<AnswerState>(initialAnswers ?? {})
   const partIndexRef = React.useRef(safeInitialPartIndex)
@@ -140,7 +141,6 @@ export function QuestionStep({
     ),
     [parts, partBundles]
   )
-
   React.useEffect(() => { answersRef.current = answers }, [answers])
   React.useEffect(() => { partIndexRef.current = partIndex }, [partIndex])
   React.useEffect(() => { pageRef.current = page }, [page])
@@ -153,6 +153,32 @@ export function QuestionStep({
   React.useEffect(() => {
     onProgressChange?.({ answers, currentPartIndex: partIndex, currentPage: page })
   }, [answers, partIndex, page, onProgressChange])
+  React.useEffect(() => {
+    function alignQuickNav() {
+      const nav = quickNavRef.current
+      const firstItem = currentItems[0]
+      if (!nav || !firstItem) return
+
+      const displayedIndex = questionAreaRef.current
+        ?.querySelector<HTMLElement>("[data-question-display-index]")
+        ?.dataset.questionDisplayIndex
+      const activeIndex = displayedIndex ?? String(firstItem.global_order_index ?? currentBundle.startIndex + 1)
+      const activeButton = nav.querySelector<HTMLButtonElement>(`[data-quick-index="${activeIndex}"]`)
+      if (!activeButton) return
+
+      const navRect = nav.getBoundingClientRect()
+      const btnRect = activeButton.getBoundingClientRect()
+      const relativeTop = btnRect.top - navRect.top + nav.scrollTop
+      nav.scrollTo({ top: Math.max(0, relativeTop - (activeButton.offsetHeight + 4) * 2), behavior: "auto" })
+    }
+
+    const frame = window.requestAnimationFrame(alignQuickNav)
+    const retry = window.setTimeout(alignQuickNav, 80)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(retry)
+    }
+  }, [partIndex, page, currentItems, currentBundle.startIndex])
 
   function answered(id: string) { return Boolean(answers[id]?.trim()) }
   function itemOptions(item: QuestionItem) {
@@ -261,8 +287,30 @@ export function QuestionStep({
         setTimeout(() => moveToItem(nextMissing.item.id, { focus: true }), 350)
       }
     } else {
-      const nextMissing = nextMissingAfterItem(id, updatedAnswers)
-      if (nextMissing) moveToItem(nextMissing.item.id, { focus: true })
+      const allCurrentPageAnswered = currentItems.every(item => Boolean(updatedAnswers[item.id]?.trim()))
+      if (allCurrentPageAnswered) {
+        if (!(page >= bundles.length - 1 && partIndex >= parts.length - 1)) {
+          setTimeout(() => handleNext(), 350)
+        }
+      } else {
+        const nextMissing = nextMissingAfterItem(id, updatedAnswers)
+        const isSamePage = nextMissing
+          ? nextMissing.partIndex === partIndexRef.current && nextMissing.page === pageRef.current
+          : false
+        if (nextMissing && isSamePage) {
+          moveToItem(nextMissing.item.id, { focus: true })
+          window.requestAnimationFrame(() => {
+            const nav = quickNavRef.current
+            if (!nav) return
+            const btn = nav.querySelector<HTMLButtonElement>(`[data-quick-item-id="${nextMissing.item.id}"]`)
+            if (!btn) return
+            const navRect = nav.getBoundingClientRect()
+            const btnRect = btn.getBoundingClientRect()
+            const relativeTop = btnRect.top - navRect.top + nav.scrollTop
+            nav.scrollTo({ top: Math.max(0, relativeTop - (btn.offsetHeight + 4) * 2), behavior: "smooth" })
+          })
+        }
+      }
     }
   }
 
@@ -773,6 +821,7 @@ export function QuestionStep({
                     return (
                       <div
                         key={item.id}
+                        data-question-display-index={item.global_order_index ?? currentBundle.startIndex + 1}
                         className={`rounded-2xl border-2 bg-white transition-all ${hasMissingMatrix ? "border-red-300 ring-2 ring-red-100" : "border-transparent shadow-sm"}`}
                       >
                         <MatrixCard groupItems={currentItems} options={options} answerState={answers} onAnswer={handleAnswer} startGlobalIndex={item.global_order_index ?? currentBundle.startIndex + 1} />
@@ -788,6 +837,7 @@ export function QuestionStep({
                     key={item.id}
                     id={`question-card-${item.id}`}
                     data-item-id={item.id}
+                    data-question-display-index={item.global_order_index ?? currentBundle.startIndex + cardIdx + 1}
                     tabIndex={-1}
                     className={`rounded-2xl border-2 bg-white p-6 transition-all ${
                       isMissing
@@ -903,20 +953,20 @@ export function QuestionStep({
               {/* 빠른 이동 */}
               <div className="mt-3 border-t border-[#f0f2f5] pt-3">
                 <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[#b0bab7]">빠른 이동</p>
-                <div className="max-h-[88px] overflow-y-auto rounded-lg">
+                <div ref={quickNavRef} className="max-h-[136px] overflow-y-auto rounded-lg">
                   <div className="grid grid-cols-5 gap-1">
-                    {parts.flatMap((part, pi) =>
-                      (part.items ?? []).map((item, idx) => {
-                        const globalIdx = part.items ? part.items.slice(0, idx).reduce((acc) => acc + 1, 0) : idx
-                        const bundleIdx = (partBundles[pi] ?? []).findIndex(b => b.items.some(i => i.id === item.id))
-                        const isOnCurrentPage = pi === partIndex && bundleIdx === page
+                    {(activePart?.items ?? []).map((item, idx) => {
+                        const displayIndex = item.global_order_index ?? idx + 1
+                        const bundleIdx = bundles.findIndex(b => b.items.some(i => i.id === item.id))
+                        const isOnCurrentPage = bundleIdx === page
                         return (
                           <button
                             key={item.id}
                             type="button"
+                            data-quick-item-id={item.id}
+                            data-quick-index={displayIndex}
                             onClick={() => {
-                              if (pi !== partIndex) { setPartIndex(pi); setPage(bundleIdx >= 0 ? bundleIdx : 0) }
-                              else if (bundleIdx !== page) setPage(bundleIdx >= 0 ? bundleIdx : 0)
+                              if (bundleIdx !== page) setPage(bundleIdx >= 0 ? bundleIdx : 0)
                             }}
                             className={`h-6 rounded text-[10px] font-semibold transition-all ${
                               answered(item.id)
@@ -933,11 +983,10 @@ export function QuestionStep({
                                 : undefined
                           }
                           >
-                            {(item.global_order_index ?? globalIdx + 1)}
+                            {displayIndex}
                           </button>
                         )
-                      })
-                    )}
+                      })}
                   </div>
                 </div>
               </div>
