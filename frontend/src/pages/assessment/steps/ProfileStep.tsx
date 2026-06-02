@@ -1,4 +1,5 @@
 import * as React from "react"
+import { ResearchNotice } from "../components/ResearchNotice"
 import type { InitialPayload, AdditionalProfileField, Profile, TestProfileSection } from "../types"
 
 const INFORMANT_LABELS: Record<string, string> = {
@@ -434,6 +435,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                   검사 시작 전 본인 확인을 진행합니다. 응답은 제출 후 결과 산출과 관리자 확인에 사용됩니다.
                 </p>
               </div>
+              <ResearchNotice />
             </div>
           </section>
 
