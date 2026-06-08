@@ -30,6 +30,7 @@
 5. 검증 결과와 미검증 항목을 이 문서와 최종 보고에 남긴다.
 
 ## 작업 중 변경 사항
+- 엑셀 파일 파싱을 위해 프런트 의존성 `xlsx`를 추가했다. Python 백엔드 의존성이 아니므로 `requirements.txt`가 아니라 `frontend/package.json`과 `frontend/package-lock.json`에 반영했다.
 - 엑셀 업로드 헤더를 프런트에서 내부 key로 정규화하도록 `frontend/src/pages/TestDetail.tsx`를 수정했다.
 - 백엔드 bulk/direct 등록에서도 한글 표시명, 공백/하이픈/언더스코어 차이, `phone`/`phon_num` 계열 alias를 정규화하도록 `app/services/admin/assessment_links.py`를 수정했다.
 - 실제 UI의 휴대폰 field key가 `phon_num`, label이 `핸드폰 번호`인 경로에서 기본 `phone` alias가 먼저 적용되는 문제가 있어, 사용 가능 필드와 현재 match key를 기본 alias보다 우선하도록 보정했다.
@@ -46,6 +47,8 @@
 - FAT는 현재 채점 엔진 지원 대상이 아니라 scoring row의 `scoring_status`는 `skipped`, reason은 `unsupported_test_id`로 남는다. 제출 자체는 성공했다.
 
 ## 검증 내용
+- `frontend/package.json`: `xlsx` 의존성 반영 확인
+- `frontend/package-lock.json`: `xlsx` lockfile 반영 확인
 - `npm --prefix frontend run build`: 통과
 - `.venv/bin/python -m py_compile app/repositories/custom_test_repository.py app/services/admin/assessment_links.py`: 통과
 - `APP_ENV=local.prod` 서버 health: `db=postgresql`
