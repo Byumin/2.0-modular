@@ -1095,6 +1095,19 @@ def ensure_access_link_allow_unanswered_submission_column() -> None:
             )
 
 
+def ensure_child_test_allow_unanswered_submission_column() -> None:
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("child_test")}
+    with engine.begin() as conn:
+        if "allow_unanswered_submission" not in columns:
+            conn.exec_driver_sql(
+                """
+                ALTER TABLE child_test
+                ADD COLUMN allow_unanswered_submission BOOLEAN NOT NULL DEFAULT FALSE
+                """
+            )
+
+
 def ensure_assessment_link_pre_registered_client_table() -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())

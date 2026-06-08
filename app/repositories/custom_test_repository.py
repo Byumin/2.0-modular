@@ -203,12 +203,14 @@ def create_access_link(
     admin_user_id: int,
     custom_test_id: int,
     access_token: str,
+    allow_unanswered_submission: bool = False,
 ) -> AdminCustomTestAccessLink:
     row = AdminCustomTestAccessLink(
         admin_user_id=admin_user_id,
         admin_custom_test_id=custom_test_id,
         access_token=access_token,
         is_active=True,
+        allow_unanswered_submission=allow_unanswered_submission,
     )
     db.add(row)
     db.commit()

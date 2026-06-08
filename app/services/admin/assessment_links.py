@@ -1054,6 +1054,7 @@ def generate_custom_test_access_link(db: Session, admin_session: str | None, cus
             admin_user_id=admin.id,
             custom_test_id=custom_test.id,
             access_token=secrets.token_urlsafe(24),
+            allow_unanswered_submission=bool(getattr(custom_test, "allow_unanswered_submission", False)),
         )
 
     return {

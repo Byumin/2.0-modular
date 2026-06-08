@@ -48,6 +48,7 @@ class CreateCustomTestBatchIn(BaseModel):
     client_intake_mode: Literal["pre_registered_only", "auto_create"] = "pre_registered_only"
     requires_consent: bool = False
     show_research_notice: bool = True
+    allow_unanswered_submission: bool = False
     test_configs: list[CreateCustomTestConfigIn] = Field(min_length=1)
     session_configs: list[CreateCustomTestSessionIn] = Field(default_factory=list)
     additional_profile_fields: list[AdditionalProfileFieldIn] = Field(default_factory=list)

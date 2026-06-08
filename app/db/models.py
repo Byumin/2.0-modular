@@ -29,6 +29,7 @@ class AdminCustomTest(Base):
     additional_profile_fields_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     requires_consent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     show_research_notice: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    allow_unanswered_submission: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
