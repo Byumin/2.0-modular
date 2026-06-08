@@ -125,6 +125,7 @@ interface CreatePayload {
   client_intake_mode: string
   requires_consent: boolean
   show_research_notice: boolean
+  allow_unanswered_submission: boolean
   test_configs: Array<{
     test_id: string
     selected_scale_codes: string[]
@@ -376,6 +377,7 @@ export function TestManagement() {
   const [createIntakeMode, setCreateIntakeMode] = React.useState("pre_registered_only")
   const [createRequiresConsent, setCreateRequiresConsent] = React.useState(false)
   const [createShowResearchNotice, setCreateShowResearchNotice] = React.useState(true)
+  const [createAllowUnansweredSubmission, setCreateAllowUnansweredSubmission] = React.useState(false)
   const [createMessage, setCreateMessage] = React.useState<{ text: string; error: boolean } | null>(null)
   const [catalogMessage, setCatalogMessage] = React.useState("")
   const [creating, setCreating] = React.useState(false)
@@ -447,6 +449,7 @@ export function TestManagement() {
     setCreateIntakeMode("pre_registered_only")
     setCreateRequiresConsent(false)
     setCreateShowResearchNotice(true)
+    setCreateAllowUnansweredSubmission(false)
     setCreateMessage(null)
     setSelectedTestIds([])
     setExpandedTestIds(new Set())
@@ -766,6 +769,7 @@ export function TestManagement() {
         client_intake_mode: normalizeClientIntakeMode(createIntakeMode),
         requires_consent: createRequiresConsent,
         show_research_notice: createShowResearchNotice,
+        allow_unanswered_submission: createAllowUnansweredSubmission,
         test_configs,
         session_configs,
         additional_profile_fields,
@@ -1187,6 +1191,19 @@ export function TestManagement() {
                           <span className="text-sm">첫 화면에 연구 참여 안내 카드 표시</span>
                         </label>
                         <p className="text-xs text-muted-foreground">검사 성격에 따라 연구 안내 카드를 숨길 수 있습니다.</p>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium">응답 제출 방식</label>
+                        <label className="flex cursor-pointer items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={createAllowUnansweredSubmission}
+                            onChange={(e) => setCreateAllowUnansweredSubmission(e.target.checked)}
+                            className="size-4 rounded border-input"
+                          />
+                          <span className="text-sm">미응답 문항이 있어도 제출 허용</span>
+                        </label>
+                        <p className="text-xs text-muted-foreground">허용하면 제출 전 미응답 문항 확인 모달을 보여주고, 그대로 제출할 수 있습니다.</p>
                       </div>
                     </div>
                   )}

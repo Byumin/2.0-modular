@@ -38,6 +38,7 @@
 - `admin_custom_test_access_link.allow_unanswered_submission` 컬럼을 모델과 startup 마이그레이션에 추가했다.
 - 관리자 링크 옵션 API `PUT /api/admin/access-links/{access_token}/response-options`를 추가했다.
 - 검사 상세 화면의 링크 생성 카드에 `무응답 제출 허용` 토글과 저장 버튼을 추가했다.
+- 후속 보정: 검사 생성 화면 Step 1에도 `미응답 문항이 있어도 제출 허용` 옵션을 추가하고, 생성된 검사 기본값을 이후 실시 링크 생성 시 `admin_custom_test_access_link.allow_unanswered_submission`으로 복사하도록 수정했다.
 - 수검자 초기 payload에 `allow_unanswered_submission`을 포함했다.
 - 수검자 `QuestionStep`에서 무응답 허용 링크인 경우 제출 버튼을 활성화하고, 미응답 문항 확인 모달을 띄우도록 수정했다.
 - 모달은 미응답 문항 번호를 최대 5개 표시하고 `응답하기`, `제출하기` 버튼을 제공한다.
@@ -50,6 +51,7 @@
 - 링크 옵션 off 상태에서는 일부 응답 제출이 `모든 문항에 응답해주세요.`로 차단된다.
 - 링크 옵션 on 상태에서는 일부 응답만으로 제출이 저장된다.
 - 관리자에서 링크별로 무응답 제출 허용 여부를 켜고 끌 수 있다.
+- 검사 생성 시점에도 기본 무응답 제출 허용 여부를 설정할 수 있고, 새로 생성되는 실시 링크는 이 기본값을 상속한다.
 
 ## 검증 내용
 - `.venv/bin/python -m py_compile ...`: 통과
@@ -70,6 +72,7 @@
   - RDS `admin_custom_test_access_link.allow_unanswered_submission=true`
 - UI 스크린샷:
   - 관리자 옵션: `artifacts/screenshots/2026-06-05-access-link-unanswered-option.png`
+  - 검사 생성 옵션: `artifacts/screenshots/2026-06-08-create-unanswered-option.png`
   - 수검자 무응답 모달: `artifacts/screenshots/2026-06-05-unanswered-submit-modal.png`
 
 ## 회고

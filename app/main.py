@@ -18,6 +18,7 @@ from app.db.schema_migrations import (
     ensure_admin_settings_table,
     ensure_admin_assessment_draft_table,
     ensure_assessment_link_pre_registered_client_table,
+    ensure_child_test_allow_unanswered_submission_column,
     ensure_child_test_client_intake_mode_column,
     ensure_child_test_requires_consent_column,
     ensure_child_test_session_configs_column,
@@ -109,6 +110,7 @@ def on_startup() -> None:
     ensure_admin_client_identity_review_table()
     ensure_child_test_requires_consent_column()
     ensure_child_test_show_research_notice_column()
+    ensure_child_test_allow_unanswered_submission_column()
     ensure_admin_settings_table()
     ensure_client_consent_record_table()
     ensure_admin_assessment_draft_table()
