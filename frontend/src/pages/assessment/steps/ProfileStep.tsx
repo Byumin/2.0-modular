@@ -125,6 +125,7 @@ function getLabel(fieldName: string, section: TestProfileSection): string {
 
 export function ProfileStep({ payload, onNext, loading, error, initialProfile, requiresConsent = false, consentText, scrollToHistory, retakeInfo, retakeProfile, onRetakeConfirm, onViewExistingResult }: Props) {
   const testName = payload.custom_test_name || payload.display_name || "검사"
+  const showResearchNotice = payload.show_research_notice !== false
 
   // profile_config에서 섹션 목록 추출
   const sections: TestProfileSection[] = React.useMemo(() => {
@@ -148,6 +149,11 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
       historyRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
     }
   }, [scrollToHistory])
+
+  React.useEffect(() => {
+    if (!retakeInfo) return
+    setRetakeConfirmOpen(true)
+  }, [retakeInfo])
 
   const additional = React.useMemo(
     () => (payload.additional_profile_fields ?? [])
@@ -210,6 +216,69 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
     setExtras((prev) => ({ ...prev, [label]: value }))
   }
 
+  function splitPhoneParts(value: string | string[] | undefined): [string, string, string] {
+    const raw = Array.isArray(value) ? value.join("") : String(value ?? "")
+    if (raw.includes("-")) {
+      const [first = "", middle = "", last = ""] = raw.split("-")
+      return [
+        first.replace(/\D/g, "").slice(0, 3),
+        middle.replace(/\D/g, "").slice(0, 4),
+        last.replace(/\D/g, "").slice(0, 4),
+      ]
+    }
+    const digits = raw.replace(/\D/g, "").slice(0, 11)
+    return [digits.slice(0, 3), digits.slice(3, 7), digits.slice(7, 11)]
+  }
+
+  function joinPhoneParts(parts: [string, string, string]) {
+    return parts.some(Boolean) ? parts.join("-") : ""
+  }
+
+  function isPhoneComplete(value: string | string[] | undefined) {
+    const [first, middle, last] = splitPhoneParts(value)
+    return first.length >= 2 && middle.length >= 3 && last.length === 4
+  }
+
+  function isPhoneFieldType(type: string | undefined) {
+    return type === "phone" || type === "phon" || type === "phon_num_input"
+  }
+
+  function renderPhoneInput(
+    idPrefix: string,
+    value: string | string[] | undefined,
+    onChange: (value: string) => void,
+  ) {
+    const parts = splitPhoneParts(value)
+    const placeholders = ["010", "1234", "5678"]
+    const maxLengths = [3, 4, 4]
+
+    return (
+      <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2">
+        {parts.map((part, index) => (
+          <React.Fragment key={`${idPrefix}_${index}`}>
+            {index > 0 && <span className="text-center text-sm font-semibold text-muted-foreground">-</span>}
+            <input
+              id={index === 0 ? idPrefix : undefined}
+              type="tel"
+              inputMode="numeric"
+              autoComplete={index === 0 ? "tel" : undefined}
+              aria-label={`전화번호 ${index + 1}번째 입력`}
+              placeholder={placeholders[index]}
+              maxLength={maxLengths[index]}
+              className="h-10 min-w-0 rounded-md border border-input bg-background px-3 text-center text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30"
+              value={part}
+              onChange={(event) => {
+                const next = [...parts] as [string, string, string]
+                next[index] = event.target.value.replace(/\D/g, "").slice(0, maxLengths[index])
+                onChange(joinPhoneParts(next))
+              }}
+            />
+          </React.Fragment>
+        ))}
+      </div>
+    )
+  }
+
   function toggleMultiSelect(label: string, option: string) {
     setExtras((prev) => {
       const current = Array.isArray(prev[label]) ? (prev[label] as string[]) : []
@@ -241,6 +310,9 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
         if (!sectionValues[key]?.trim()) {
           return fieldCfg.label ?? getLabel(fieldName, section)
         }
+        if (isPhoneFieldType(fieldCfg.type) && !isPhoneComplete(sectionValues[key])) {
+          return fieldCfg.label ?? getLabel(fieldName, section)
+        }
       }
     }
     for (const f of additional) {
@@ -248,6 +320,8 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
       if (f.type === "multi_select") {
         const val = extras[f.label]
         if (!Array.isArray(val) || val.length === 0) return f.label
+      } else if (isPhoneFieldType(f.type)) {
+        if (!isPhoneComplete(extras[f.label])) return f.label
       } else {
         if (!String(extras[f.label] ?? "").trim()) return f.label
       }
@@ -392,6 +466,17 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
       : f.type === "email" ? "email"
       : "text"
 
+    if (isPhoneFieldType(f.type)) {
+      return (
+        <div key={idx} className="flex flex-col gap-1.5">
+          <label htmlFor={id} className="text-sm font-medium">
+            {f.label}{f.required && <span className="text-destructive ml-0.5">*</span>}
+          </label>
+          {renderPhoneInput(id, val, (value) => setExtra(f.label, value))}
+        </div>
+      )
+    }
+
     return (
       <div key={idx} className="flex flex-col gap-1.5">
         <label htmlFor={id} className="text-sm font-medium">
@@ -435,7 +520,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                   검사 시작 전 본인 확인을 진행합니다. 응답은 제출 후 결과 산출과 관리자 확인에 사용됩니다.
                 </p>
               </div>
-              <ResearchNotice />
+              {showResearchNotice && <ResearchNotice />}
             </div>
           </section>
 
@@ -656,7 +741,15 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                     }
 
                     // 기타: text / number
-                    const inputType = type === "number" ? "number" : type === "phone" ? "tel" : type === "email" ? "email" : "text"
+                    const inputType = type === "number" ? "number" : isPhoneFieldType(type) ? "tel" : type === "email" ? "email" : "text"
+                    if (isPhoneFieldType(type)) {
+                      return (
+                        <div key={fieldName} className="flex flex-col gap-1.5">
+                          <label htmlFor={`field_${key}`} className="text-sm font-medium">{label} {reqMark}</label>
+                          {renderPhoneInput(`field_${key}`, sectionValues[key], (value) => setSectionValue(key, value))}
+                        </div>
+                      )
+                    }
                     return (
                       <div key={fieldName} className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium">{label} {reqMark}</label>
@@ -746,9 +839,17 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                         )
                       }
 
+                      if (isPhoneFieldType(cfg.type)) {
+                        return (
+                          <div key={key} className="flex flex-col gap-1.5">
+                            <label htmlFor={`opt_${key}`} className="text-sm font-medium">{label}</label>
+                            {renderPhoneInput(`opt_${key}`, sectionValues[key], (value) => setSectionValue(key, value))}
+                          </div>
+                        )
+                      }
+
                       const inputType = cfg.type === "number" ? "number"
                         : cfg.type === "date" ? "date"
-                        : cfg.type === "phone" ? "tel"
                         : cfg.type === "email" ? "email"
                         : "text"
                       return (

@@ -41,7 +41,7 @@ export interface AssessmentSession {
 
 export interface AdditionalProfileField {
   label: string
-  type: 'short_text' | 'long_text' | 'select' | 'multi_select' | 'number' | 'date' | 'phone' | 'email'
+  type: 'short_text' | 'long_text' | 'select' | 'multi_select' | 'number' | 'date' | 'phone' | 'phon' | 'phon_num_input' | 'email'
   required: boolean
   placeholder?: string
   options: string[]
@@ -50,7 +50,7 @@ export interface AdditionalProfileField {
 export interface TestProfileFieldConfig {
   label?: string
   required?: boolean
-  type?: 'text' | 'radio' | 'select' | 'long_text' | 'number' | 'date' | 'phone' | 'email'
+  type?: 'text' | 'radio' | 'select' | 'long_text' | 'number' | 'date' | 'phone' | 'phon' | 'phon_num_input' | 'email'
   options?: string[]
 }
 
@@ -74,6 +74,8 @@ export interface InitialPayload {
   description?: string
   estimated_time_minutes?: number
   client_intake_mode: string
+  show_research_notice?: boolean
+  allow_unanswered_submission?: boolean
   required_profile_fields: string[]
   profile_field_options?: Record<string, string[]>
   additional_profile_fields: Array<AdditionalProfileField | string>

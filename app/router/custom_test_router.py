@@ -9,7 +9,33 @@ from app.schemas.custom_tests import (
     CreateCustomTestBatchIn,
     UpdateCustomTestSettingsIn,
 )
-from app.services.admin.assessment_links import generate_custom_test_access_link
+from pydantic import BaseModel
+
+from app.services.admin.assessment_links import (
+    add_pre_registered_client_for_link,
+    bulk_add_pre_registered_clients_for_link,
+    generate_custom_test_access_link,
+    list_pre_registered_clients_for_link,
+    remove_pre_registered_client_for_link,
+    update_link_match_field_keys,
+    update_link_response_options,
+)
+
+
+class PreRegisteredClientIn(BaseModel):
+    profile_data: dict
+
+
+class PreRegisteredClientBulkIn(BaseModel):
+    rows: list[dict]
+
+
+class MatchFieldKeysIn(BaseModel):
+    match_field_keys: list[str]
+
+
+class AccessLinkResponseOptionsIn(BaseModel):
+    allow_unanswered_submission: bool = False
 from app.services.admin.custom_tests import (
     bulk_delete_admin_custom_tests,
     create_admin_custom_test_batch,
@@ -123,3 +149,69 @@ def bulk_delete_custom_tests(
     admin_session: str | None = Cookie(default=None),
 ) -> dict:
     return bulk_delete_admin_custom_tests(db, admin_session, payload.custom_test_ids)
+
+
+# ── 실시 링크 사전 등록 내담자 관리 ────────────────────────────────────────────
+
+@router.get("/api/admin/access-links/{access_token}/pre-registered")
+def get_pre_registered_clients(
+    access_token: str,
+    db: Session = Depends(get_db),
+    admin_session: str | None = Cookie(default=None),
+) -> dict:
+    return list_pre_registered_clients_for_link(db, admin_session, access_token)
+
+
+@router.post("/api/admin/access-links/{access_token}/pre-registered")
+def post_pre_registered_client(
+    access_token: str,
+    payload: PreRegisteredClientIn,
+    db: Session = Depends(get_db),
+    admin_session: str | None = Cookie(default=None),
+) -> dict:
+    return add_pre_registered_client_for_link(db, admin_session, access_token, payload.profile_data)
+
+
+@router.delete("/api/admin/access-links/{access_token}/pre-registered/{entry_id}")
+def delete_pre_registered_client(
+    access_token: str,
+    entry_id: int,
+    db: Session = Depends(get_db),
+    admin_session: str | None = Cookie(default=None),
+) -> dict:
+    return remove_pre_registered_client_for_link(db, admin_session, access_token, entry_id)
+
+
+@router.put("/api/admin/access-links/{access_token}/match-field-keys")
+def put_match_field_keys(
+    access_token: str,
+    payload: MatchFieldKeysIn,
+    db: Session = Depends(get_db),
+    admin_session: str | None = Cookie(default=None),
+) -> dict:
+    return update_link_match_field_keys(db, admin_session, access_token, payload.match_field_keys)
+
+
+@router.put("/api/admin/access-links/{access_token}/response-options")
+def put_access_link_response_options(
+    access_token: str,
+    payload: AccessLinkResponseOptionsIn,
+    db: Session = Depends(get_db),
+    admin_session: str | None = Cookie(default=None),
+) -> dict:
+    return update_link_response_options(
+        db,
+        admin_session,
+        access_token,
+        allow_unanswered_submission=payload.allow_unanswered_submission,
+    )
+
+
+@router.post("/api/admin/access-links/{access_token}/pre-registered/bulk")
+def post_pre_registered_bulk(
+    access_token: str,
+    payload: PreRegisteredClientBulkIn,
+    db: Session = Depends(get_db),
+    admin_session: str | None = Cookie(default=None),
+) -> dict:
+    return bulk_add_pre_registered_clients_for_link(db, admin_session, access_token, payload.rows)

@@ -11,6 +11,7 @@ from app.db.models import (
     AdminCustomTest,
     AdminCustomTestAccessLink,
     AdminCustomTestSubmission,
+    AssessmentLinkPreRegisteredClient,
     SubmissionScoringResult,
 )
 
@@ -490,3 +491,148 @@ def list_submissions_by_client_with_test_name(
         .limit(limit)
         .all()
     )
+
+
+# ── assessment_link_pre_registered_client ──────────────────────────────────
+
+def get_pre_registered_entries_by_link(
+    db: Session,
+    access_link_id: int,
+) -> list[AssessmentLinkPreRegisteredClient]:
+    return (
+        db.query(AssessmentLinkPreRegisteredClient)
+        .filter(AssessmentLinkPreRegisteredClient.access_link_id == access_link_id)
+        .order_by(AssessmentLinkPreRegisteredClient.created_at.asc())
+        .all()
+    )
+
+
+def create_pre_registered_entry(
+    db: Session,
+    *,
+    access_link_id: int,
+    admin_user_id: int,
+    profile_data_json: str,
+) -> AssessmentLinkPreRegisteredClient:
+    import json
+    row = AssessmentLinkPreRegisteredClient(
+        access_link_id=access_link_id,
+        admin_user_id=admin_user_id,
+        profile_data_json=profile_data_json,
+    )
+    db.add(row)
+    db.flush()
+    db.refresh(row)
+    return row
+
+
+def delete_pre_registered_entry(
+    db: Session,
+    *,
+    entry_id: int,
+    admin_user_id: int,
+) -> bool:
+    row = (
+        db.query(AssessmentLinkPreRegisteredClient)
+        .filter(
+            AssessmentLinkPreRegisteredClient.id == entry_id,
+            AssessmentLinkPreRegisteredClient.admin_user_id == admin_user_id,
+        )
+        .first()
+    )
+    if row is None:
+        return False
+    db.delete(row)
+    db.flush()
+    return True
+
+
+def find_pre_registered_entry_by_match(
+    db: Session,
+    *,
+    access_link_id: int,
+    match_keys: list[str],
+    profile: dict,
+) -> AssessmentLinkPreRegisteredClient | None:
+    import json
+    rows = get_pre_registered_entries_by_link(db, access_link_id)
+    normalized_match_keys = [str(k).strip() for k in match_keys if str(k).strip()]
+    if not normalized_match_keys:
+        return None
+
+    def _normalize_match_key(value: str) -> str:
+        return str(value or "").strip().lower().replace(" ", "").replace("_", "").replace("-", "")
+
+    def _is_phone_key(key: str) -> bool:
+        normalized = _normalize_match_key(key)
+        return "phone" in normalized or "phon" in normalized or "휴대" in key or "핸드폰" in key or "전화" in key or "연락처" in key
+
+    def _phone_digits(value: object) -> str:
+        return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+    def _value_for_match(source: dict, key: str) -> str:
+        direct = str(source.get(key, "")).strip()
+        if direct:
+            return direct
+
+        if not _is_phone_key(key):
+            return direct
+
+        phone_aliases = {
+            "phone",
+            "phon_num",
+            "phonnum",
+            "phone_num",
+            "휴대폰번호",
+            "휴대폰 번호",
+            "휴대전화",
+            "핸드폰",
+            "핸드폰번호",
+            "핸드폰 번호",
+            "전화번호",
+            "연락처",
+        }
+        normalized_aliases = {_normalize_match_key(alias) for alias in phone_aliases}
+        for source_key, value in source.items():
+            if _normalize_match_key(source_key) in normalized_aliases:
+                text = str(value or "").strip()
+                if text:
+                    return text
+        return direct
+
+    for row in rows:
+        try:
+            stored = json.loads(row.profile_data_json or "{}")
+        except Exception:
+            stored = {}
+
+        is_match = True
+        for key in normalized_match_keys:
+            stored_value = _value_for_match(stored, key)
+            profile_value = _value_for_match(profile, key)
+            if _is_phone_key(key):
+                stored_value = _phone_digits(stored_value)
+                profile_value = _phone_digits(profile_value)
+            else:
+                stored_value = stored_value.lower()
+                profile_value = profile_value.lower()
+            if not stored_value or not profile_value or stored_value != profile_value:
+                is_match = False
+                break
+        if is_match:
+            return row
+    return None
+
+
+def update_pre_registered_provisional_client(
+    db: Session,
+    *,
+    entry_id: int,
+    client_id: int,
+) -> None:
+    row = db.query(AssessmentLinkPreRegisteredClient).filter(
+        AssessmentLinkPreRegisteredClient.id == entry_id
+    ).first()
+    if row is not None:
+        row.provisional_client_id = client_id
+        db.flush()

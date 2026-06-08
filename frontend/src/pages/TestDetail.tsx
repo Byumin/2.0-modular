@@ -1,22 +1,39 @@
 import * as React from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { IconArrowLeft, IconLink, IconCopy, IconPlus, IconX } from "@tabler/icons-react"
+import { IconArrowLeft, IconLink, IconCopy, IconPlus, IconUpload, IconX } from "@tabler/icons-react"
+import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
+interface AdditionalProfileField {
+  label: string
+  type: string
+  required: boolean
+}
+
 interface TestDetail {
   id: number
   custom_test_name: string
   client_intake_mode?: string
   requires_consent?: boolean
+  show_research_notice?: boolean
+  allow_unanswered_submission?: boolean
   test_ids?: string[]
   session_configs?: SessionConfig[]
   created_at: string
   selected_scale_codes?: string[]
   scale_count?: number
+  additional_profile_fields?: AdditionalProfileField[]
+}
+
+interface PreRegisteredEntry {
+  id: number
+  profile_data: Record<string, string>
+  has_provisional_client: boolean
+  created_at: string | null
 }
 
 type ClientIntakeMode = "pre_registered_only" | "auto_create"
@@ -36,6 +53,40 @@ const intakeModeLabels: Record<ClientIntakeMode, string> = {
 
 function normalizeClientIntakeMode(value?: string): ClientIntakeMode {
   return value === "auto_create" ? "auto_create" : "pre_registered_only"
+}
+
+function normalizeExcelHeader(value: unknown) {
+  return String(value ?? "").trim().toLowerCase().replace(/[\s_-]/g, "")
+}
+
+function buildExcelHeaderLookup(fields: { key: string; label: string }[]) {
+  const aliases: Record<string, string[]> = {
+    name: ["이름", "성명", "내담자명", "수검자명", "name"],
+    gender: ["성별", "gender"],
+    birth_day: ["생년월일", "생일", "출생일", "birth_day", "birth", "birthday"],
+    phone: ["휴대폰 번호", "휴대폰번호", "휴대전화", "핸드폰", "핸드폰 번호", "전화번호", "연락처", "phone"],
+  }
+  const lookup = new Map<string, string>()
+  fields.forEach((field) => {
+    const values = [field.key, field.label, ...(aliases[field.key] ?? [])]
+    values.forEach((value) => {
+      const normalized = normalizeExcelHeader(value)
+      if (normalized) lookup.set(normalized, field.key)
+    })
+  })
+  return lookup
+}
+
+function normalizeExcelRowHeaders(row: Record<string, unknown>, fields: { key: string; label: string }[]) {
+  const lookup = buildExcelHeaderLookup(fields)
+  const normalizedRow: Record<string, string> = {}
+  Object.entries(row).forEach(([rawKey, rawValue]) => {
+    const value = String(rawValue ?? "").trim()
+    if (!value) return
+    const key = lookup.get(normalizeExcelHeader(rawKey)) ?? rawKey.trim()
+    normalizedRow[key] = value
+  })
+  return normalizedRow
 }
 
 function normalizeSessionConfigs(raw: unknown, fallbackTestIds: string[] = []): SessionConfig[] {
@@ -86,13 +137,48 @@ export function TestDetail() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState("")
   const [accessLink, setAccessLink] = React.useState("")
+  const [accessToken, setAccessToken] = React.useState("")
+  const [allowUnansweredSubmission, setAllowUnansweredSubmission] = React.useState(false)
+  const [savingLinkOptions, setSavingLinkOptions] = React.useState(false)
   const [generatingLink, setGeneratingLink] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
+  const [matchFieldKeys, setMatchFieldKeys] = React.useState<string[]>(["name"])
+  const [availableFields, setAvailableFields] = React.useState<{ key: string; label: string }[]>([
+    { key: "name", label: "이름" },
+    { key: "gender", label: "성별" },
+    { key: "birth_day", label: "생년월일" },
+  ])
+  const [savingMatchKeys, setSavingMatchKeys] = React.useState(false)
+  const [preRegisteredEntries, setPreRegisteredEntries] = React.useState<PreRegisteredEntry[]>([])
+  const [loadingPreRegistered, setLoadingPreRegistered] = React.useState(false)
+  const [addingEntry, setAddingEntry] = React.useState(false)
+  const [newEntryValues, setNewEntryValues] = React.useState<Record<string, string>>({})
+  const [uploadingExcel, setUploadingExcel] = React.useState(false)
+  const [uploadResult, setUploadResult] = React.useState<{ added: number; skipped: number; errors: string[] } | null>(null)
+  const excelInputRef = React.useRef<HTMLInputElement>(null)
   const [nameValue, setNameValue] = React.useState("")
   const [intakeMode, setIntakeMode] = React.useState<ClientIntakeMode>("pre_registered_only")
+  const [showResearchNotice, setShowResearchNotice] = React.useState(true)
   const [sessionConfigs, setSessionConfigs] = React.useState<SessionConfig[]>([])
   const [savingSettings, setSavingSettings] = React.useState(false)
   const [saveMessage, setSaveMessage] = React.useState<{ text: string; error: boolean } | null>(null)
+
+  const loadPreRegistered = React.useCallback(async (token: string) => {
+    if (!token) return
+    setLoadingPreRegistered(true)
+    try {
+      const res = await fetch(`/api/admin/access-links/${token}/pre-registered`)
+      if (!res.ok) return
+      const data = await res.json()
+      setMatchFieldKeys(data.match_field_keys ?? ["name"])
+      setPreRegisteredEntries(data.entries ?? [])
+      if (Array.isArray(data.available_profile_fields) && data.available_profile_fields.length > 0) {
+        setAvailableFields(data.available_profile_fields)
+      }
+    } finally {
+      setLoadingPreRegistered(false)
+    }
+  }, [])
 
   React.useEffect(() => {
     if (!id) return
@@ -102,12 +188,23 @@ export function TestDetail() {
         const item = data.item ?? data
         setTest(item)
         setNameValue(item.custom_test_name ?? "")
-        setIntakeMode(normalizeClientIntakeMode(item.client_intake_mode))
+        const mode = normalizeClientIntakeMode(item.client_intake_mode)
+        setIntakeMode(mode)
+        setShowResearchNotice(item.show_research_notice !== false)
         setSessionConfigs(normalizeSessionConfigs(item.session_configs, item.test_ids ?? []))
+        if (item.access_token) {
+          const fullUrl = `${window.location.origin}/assessment/custom/${item.access_token}`
+          setAccessLink(fullUrl)
+          setAccessToken(item.access_token)
+          setAllowUnansweredSubmission(Boolean(item.allow_unanswered_submission))
+          if (mode === "pre_registered_only") {
+            loadPreRegistered(item.access_token)
+          }
+        }
       })
       .catch(() => setError("검사 정보를 불러올 수 없습니다."))
       .finally(() => setLoading(false))
-  }, [id])
+  }, [id, loadPreRegistered])
 
   const saveSettings = async () => {
     if (!test || savingSettings) return
@@ -137,6 +234,7 @@ export function TestDetail() {
           custom_test_name: trimmedName,
           client_intake_mode: intakeMode,
           requires_consent: Boolean(test.requires_consent),
+          show_research_notice: showResearchNotice,
           session_configs: normalizedSessions,
         }),
       })
@@ -150,6 +248,7 @@ export function TestDetail() {
         ...prev,
         custom_test_name: trimmedName,
         client_intake_mode: intakeMode,
+        show_research_notice: showResearchNotice,
         session_configs: normalizedSessions,
       } : prev)
       setSessionConfigs(normalizedSessions)
@@ -209,10 +308,126 @@ export function TestDetail() {
       const data = await res.json()
       const fullUrl = `${window.location.origin}${data.assessment_url}`
       setAccessLink(fullUrl)
+      const token = data.access_token ?? ""
+      setAccessToken(token)
+      setAllowUnansweredSubmission(Boolean(data.allow_unanswered_submission))
+      if (intakeMode === "pre_registered_only" && token) {
+        await loadPreRegistered(token)
+      }
     } catch {
       setError("링크 생성에 실패했습니다.")
     } finally {
       setGeneratingLink(false)
+    }
+  }
+
+  const handleSaveMatchKeys = async () => {
+    if (!accessToken || savingMatchKeys) return
+    setSavingMatchKeys(true)
+    try {
+      const res = await fetch(`/api/admin/access-links/${accessToken}/match-field-keys`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ match_field_keys: matchFieldKeys }),
+      })
+      if (!res.ok) throw new Error()
+      setNewEntryValues({})
+    } catch {
+      setError("확인 기준 필드 저장에 실패했습니다.")
+    } finally {
+      setSavingMatchKeys(false)
+    }
+  }
+
+  const handleSaveLinkOptions = async () => {
+    if (!accessToken || savingLinkOptions) return
+    setSavingLinkOptions(true)
+    setError("")
+    try {
+      const res = await fetch(`/api/admin/access-links/${accessToken}/response-options`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ allow_unanswered_submission: allowUnansweredSubmission }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(typeof data.detail === "string" ? data.detail : "실시 링크 옵션 저장에 실패했습니다.")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "실시 링크 옵션 저장에 실패했습니다.")
+    } finally {
+      setSavingLinkOptions(false)
+    }
+  }
+
+  const handleAddEntry = async () => {
+    if (!accessToken || addingEntry) return
+    const profileData: Record<string, string> = {}
+    for (const key of matchFieldKeys) {
+      const val = (newEntryValues[key] ?? "").trim()
+      if (!val) { setError(`'${key}' 값을 입력해주세요.`); return }
+      profileData[key] = val
+    }
+    setAddingEntry(true)
+    setError("")
+    try {
+      const res = await fetch(`/api/admin/access-links/${accessToken}/pre-registered`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile_data: profileData }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(typeof d.detail === "string" ? d.detail : "등록에 실패했습니다.")
+      }
+      const d = await res.json()
+      setPreRegisteredEntries((prev) => [...prev, d.entry])
+      setNewEntryValues({})
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "등록에 실패했습니다.")
+    } finally {
+      setAddingEntry(false)
+    }
+  }
+
+  const handleDeleteEntry = async (entryId: number) => {
+    if (!accessToken) return
+    try {
+      const res = await fetch(`/api/admin/access-links/${accessToken}/pre-registered/${entryId}`, { method: "DELETE" })
+      if (!res.ok) throw new Error()
+      setPreRegisteredEntries((prev) => prev.filter((e) => e.id !== entryId))
+    } catch {
+      setError("삭제에 실패했습니다.")
+    }
+  }
+
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !accessToken) return
+    e.target.value = ""
+    setUploadingExcel(true)
+    setUploadResult(null)
+    setError("")
+    try {
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, { type: "array" })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" })
+      const rows: Record<string, string>[] = rawRows.map((row) => normalizeExcelRowHeaders(row, availableFields))
+      if (rows.length === 0) { setError("엑셀에 데이터가 없습니다."); return }
+      const res = await fetch(`/api/admin/access-links/${accessToken}/pre-registered/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "업로드 실패")
+      setUploadResult({ added: data.added, skipped: data.skipped, errors: data.errors ?? [] })
+      await loadPreRegistered(accessToken)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "엑셀 업로드에 실패했습니다.")
+    } finally {
+      setUploadingExcel(false)
     }
   }
 
@@ -291,6 +506,21 @@ export function TestDetail() {
                   자동 생성 허용은 사전 배정이 없어도 수검자가 확인 후 내담자 등록과 검사 배정을 진행합니다.
                 </p>
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>실시 링크 안내</Label>
+                <label className="flex cursor-pointer items-center gap-2 rounded-md border bg-muted/20 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={showResearchNotice}
+                    onChange={(event) => setShowResearchNotice(event.target.checked)}
+                    className="size-4 rounded border-input"
+                  />
+                  <span className="text-sm">첫 화면에 연구 참여 안내 카드 표시</span>
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  끄면 실시 링크 첫 화면의 왼쪽 안내 카드가 표시되지 않습니다.
+                </p>
+              </div>
               <div className="flex items-center justify-between gap-3">
                 <Badge variant={intakeMode === "auto_create" ? "success" : "secondary"} className="text-xs">
                   {intakeModeLabels[intakeMode]}
@@ -342,8 +572,203 @@ export function TestDetail() {
                 </div>
               </div>
             )}
+            {accessToken && (
+              <div className="flex flex-col gap-2 rounded-md border bg-muted/20 p-3">
+                <label className="flex cursor-pointer items-center justify-between gap-3">
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium">무응답 제출 허용</span>
+                    <span className="text-xs text-muted-foreground">
+                      켜면 수검자가 미응답 문항 확인 후 그대로 제출할 수 있습니다.
+                    </span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={allowUnansweredSubmission}
+                    onChange={(event) => setAllowUnansweredSubmission(event.target.checked)}
+                    className="size-4 rounded border-input"
+                  />
+                </label>
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleSaveLinkOptions}
+                    disabled={savingLinkOptions}
+                  >
+                    {savingLinkOptions ? "저장 중..." : "링크 옵션 저장"}
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        {intakeMode === "pre_registered_only" && accessToken && (
+          <Card className="lg:col-span-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">사전 등록 내담자 관리</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              {/* 확인 기준 필드 선택 */}
+              <div className="flex flex-col gap-2">
+                <Label className="text-xs font-semibold text-muted-foreground">확인 기준 필드</Label>
+                <p className="text-xs text-muted-foreground">
+                  수검자가 입력한 값 중 어떤 필드로 사전 등록 여부를 확인할지 선택합니다.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {availableFields.map(({ key, label }) => (
+                    <label key={key} className="flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={matchFieldKeys.includes(key)}
+                        onChange={(e) => {
+                          setMatchFieldKeys((prev) =>
+                            e.target.checked ? [...prev, key] : prev.filter((k) => k !== key)
+                          )
+                        }}
+                        className="size-3.5"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <Button size="sm" variant="outline" onClick={handleSaveMatchKeys} disabled={savingMatchKeys || matchFieldKeys.length === 0}>
+                  {savingMatchKeys ? "저장 중..." : "기준 필드 저장"}
+                </Button>
+              </div>
+
+              <hr className="border-border" />
+
+              {/* 등록 폼 */}
+              <div className="flex flex-col gap-2">
+                <Label className="text-xs font-semibold text-muted-foreground">내담자 추가</Label>
+                <div className="flex flex-wrap gap-2 items-end">
+                  {matchFieldKeys.map((key) => {
+                    const fieldDef = availableFields.find((f) => f.key === key)
+                    const label = fieldDef?.label ?? key
+                    return (
+                      <div key={key} className="flex flex-col gap-1">
+                        <Label className="text-xs">{label}</Label>
+                        <Input
+                          value={newEntryValues[key] ?? ""}
+                          onChange={(e) => setNewEntryValues((prev) => ({ ...prev, [key]: e.target.value }))}
+                          placeholder={label}
+                          className="h-8 text-xs w-44"
+                        />
+                      </div>
+                    )
+                  })}
+                  <Button size="sm" onClick={handleAddEntry} disabled={addingEntry} className="h-8">
+                    <IconPlus className="size-3.5" />
+                    {addingEntry ? "등록 중..." : "추가"}
+                  </Button>
+                </div>
+              </div>
+
+              {/* 엑셀 업로드 */}
+              <div className="flex flex-col gap-2">
+                <Label className="text-xs font-semibold text-muted-foreground">엑셀로 일괄 등록</Label>
+                <p className="text-xs text-muted-foreground">
+                  첫 행이 헤더인 엑셀 파일을 업로드하세요. 헤더 이름이 확인 기준 필드명과 일치해야 합니다.
+                  <br />
+                  기준 필드: {matchFieldKeys.map((k) => {
+                    const f = availableFields.find((f) => f.key === k)
+                    return f?.label ?? k
+                  }).join(", ")}
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={excelInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    onChange={handleExcelUpload}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => excelInputRef.current?.click()}
+                    disabled={uploadingExcel}
+                  >
+                    <IconUpload className="size-3.5" />
+                    {uploadingExcel ? "업로드 중..." : "엑셀 파일 선택"}
+                  </Button>
+                </div>
+                {uploadResult && (
+                  <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs">
+                    <span className="text-green-600 font-medium">{uploadResult.added}명 등록</span>
+                    {uploadResult.skipped > 0 && (
+                      <span className="ml-2 text-muted-foreground">{uploadResult.skipped}명 건너뜀</span>
+                    )}
+                    {uploadResult.errors.length > 0 && (
+                      <ul className="mt-1 text-destructive">
+                        {uploadResult.errors.map((e, i) => <li key={i}>{e}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 목록 */}
+              {loadingPreRegistered ? (
+                <p className="text-xs text-muted-foreground">불러오는 중...</p>
+              ) : preRegisteredEntries.length === 0 ? (
+                <p className="rounded-md border border-dashed bg-muted/20 px-4 py-3 text-center text-xs text-muted-foreground">
+                  등록된 내담자가 없습니다.
+                </p>
+              ) : (
+                <div className="rounded-md border border-border overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/30">
+                      <tr>
+                        {matchFieldKeys.map((key) => {
+                          const fieldDef = availableFields.find((f) => f.key === key)
+                          return (
+                            <th key={key} className="px-3 py-2 text-left font-medium text-muted-foreground">
+                              {fieldDef?.label ?? key}
+                            </th>
+                          )
+                        })}
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">등록일</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">상태</th>
+                        <th className="px-3 py-2" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preRegisteredEntries.map((entry) => (
+                        <tr key={entry.id} className="border-t border-border">
+                          {matchFieldKeys.map((key) => (
+                            <td key={key} className="px-3 py-2">{entry.profile_data[key] ?? "-"}</td>
+                          ))}
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {entry.created_at ? new Date(entry.created_at).toLocaleDateString("ko-KR") : "-"}
+                          </td>
+                          <td className="px-3 py-2">
+                            {entry.has_provisional_client ? (
+                              <Badge variant="success" className="text-[10px]">접속 이력 있음</Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-[10px]">미접속</Badge>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteEntry(entry.id)}
+                              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            >
+                              <IconX className="size-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {test?.selected_scale_codes && test.selected_scale_codes.length > 0 && (
           <Card>
