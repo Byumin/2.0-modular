@@ -1,0 +1,197 @@
+{
+  "case_name": "draft_mid_save_restore_delete",
+  "token": "Gl2LASqVIs9NoOFZQKACPeAD8CHHFe5r",
+  "profile": {
+    "name": "검수아동Draft0604_170812",
+    "child_name": "검수아동Draft0604_170812",
+    "child_gender": "female",
+    "child_birth_day": "2020-06-15",
+    "parent_name": "검수양육자Draft0604_170812",
+    "parent_gender": "female",
+    "parent_birth_day": "1988-02-10",
+    "informant": "mother",
+    "exam_date": "2026-06-04"
+  },
+  "custom_test_id": 29,
+  "client_id": 131,
+  "client": {
+    "id": 131,
+    "name": "검수아동Draft0604_170812",
+    "created_source": "assessment_link_auto"
+  },
+  "register_result": {
+    "message": "내담자 등록과 배정이 완료되었습니다.",
+    "client_id": 131,
+    "created": true
+  },
+  "consent_result": {
+    "message": "동의 기록이 저장되었습니다.",
+    "consented": true
+  },
+  "item_count": 244,
+  "partial_answer_count": 17,
+  "partial_choice_distribution": {
+    "1": 4,
+    "2": 4,
+    "3": 3,
+    "4": 3,
+    "5": 3
+  },
+  "full_answer_count": 244,
+  "save_response": {
+    "message": "임시저장되었습니다.",
+    "draft": {
+      "client_id": 131,
+      "profile": {
+        "name": "검수아동Draft0604_170812",
+        "child_name": "검수아동Draft0604_170812",
+        "child_gender": "female",
+        "child_birth_day": "2020-06-15",
+        "parent_name": "검수양육자Draft0604_170812",
+        "parent_gender": "female",
+        "parent_birth_day": "1988-02-10",
+        "informant": "mother",
+        "exam_date": "2026-06-04"
+      },
+      "answers": {
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::1": "1",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::2": "2",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::3": "3",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::4": "4",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::5": "5",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::6": "1",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::7": "2",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::8": "3",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::9": "4",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::10": "5",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::11": "1",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::12": "2",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::13": "3",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::14": "4",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::15": "5",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::16": "1",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::17": "2"
+      },
+      "current_part_index": 1,
+      "current_page": 3,
+      "is_ambiguous_match": false,
+      "responder_choice": null,
+      "candidate_client_ids": [],
+      "updated_at": "2026-06-04T08:08:13.372802"
+    }
+  },
+  "draft_row_snapshot_before_submit": {
+    "id": 39,
+    "admin_user_id": 1,
+    "admin_custom_test_id": 29,
+    "admin_client_id": 131,
+    "access_token": "Gl2LASqVIs9NoOFZQKACPeAD8CHHFe5r",
+    "profile": {
+      "name": "검수아동Draft0604_170812",
+      "child_name": "검수아동Draft0604_170812",
+      "child_gender": "female",
+      "child_birth_day": "2020-06-15",
+      "parent_name": "검수양육자Draft0604_170812",
+      "parent_gender": "female",
+      "parent_birth_day": "1988-02-10",
+      "informant": "mother",
+      "exam_date": "2026-06-04"
+    },
+    "answers": {
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::1": "1",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::2": "2",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::3": "3",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::4": "4",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::5": "5",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::6": "1",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::7": "2",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::8": "3",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::9": "4",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::10": "5",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::11": "1",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::12": "2",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::13": "3",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::14": "4",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::15": "5",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::16": "1",
+      "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::17": "2"
+    },
+    "current_part_index": 1,
+    "current_page": 3,
+    "is_ambiguous_match": false,
+    "responder_choice": null,
+    "candidate_client_ids": [],
+    "created_at": "2026-06-04T08:08:13.372805",
+    "updated_at": "2026-06-04T08:08:13.372802"
+  },
+  "get_draft_response_before_submit": {
+    "draft": {
+      "client_id": 131,
+      "profile": {
+        "name": "검수아동Draft0604_170812",
+        "child_name": "검수아동Draft0604_170812",
+        "child_gender": "female",
+        "child_birth_day": "2020-06-15",
+        "parent_name": "검수양육자Draft0604_170812",
+        "parent_gender": "female",
+        "parent_birth_day": "1988-02-10",
+        "informant": "mother",
+        "exam_date": "2026-06-04"
+      },
+      "answers": {
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::1": "1",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::2": "2",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::3": "3",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::4": "4",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::5": "5",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::6": "1",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::7": "2",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::8": "3",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::9": "4",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::10": "5",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::11": "1",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::12": "2",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::13": "3",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::14": "4",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::15": "5",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::16": "1",
+        "K-PSI-4-SF::{\"age_range\": {\"as_of_time\": \"00:00:00\", \"start_inclusive\": [0, 0, 0], \"end_exclusive\": [100, 0, 0]}, \"gender\": [\"female\", \"male\"]}::17": "2"
+      },
+      "current_part_index": 1,
+      "current_page": 3,
+      "is_ambiguous_match": false,
+      "responder_choice": null,
+      "candidate_client_ids": [],
+      "updated_at": "2026-06-04T08:08:13.372802"
+    }
+  },
+  "submit_result": {
+    "message": "검사가 제출되었습니다.",
+    "submitted_item_count": 244,
+    "submission_id": 57,
+    "access_token": "IsBbzofjONoFpXBhsHSMx0SieT1Iu0OET32qgohGNnE",
+    "scoring_result_id": 62,
+    "scoring_status": "scoring_completed"
+  },
+  "draft_after_submit_count": 0,
+  "checks": {
+    "row_exists_after_save": true,
+    "row_access_token_matches_link": true,
+    "row_profile_matches": true,
+    "row_answers_match_partial": true,
+    "row_answer_count_matches": true,
+    "row_current_part_index_matches": true,
+    "row_current_page_matches": true,
+    "row_candidate_ids_empty": true,
+    "get_restores_draft": true,
+    "get_restored_profile_matches": true,
+    "get_restored_answers_match": true,
+    "get_restored_part_matches": true,
+    "get_restored_page_matches": true,
+    "submission_created": true,
+    "submission_client_matches": true,
+    "submission_full_answer_count_matches": true,
+    "draft_deleted_after_submit": true
+  },
+  "all_pass": true
+}
