@@ -56,16 +56,17 @@
 12. 내담자 리포트 테이블(`admin_client_report`) 보정
 13. 동일인 검토 테이블(`admin_client_identity_review`) 보정
 14. `child_test.requires_consent` 컬럼 보정
-15. 관리자 설정 테이블(`admin_settings`) 보정
-16. 개인정보동의 기록 테이블(`client_consent_record`) 보정
-17. 검사 실시 임시저장 테이블(`admin_assessment_draft`) 보정
-18. `RUN_STARTUP_DATA_MIGRATIONS=1`일 때만 기존 row 재작성 데이터 migration 실행
+15. `child_test.show_research_notice` 컬럼 보정
+16. 관리자 설정 테이블(`admin_settings`) 보정
+17. 개인정보동의 기록 테이블(`client_consent_record`) 보정
+18. 검사 실시 임시저장 테이블(`admin_assessment_draft`) 보정
+19. `RUN_STARTUP_DATA_MIGRATIONS=1`일 때만 기존 row 재작성 데이터 migration 실행
     - `migrate_child_test_sub_test_json_to_structured`
     - `rotate_shared_submission_access_tokens`
     - `ensure_test_profile_config_restructure`
     - `ensure_test_profile_condition_profile_maps`
-19. `test_profile_config` 테이블 생성 보정
-20. 내담자 관계 테이블(`admin_client_relation`) 보정
+20. `test_profile_config` 테이블 생성 보정
+21. 내담자 관계 테이블(`admin_client_relation`) 보정
 
 정확한 최신 실행 순서는 `app/main.py`의 `on_startup()` 함수와 `app/db/schema_migrations.py`를 최종 기준으로 본다.
 

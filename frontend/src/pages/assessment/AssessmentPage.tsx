@@ -746,6 +746,7 @@ export function AssessmentPage() {
               initialPage={activeSessionIndex === 0 ? activeDraft?.current_page ?? 0 : 0}
               onProgressChange={handleQuestionProgressChange}
               sessionClass={sessionClass}
+              allowUnansweredSubmission={Boolean(initialPayload?.allow_unanswered_submission)}
             />
           )}
         </div>

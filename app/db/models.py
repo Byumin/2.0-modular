@@ -28,6 +28,7 @@ class AdminCustomTest(Base):
     session_configs_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     additional_profile_fields_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     requires_consent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    show_research_notice: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -128,6 +129,19 @@ class AdminCustomTestAccessLink(Base):
     admin_custom_test_id: Mapped[int] = mapped_column(ForeignKey("child_test.id"), nullable=False, index=True)
     access_token: Mapped[str] = mapped_column(String(120), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    match_field_keys_json: Mapped[str] = mapped_column(Text, nullable=False, default='["name"]')
+    allow_unanswered_submission: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AssessmentLinkPreRegisteredClient(Base):
+    __tablename__ = "assessment_link_pre_registered_client"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    access_link_id: Mapped[int] = mapped_column(ForeignKey("admin_custom_test_access_link.id"), nullable=False, index=True)
+    admin_user_id: Mapped[int] = mapped_column(ForeignKey("admin_user.id"), nullable=False, index=True)
+    profile_data_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    provisional_client_id: Mapped[int | None] = mapped_column(ForeignKey("admin_client.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 

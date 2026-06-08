@@ -124,6 +124,7 @@ interface CreatePayload {
   custom_test_name: string
   client_intake_mode: string
   requires_consent: boolean
+  show_research_notice: boolean
   test_configs: Array<{
     test_id: string
     selected_scale_codes: string[]
@@ -374,6 +375,7 @@ export function TestManagement() {
   const [createName, setCreateName] = React.useState("")
   const [createIntakeMode, setCreateIntakeMode] = React.useState("pre_registered_only")
   const [createRequiresConsent, setCreateRequiresConsent] = React.useState(false)
+  const [createShowResearchNotice, setCreateShowResearchNotice] = React.useState(true)
   const [createMessage, setCreateMessage] = React.useState<{ text: string; error: boolean } | null>(null)
   const [catalogMessage, setCatalogMessage] = React.useState("")
   const [creating, setCreating] = React.useState(false)
@@ -444,6 +446,7 @@ export function TestManagement() {
     setCreateName("")
     setCreateIntakeMode("pre_registered_only")
     setCreateRequiresConsent(false)
+    setCreateShowResearchNotice(true)
     setCreateMessage(null)
     setSelectedTestIds([])
     setExpandedTestIds(new Set())
@@ -762,6 +765,7 @@ export function TestManagement() {
         custom_test_name: createName.trim(),
         client_intake_mode: normalizeClientIntakeMode(createIntakeMode),
         requires_consent: createRequiresConsent,
+        show_research_notice: createShowResearchNotice,
         test_configs,
         session_configs,
         additional_profile_fields,
@@ -1170,6 +1174,19 @@ export function TestManagement() {
                           <span className="text-sm">수검 전 개인정보 수집·이용 동의 받기</span>
                         </label>
                         <p className="text-xs text-muted-foreground">동의서 내용은 설정 메뉴에서 관리합니다.</p>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium">실시 링크 안내</label>
+                        <label className="flex cursor-pointer items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={createShowResearchNotice}
+                            onChange={(e) => setCreateShowResearchNotice(e.target.checked)}
+                            className="size-4 rounded border-input"
+                          />
+                          <span className="text-sm">첫 화면에 연구 참여 안내 카드 표시</span>
+                        </label>
+                        <p className="text-xs text-muted-foreground">검사 성격에 따라 연구 안내 카드를 숨길 수 있습니다.</p>
                       </div>
                     </div>
                   )}

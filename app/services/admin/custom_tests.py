@@ -603,6 +603,7 @@ def create_admin_custom_test_batch(
             normalized_fields,
         ),
         requires_consent=payload.requires_consent,
+        show_research_notice=payload.show_research_notice,
     )
     db.add(row)
     db.flush()
@@ -651,6 +652,8 @@ def get_admin_custom_test(db: Session, admin_session: str | None, custom_test_id
                 sub_test_variants = [row.sub_test_json] if row.sub_test_json else []
         except (TypeError, json.JSONDecodeError):
             sub_test_variants = []
+    from app.repositories.custom_test_repository import get_active_access_link_by_admin_and_test
+    active_link = get_active_access_link_by_admin_and_test(db, admin_user_id=admin.id, custom_test_id=row.id)
     return {
         "id": row.id,
         "custom_test_name": row.custom_test_name,
@@ -665,8 +668,11 @@ def get_admin_custom_test(db: Session, admin_session: str | None, custom_test_id
         "selected_scale_codes": selected_scale_codes,
         "additional_profile_fields": additional_profile_fields,
         "requires_consent": bool(getattr(row, "requires_consent", False)),
+        "show_research_notice": bool(getattr(row, "show_research_notice", True)),
         "scale_count": len(selected_scale_pairs),
         "created_at": row.created_at.isoformat(),
+        "access_token": active_link.access_token if active_link else None,
+        "allow_unanswered_submission": bool(getattr(active_link, "allow_unanswered_submission", False)) if active_link else False,
     }
 
 
@@ -693,6 +699,7 @@ def update_admin_custom_test(
     row.custom_test_name = trimmed_name
     row.client_intake_mode = client_intake_mode
     row.requires_consent = payload.requires_consent
+    row.show_research_notice = payload.show_research_notice
     if payload.session_configs is not None:
         test_configs = load_custom_test_configs(row)
         raw_sessions = [

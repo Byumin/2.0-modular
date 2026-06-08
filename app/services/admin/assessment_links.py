@@ -13,11 +13,16 @@ from app.repositories.custom_test_repository import (
     create_access_link,
     create_submission,
     delete_assessment_draft,
+    find_pre_registered_entry_by_match,
     get_assessment_draft,
     get_latest_submission_by_client_and_test,
     get_active_access_link_by_admin_and_test,
     get_active_access_link_by_token,
     get_custom_test_by_id_and_admin,
+    get_pre_registered_entries_by_link,
+    create_pre_registered_entry,
+    delete_pre_registered_entry,
+    update_pre_registered_provisional_client,
     upsert_assessment_draft,
 )
 from app.repositories.parent_test_repository import fetch_parent_item_bundle
@@ -46,6 +51,7 @@ from app.services.admin.common import (
 
 
 _SECONDARY_ROLES = {"parent", "teacher", "classmate", "guardian"}
+NO_RESPONSE_ANSWER_VALUE = "NO_RESPONSE"
 
 
 def _resolve_subject_profile(profile: dict[str, Any]) -> dict[str, Any]:
@@ -471,6 +477,7 @@ def _build_custom_assessment_profile_meta(custom_test_row: AdminCustomTest, test
         "test_id": test_id_text or custom_test_row.test_id,
         "test_ids": test_ids,
         "display_name": custom_test_row.custom_test_name,
+        "show_research_notice": bool(getattr(custom_test_row, "show_research_notice", True)),
         "required_profile_fields": _required_profile_fields_for_variants(test_configs),
         "profile_field_options": _collect_profile_field_options(test_configs),
         "additional_profile_fields": additional_profile_fields,
@@ -731,6 +738,7 @@ def _build_structured_answers(
     *,
     raw_answers: dict[str, str],
     assessment_items: list[dict[str, Any]],
+    include_unanswered: bool = False,
 ) -> list[dict[str, Any]]:
     item_meta_by_id: dict[str, dict[str, Any]] = {}
     ordered_item_ids: list[str] = []
@@ -747,17 +755,24 @@ def _build_structured_answers(
         }
 
     grouped_items: dict[tuple[str, str], list[dict[str, str | int]]] = {}
-    for answer_key, raw_value in (raw_answers or {}).items():
+    source_item_ids = ordered_item_ids if include_unanswered else list((raw_answers or {}).keys())
+    for answer_key in source_item_ids:
         key = str(answer_key).strip()
         meta = item_meta_by_id.get(key)
         if meta is None:
             continue
+        raw_value = (raw_answers or {}).get(key)
+        answer_value = str(raw_value).strip() if raw_value is not None else ""
+        if not answer_value:
+            if not include_unanswered:
+                continue
+            answer_value = NO_RESPONSE_ANSWER_VALUE
         group_key = (meta["test_id"], meta["sub_test_json"])
         grouped_items.setdefault(group_key, []).append(
             {
                 "order": int(meta["order"]),
                 "parent_item_id": meta["parent_item_id"],
-                "answer_value": str(raw_value),
+                "answer_value": answer_value,
             }
         )
 
@@ -1046,6 +1061,7 @@ def generate_custom_test_access_link(db: Session, admin_session: str | None, cus
         "custom_test_name": custom_test.custom_test_name,
         "access_token": link.access_token,
         "assessment_url": f"/assessment/custom/{link.access_token}",
+        "allow_unanswered_submission": bool(getattr(link, "allow_unanswered_submission", False)),
     }
 
 def _derive_required_fields_for_test(test_id: str, test_configs: list[dict]) -> list[str]:
@@ -1183,6 +1199,7 @@ def get_custom_test_by_access_link(db: Session, access_token: str) -> dict:
 
     payload = _build_custom_assessment_profile_meta(custom_test, test_configs)
     payload["access_token"] = access_token
+    payload["allow_unanswered_submission"] = bool(getattr(link, "allow_unanswered_submission", False))
     payload["profile_config"] = _load_test_profile_config(db, payload.get("test_ids") or [], test_configs)
     return payload
 
@@ -1211,62 +1228,96 @@ def validate_custom_test_profile_by_access_link(
 
     assessment_payload = build_custom_assessment_question_payload(custom_test, profile or {}, db=db)
     client_intake_mode = normalize_client_intake_mode(getattr(custom_test, "client_intake_mode", ""))
-    client, error_message, error_code, candidates = find_assigned_client_for_profile_with_code(
-        db,
-        admin_user_id=link.admin_user_id,
-        custom_test_id=custom_test.id,
-        profile=profile or {},
-    )
 
     is_ambiguous_match = False
+    candidates: list = []
 
-    if client is None:
-        if error_code == AMBIGUOUS_CLIENT_CODE:
-            # Case 2: 애매 매칭 - 수검자 선택 처리
-            if responder_choice == "new":
-                # 신규 등록 선택 → 임시 내담자 생성
+    if client_intake_mode == "pre_registered_only":
+        # 링크 사전 등록 테이블 기반 매칭
+        match_keys = _parse_json_list(getattr(link, "match_field_keys_json", '["name"]')) or ["name"]
+        pre_entry = find_pre_registered_entry_by_match(
+            db,
+            access_link_id=link.id,
+            match_keys=match_keys,
+            profile=profile or {},
+        )
+        if pre_entry is None:
+            _raise_assessment_error(403, "사전 등록되지 않은 내담자입니다. 담당자에게 문의하세요.")
+
+        if pre_entry.provisional_client_id is not None:
+            from app.repositories.client_repository import get_admin_client_by_id_and_admin
+            client = get_admin_client_by_id_and_admin(
+                db,
+                client_id=pre_entry.provisional_client_id,
+                admin_user_id=link.admin_user_id,
+            )
+            if client is None:
+                # provisional client가 삭제된 경우 재생성
                 client = create_provisional_client_and_assign_for_public_assessment(
                     db,
                     admin_user_id=link.admin_user_id,
                     custom_test_id=custom_test.id,
                     profile=profile or {},
                 )
-                is_ambiguous_match = True
-            elif selected_client_id is not None:
-                # 기존 내담자 선택 → 후보 중 검증
-                selected = next((c for c in candidates if c.id == selected_client_id), None)
-                if selected is None:
-                    _raise_assessment_error(403, "선택한 내담자 정보가 일치하지 않습니다.")
-                client = selected
-                is_ambiguous_match = True
+                update_pre_registered_provisional_client(db, entry_id=pre_entry.id, client_id=client.id)
+                db.commit()
+        else:
+            client = create_provisional_client_and_assign_for_public_assessment(
+                db,
+                admin_user_id=link.admin_user_id,
+                custom_test_id=custom_test.id,
+                profile=profile or {},
+            )
+            update_pre_registered_provisional_client(db, entry_id=pre_entry.id, client_id=client.id)
+            db.commit()
+    else:
+        # auto_create 모드: 기존 assignment 기반 매칭
+        client, error_message, error_code, candidates = find_assigned_client_for_profile_with_code(
+            db,
+            admin_user_id=link.admin_user_id,
+            custom_test_id=custom_test.id,
+            profile=profile or {},
+        )
+
+        if client is None:
+            if error_code == AMBIGUOUS_CLIENT_CODE:
+                if responder_choice == "new":
+                    client = create_provisional_client_and_assign_for_public_assessment(
+                        db,
+                        admin_user_id=link.admin_user_id,
+                        custom_test_id=custom_test.id,
+                        profile=profile or {},
+                    )
+                    is_ambiguous_match = True
+                elif selected_client_id is not None:
+                    selected = next((c for c in candidates if c.id == selected_client_id), None)
+                    if selected is None:
+                        _raise_assessment_error(403, "선택한 내담자 정보가 일치하지 않습니다.")
+                    client = selected
+                    is_ambiguous_match = True
+                else:
+                    _raise_assessment_error(
+                        403,
+                        error_message,
+                        AMBIGUOUS_CLIENT_CODE,
+                        data={
+                            "candidates": [
+                                {
+                                    "id": c.id,
+                                    "name": c.name,
+                                    "gender": c.gender,
+                                    "birth_day": c.birth_day.isoformat() if c.birth_day else None,
+                                }
+                                for c in candidates
+                            ]
+                        },
+                    )
             else:
-                # 아직 선택 안 함 → 후보 목록 반환
                 _raise_assessment_error(
                     403,
-                    error_message,
-                    AMBIGUOUS_CLIENT_CODE,
-                    data={
-                        "candidates": [
-                            {
-                                "id": c.id,
-                                "name": c.name,
-                                "gender": c.gender,
-                                "birth_day": c.birth_day.isoformat() if c.birth_day else None,
-                            }
-                            for c in candidates
-                        ]
-                    },
+                    "기존 내담자 재사용 또는 신규 등록을 위해 확인이 필요합니다. 계속하면 현재 검사에 연결됩니다.",
+                    AUTO_CREATE_CONFIRM_REQUIRED_CODE,
                 )
-        elif client_intake_mode == "auto_create":
-            # Case 3: 배정된 내담자 없거나 불일치 → auto_create 확인 요청
-            _raise_assessment_error(
-                403,
-                "기존 내담자 재사용 또는 신규 등록을 위해 확인이 필요합니다. 계속하면 현재 검사에 연결됩니다.",
-                AUTO_CREATE_CONFIRM_REQUIRED_CODE,
-            )
-        else:
-            # Case 1 실패: pre_registered_only에서 불일치
-            _raise_assessment_error(403, error_message, error_code)
 
     if not allow_retake:
         latest_submission = get_latest_submission_by_client_and_test(
@@ -1557,8 +1608,9 @@ def submit_custom_test_by_access_link(
         raise HTTPException(status_code=400, detail="문항 데이터가 없습니다.")
 
     cleaned_answers = _clean_answers_for_items(answers, valid_item_ids)
+    allow_unanswered_submission = bool(getattr(link, "allow_unanswered_submission", False))
 
-    if len(cleaned_answers) != len(valid_item_ids):
+    if not allow_unanswered_submission and len(cleaned_answers) != len(valid_item_ids):
         raise HTTPException(status_code=400, detail="모든 문항에 응답해주세요.")
 
     if client_id is not None:
@@ -1572,7 +1624,8 @@ def submit_custom_test_by_access_link(
             _raise_assessment_error(403, "이 검사에 배정된 내담자가 아닙니다.")
         if is_ambiguous_match and responder_choice == "existing" and client_id not in set(candidate_client_ids or []):
             _raise_assessment_error(403, "선택한 내담자 정보가 일치하지 않습니다.")
-        _validate_selected_client_matches_profile(client_row, clean_profile)
+        if normalize_client_intake_mode(getattr(custom_test, "client_intake_mode", "")) != "pre_registered_only":
+            _validate_selected_client_matches_profile(client_row, clean_profile)
         client = client_row
     else:
         client, error_message, error_code, candidates = find_assigned_client_for_profile_with_code(
@@ -1603,6 +1656,7 @@ def submit_custom_test_by_access_link(
                 "answers": _build_structured_answers(
                     raw_answers=cleaned_answers,
                     assessment_items=assessment_payload["items"],
+                    include_unanswered=allow_unanswered_submission,
                 ),
             },
             ensure_ascii=False,
@@ -1704,3 +1758,338 @@ def submit_consent_by_token(db: Session, access_token: str, client_id: int, cons
     db.add(record)
     db.commit()
     return {"message": "동의 기록이 저장되었습니다.", "consented": consented}
+
+
+# ── 관리자: 링크 사전 등록 내담자 관리 ────────────────────────────────────────
+
+def _get_link_and_verify_admin(db: Session, admin_session: str | None, access_token: str):
+    admin = get_current_admin(db, admin_session)
+    link = get_active_access_link_by_token(db, access_token)
+    if link is None or link.admin_user_id != admin.id:
+        raise HTTPException(status_code=404, detail="링크를 찾을 수 없습니다.")
+    return admin, link
+
+
+_BASE_FIELD_LABELS: dict[str, str] = {
+    "name": "이름",
+    "gender": "성별",
+    "birth_day": "생년월일",
+    "phone": "휴대폰 번호",
+    "school_age": "학령",
+    "informant": "관찰자",
+}
+
+_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
+    "name": ("이름", "성명", "내담자명", "수검자명", "name"),
+    "gender": ("성별", "gender"),
+    "birth_day": ("생년월일", "생일", "출생일", "birth_day", "birth", "birthday"),
+    "phone": ("휴대폰 번호", "휴대폰번호", "휴대전화", "핸드폰", "핸드폰 번호", "전화번호", "연락처", "phone"),
+}
+
+
+def _normalize_header_key(value: Any) -> str:
+    return str(value or "").strip().lower().replace(" ", "").replace("_", "").replace("-", "")
+
+
+def _profile_field_lookup(available_fields: list[dict], match_keys: list[str] | None = None) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+
+    def add(alias: Any, key: str, *, override: bool = False) -> None:
+        normalized = _normalize_header_key(alias)
+        if normalized:
+            if override:
+                lookup[normalized] = key
+            else:
+                lookup.setdefault(normalized, key)
+
+    for key, aliases in _FIELD_ALIASES.items():
+        add(key, key)
+        add(_BASE_FIELD_LABELS.get(key, ""), key)
+        for alias in aliases:
+            add(alias, key)
+
+    for field in available_fields:
+        key = str(field.get("key", "")).strip()
+        if not key:
+            continue
+        add(key, key, override=True)
+        add(field.get("label", ""), key, override=True)
+        add(_BASE_FIELD_LABELS.get(key, ""), key, override=True)
+        for alias in _FIELD_ALIASES.get(key, ()):
+            add(alias, key, override=True)
+
+    for key in match_keys or []:
+        key = str(key).strip()
+        if not key:
+            continue
+        add(key, key, override=True)
+        add(_BASE_FIELD_LABELS.get(key, ""), key, override=True)
+        for alias in _FIELD_ALIASES.get(key, ()):
+            add(alias, key, override=True)
+    return lookup
+
+
+def _normalize_pre_registered_profile_data(
+    raw_profile_data: dict[str, Any],
+    *,
+    available_fields: list[dict],
+    match_keys: list[str] | None = None,
+) -> dict[str, str]:
+    lookup = _profile_field_lookup(available_fields, match_keys)
+    normalized: dict[str, str] = {}
+    extras: dict[str, str] = {}
+
+    for raw_key, raw_value in (raw_profile_data or {}).items():
+        value = str(raw_value or "").strip()
+        if value == "":
+            continue
+        key = lookup.get(_normalize_header_key(raw_key))
+        if key:
+            normalized[key] = value
+        else:
+            extras[str(raw_key).strip()] = value
+
+    for key, value in extras.items():
+        normalized.setdefault(key, value)
+    return normalized
+
+
+def _match_key_labels(match_keys: list[str], available_fields: list[dict]) -> dict[str, str]:
+    labels = {str(field.get("key", "")): str(field.get("label") or field.get("key") or "") for field in available_fields}
+    return {key: labels.get(key) or _BASE_FIELD_LABELS.get(key) or key for key in match_keys}
+
+
+def _available_profile_fields_for_link(
+    db: Session,
+    custom_test: AdminCustomTest,
+    test_configs: list,
+) -> list[dict]:
+    """링크에서 수집하는 전체 프로필 필드 목록을 {key, label} 형태로 반환한다.
+    test_profile_config 테이블 + additional_profile_fields_json 모두 포함한다."""
+    seen: set[str] = set()
+    fields: list[dict] = []
+
+    def _add(key: str, label: str) -> None:
+        if key not in seen:
+            seen.add(key)
+            fields.append({"key": key, "label": label or key})
+
+    # 1. test_profile_config 테이블에서 각 test_id의 essential/optional 필드 로드
+    test_ids, _ = summarize_custom_test_ids(test_configs, custom_test.test_id)
+    if test_ids:
+        placeholders = ",".join(f":id{i}" for i in range(len(test_ids)))
+        params = {f"id{i}": tid for i, tid in enumerate(test_ids)}
+        rows = db.execute(
+            text(f"SELECT essential_profile_json, optional_profile_json FROM test_profile_config WHERE test_id IN ({placeholders})"),
+            params,
+        ).fetchall()
+        for row in rows:
+            for raw_json in (row[0], row[1]):
+                if not raw_json:
+                    continue
+                try:
+                    cfg = json.loads(raw_json)
+                except Exception:
+                    continue
+                # sections 형태
+                for sec in cfg.get("sections", []):
+                    for fk, fv in (sec.get("fields") or {}).items():
+                        label = (fv.get("label") if isinstance(fv, dict) else None) or _BASE_FIELD_LABELS.get(fk, fk)
+                        _add(fk, label)
+                # flat fields 형태
+                for fk, fv in (cfg.get("fields") or {}).items():
+                    label = (fv.get("label") if isinstance(fv, dict) else None) or _BASE_FIELD_LABELS.get(fk, fk)
+                    _add(fk, label)
+
+    # 2. _required_profile_fields_for_variants 기반 기본 필드 보완 (test_profile_config 없는 경우 대비)
+    required_keys = set(_required_profile_fields_for_variants(test_configs))
+    for key in ["name", "gender", "birth_day", "phone", "school_age", "informant"]:
+        if key == "name" or key in required_keys:
+            _add(key, _BASE_FIELD_LABELS.get(key, key))
+
+    # 3. additional_profile_fields_json (관리자가 직접 추가한 필드)
+    raw = json.loads(getattr(custom_test, "additional_profile_fields_json", "[]") or "[]")
+    for f in normalize_additional_profile_fields(raw):
+        label = f.get("label", "")
+        if label:
+            _add(label, label)
+
+    return fields
+
+
+def list_pre_registered_clients_for_link(
+    db: Session,
+    admin_session: str | None,
+    access_token: str,
+) -> dict:
+    admin, link = _get_link_and_verify_admin(db, admin_session, access_token)
+    match_keys = _parse_json_list(getattr(link, "match_field_keys_json", '["name"]')) or ["name"]
+    entries = get_pre_registered_entries_by_link(db, link.id)
+    custom_test = get_custom_test_by_id_and_admin(
+        db, custom_test_id=link.admin_custom_test_id, admin_user_id=link.admin_user_id
+    )
+    test_configs = load_custom_test_configs(custom_test) if custom_test else []
+    available_fields = _available_profile_fields_for_link(db, custom_test, test_configs) if custom_test else [{"key": "name", "label": "이름"}]
+    return {
+        "match_field_keys": match_keys,
+        "available_profile_fields": available_fields,
+        "entries": [
+            {
+                "id": e.id,
+                "profile_data": json.loads(e.profile_data_json or "{}"),
+                "has_provisional_client": e.provisional_client_id is not None,
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+            }
+            for e in entries
+        ],
+    }
+
+
+def add_pre_registered_client_for_link(
+    db: Session,
+    admin_session: str | None,
+    access_token: str,
+    profile_data: dict[str, Any],
+) -> dict:
+    admin, link = _get_link_and_verify_admin(db, admin_session, access_token)
+    match_keys = _parse_json_list(getattr(link, "match_field_keys_json", '["name"]')) or ["name"]
+    custom_test = get_custom_test_by_id_and_admin(
+        db, custom_test_id=link.admin_custom_test_id, admin_user_id=link.admin_user_id
+    )
+    test_configs = load_custom_test_configs(custom_test) if custom_test else []
+    available_fields = _available_profile_fields_for_link(db, custom_test, test_configs) if custom_test else [{"key": "name", "label": "이름"}]
+    profile_data = _normalize_pre_registered_profile_data(
+        profile_data,
+        available_fields=available_fields,
+        match_keys=match_keys,
+    )
+    match_labels = _match_key_labels(match_keys, available_fields)
+
+    # match key 값이 모두 있어야 등록 가능
+    for key in match_keys:
+        if not str(profile_data.get(key, "")).strip():
+            raise HTTPException(status_code=422, detail=f"'{match_labels.get(key, key)}' 필드가 비어 있습니다.")
+
+    # 중복 확인
+    existing = find_pre_registered_entry_by_match(
+        db,
+        access_link_id=link.id,
+        match_keys=match_keys,
+        profile=profile_data,
+    )
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="이미 등록된 내담자입니다.")
+
+    entry = create_pre_registered_entry(
+        db,
+        access_link_id=link.id,
+        admin_user_id=admin.id,
+        profile_data_json=json.dumps(profile_data, ensure_ascii=False),
+    )
+    db.commit()
+    return {
+        "message": "사전 등록이 완료되었습니다.",
+        "entry": {
+            "id": entry.id,
+            "profile_data": profile_data,
+            "has_provisional_client": False,
+            "created_at": entry.created_at.isoformat() if entry.created_at else None,
+        },
+    }
+
+
+def remove_pre_registered_client_for_link(
+    db: Session,
+    admin_session: str | None,
+    access_token: str,
+    entry_id: int,
+) -> dict:
+    admin, link = _get_link_and_verify_admin(db, admin_session, access_token)
+    deleted = delete_pre_registered_entry(db, entry_id=entry_id, admin_user_id=admin.id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="등록 정보를 찾을 수 없습니다.")
+    db.commit()
+    return {"message": "삭제되었습니다."}
+
+
+def update_link_match_field_keys(
+    db: Session,
+    admin_session: str | None,
+    access_token: str,
+    match_field_keys: list[str],
+) -> dict:
+    admin, link = _get_link_and_verify_admin(db, admin_session, access_token)
+    if not match_field_keys:
+        raise HTTPException(status_code=422, detail="확인 기준 필드를 하나 이상 선택해야 합니다.")
+    link.match_field_keys_json = json.dumps(match_field_keys, ensure_ascii=False)
+    db.commit()
+    return {"message": "확인 기준 필드가 저장되었습니다.", "match_field_keys": match_field_keys}
+
+
+def update_link_response_options(
+    db: Session,
+    admin_session: str | None,
+    access_token: str,
+    *,
+    allow_unanswered_submission: bool,
+) -> dict:
+    admin, link = _get_link_and_verify_admin(db, admin_session, access_token)
+    link.allow_unanswered_submission = bool(allow_unanswered_submission)
+    db.commit()
+    return {
+        "message": "실시 링크 응답 옵션이 저장되었습니다.",
+        "allow_unanswered_submission": bool(link.allow_unanswered_submission),
+    }
+
+
+def bulk_add_pre_registered_clients_for_link(
+    db: Session,
+    admin_session: str | None,
+    access_token: str,
+    rows: list[dict[str, Any]],
+) -> dict:
+    admin, link = _get_link_and_verify_admin(db, admin_session, access_token)
+    match_keys = _parse_json_list(getattr(link, "match_field_keys_json", '["name"]')) or ["name"]
+    custom_test = get_custom_test_by_id_and_admin(
+        db, custom_test_id=link.admin_custom_test_id, admin_user_id=link.admin_user_id
+    )
+    test_configs = load_custom_test_configs(custom_test) if custom_test else []
+    available_fields = _available_profile_fields_for_link(db, custom_test, test_configs) if custom_test else [{"key": "name", "label": "이름"}]
+    match_labels = _match_key_labels(match_keys, available_fields)
+
+    added = 0
+    skipped = 0
+    errors: list[str] = []
+
+    for i, raw_profile_data in enumerate(rows, start=1):
+        profile_data = _normalize_pre_registered_profile_data(
+            raw_profile_data,
+            available_fields=available_fields,
+            match_keys=match_keys,
+        )
+        # match key 값 검사
+        missing = [k for k in match_keys if not str(profile_data.get(k, "")).strip()]
+        if missing:
+            missing_labels = [match_labels.get(k, k) for k in missing]
+            errors.append(f"{i}행: '{', '.join(missing_labels)}' 필드가 비어 있습니다.")
+            skipped += 1
+            continue
+
+        # 중복 확인
+        existing = find_pre_registered_entry_by_match(
+            db, access_link_id=link.id, match_keys=match_keys, profile=profile_data
+        )
+        if existing is not None:
+            skipped += 1
+            continue
+
+        create_pre_registered_entry(
+            db,
+            access_link_id=link.id,
+            admin_user_id=admin.id,
+            profile_data_json=json.dumps(profile_data, ensure_ascii=False),
+        )
+        added += 1
+
+    db.commit()
+    return {"message": f"{added}명 등록, {skipped}명 건너뜀", "added": added, "skipped": skipped, "errors": errors}

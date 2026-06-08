@@ -92,6 +92,7 @@ interface Props {
   initialPage?: number
   onProgressChange?: (state: { answers: AnswerState; currentPartIndex: number; currentPage: number }) => void
   sessionClass?: string
+  allowUnansweredSubmission?: boolean
 }
 
 export function QuestionStep({
@@ -109,16 +110,20 @@ export function QuestionStep({
   initialPage = 0,
   onProgressChange,
   sessionClass = "session-teal",
+  allowUnansweredSubmission = false,
 }: Props) {
   const safeInitialPartIndex = Math.min(Math.max(initialPartIndex, 0), Math.max(parts.length - 1, 0))
   const [partIndex, setPartIndex] = React.useState(safeInitialPartIndex)
   const [page, setPage] = React.useState(Math.max(initialPage, 0))
   const [answers, setAnswers] = React.useState<AnswerState>(() => initialAnswers ?? {})
   const [showMissingHighlight, setShowMissingHighlight] = React.useState(false)
+  const [missingConfirmOpen, setMissingConfirmOpen] = React.useState(false)
+  const [pendingMissingItems, setPendingMissingItems] = React.useState<Array<{ item: QuestionItem; globalIndex: number }>>([])
   const [viewMode, setViewMode] = React.useState<ViewMode>("cards")
   const questionAreaRef = React.useRef<HTMLDivElement | null>(null)
   const quickNavRef = React.useRef<HTMLDivElement | null>(null)
   const pendingScrollRef = React.useRef<"first" | string | null>("first")
+  const hotkeyAnchorItemIdRef = React.useRef<string | null>(null)
   const answersRef = React.useRef<AnswerState>(initialAnswers ?? {})
   const partIndexRef = React.useRef(safeInitialPartIndex)
   const pageRef = React.useRef(Math.max(initialPage, 0))
@@ -218,18 +223,34 @@ export function QuestionStep({
     return null
   }
 
+  function nextMissingInCurrentAfterItem(fromItemId: string, state: AnswerState) {
+    const startIndex = currentItems.findIndex((item) => item.id === fromItemId)
+    if (startIndex < 0) return null
+    for (let idx = startIndex + 1; idx < currentItems.length; idx += 1) {
+      if (!state[currentItems[idx].id]?.trim()) return currentItems[idx]
+    }
+    return null
+  }
+
   function activeHotkeyItem(state: AnswerState, scopedItemId?: string) {
     if (scopedItemId) {
       const scoped = flatItems.find(({ item }) => item.id === scopedItemId)
       if (scoped && !state[scoped.item.id]?.trim()) return scoped.item
-      return nextMissingAfterItem(scopedItemId, state)?.item ?? null
+      return nextMissingInCurrentAfterItem(scopedItemId, state)
     }
-    return firstMissingIn(currentItems, state) ?? firstMissingGlobal(state)?.item ?? null
+    const anchoredItemId = hotkeyAnchorItemIdRef.current
+    if (anchoredItemId && currentItems.some((item) => item.id === anchoredItemId)) {
+      const anchored = currentItems.find((item) => item.id === anchoredItemId)
+      if (anchored && !state[anchored.id]?.trim()) return anchored
+      return nextMissingInCurrentAfterItem(anchoredItemId, state)
+    }
+    return firstMissingIn(currentItems, state)
   }
 
   function moveToItem(itemId: string, { focus = true } = {}) {
     const location = flatItems.find(({ item }) => item.id === itemId)
     if (!location) return
+    if (focus) hotkeyAnchorItemIdRef.current = itemId
     const needsPageChange = location.partIndex !== partIndexRef.current || location.page !== pageRef.current
     if (needsPageChange) {
       partIndexRef.current = location.partIndex
@@ -275,10 +296,22 @@ export function QuestionStep({
 
   function allAnswered() { return allAnsweredValue }
   function partAllAnswered(pi: number) { return partAllAnsweredSet[pi] ?? false }
+  function canSubmitNow() { return allowUnansweredSubmission || allAnswered() }
+
+  function missingItemsForState(state: AnswerState) {
+    return flatItems
+      .filter(({ item }) => !state[item.id]?.trim())
+      .map(({ item }, index) => ({
+        item,
+        globalIndex: item.global_order_index ?? index + 1,
+      }))
+  }
 
   function handleAnswer(id: string, value: string) {
     const updatedAnswers = { ...answersRef.current, [id]: value }
     answersRef.current = updatedAnswers
+    const nextCurrentMissing = nextMissingInCurrentAfterItem(id, updatedAnswers)
+    hotkeyAnchorItemIdRef.current = nextCurrentMissing?.id ?? id
     setAnswers(updatedAnswers)
     setShowMissingHighlight(false)
     if (viewMode === "step") {
@@ -292,6 +325,8 @@ export function QuestionStep({
         if (!(page >= bundles.length - 1 && partIndex >= parts.length - 1)) {
           setTimeout(() => handleNext(), 350)
         }
+      } else if (allowUnansweredSubmission && !nextCurrentMissing && !(page >= bundles.length - 1 && partIndex >= parts.length - 1)) {
+        setTimeout(() => handleNext(), 350)
       } else {
         const nextMissing = nextMissingAfterItem(id, updatedAnswers)
         const isSamePage = nextMissing
@@ -337,6 +372,7 @@ export function QuestionStep({
   }
 
   function handleNext() {
+    hotkeyAnchorItemIdRef.current = null
     if (page < bundles.length - 1) {
       const nextPage = page + 1
       pageRef.current = nextPage
@@ -356,6 +392,13 @@ export function QuestionStep({
 
   function handleSubmitClick() {
     if (!allAnswered()) {
+      const missing = missingItemsForState(answers)
+      if (allowUnansweredSubmission) {
+        setPendingMissingItems(missing)
+        setMissingConfirmOpen(true)
+        setShowMissingHighlight(false)
+        return
+      }
       setShowMissingHighlight(true)
       const firstIncompletePart = parts.findIndex(p => (p.items ?? []).some(i => !answered(i.id)))
       if (firstIncompletePart >= 0 && firstIncompletePart !== partIndex) {
@@ -375,8 +418,31 @@ export function QuestionStep({
     onSubmit(flat)
   }
 
+  function submitCurrentAnswers() {
+    const flat: AnswerState = {}
+    parts.forEach(p => (p.items ?? []).forEach(i => {
+      const value = answers[i.id]?.trim()
+      if (value) flat[i.id] = value
+    }))
+    onSubmit(flat)
+  }
+
+  function handleAnswerMissing() {
+    const firstMissing = pendingMissingItems[0]?.item ?? missingItemsForState(answers)[0]?.item
+    setMissingConfirmOpen(false)
+    setPendingMissingItems([])
+    if (firstMissing) moveToItem(firstMissing.id, { focus: true })
+  }
+
+  function handleSubmitWithMissing() {
+    setMissingConfirmOpen(false)
+    setPendingMissingItems([])
+    submitCurrentAnswers()
+  }
+
   function handleViewModeChange(nextMode: ViewMode) {
     const anchorItemId = currentItems[0]?.id ?? null
+    hotkeyAnchorItemIdRef.current = anchorItemId
 
     if (nextMode === "cards" && viewMode === "step") {
       // 집중형 → 카드형: 현재 문항이 속한 카드형 페이지로 이동
@@ -477,6 +543,54 @@ export function QuestionStep({
   const isLastPage = page >= bundles.length - 1
   const isLastPart = partIndex >= parts.length - 1
   const totalPages = bundles.length
+  const missingPreview = pendingMissingItems.slice(0, 5)
+
+  function renderMissingConfirmModal() {
+    if (!missingConfirmOpen) return null
+    const hiddenCount = Math.max(0, pendingMissingItems.length - missingPreview.length)
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
+        <div className="w-full max-w-md rounded-xl border border-[#dfe5e3] bg-white p-5 shadow-xl">
+          <h3 className="text-lg font-semibold text-[#161d1b]">응답하지 않은 문항이 있습니다</h3>
+          <p className="mt-2 text-sm text-[#5f6f73]">
+            아래 문항을 확인하거나, 현재 응답한 내용만 제출할 수 있습니다.
+          </p>
+          <div className="mt-4 rounded-lg bg-[#f5f7fa] p-3">
+            <p className="text-xs font-semibold text-[#5f6f73]">미응답 문항</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {missingPreview.map(({ item, globalIndex }) => (
+                <span key={item.id} className="rounded-md border border-[#dfe5e3] bg-white px-2.5 py-1 text-xs font-medium text-[#161d1b]">
+                  {globalIndex}번
+                </span>
+              ))}
+              {hiddenCount > 0 && (
+                <span className="rounded-md border border-[#dfe5e3] bg-white px-2.5 py-1 text-xs font-medium text-[#5f6f73]">
+                  외 {hiddenCount}개
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleAnswerMissing}
+              className="rounded-lg border border-[#dfe5e3] bg-white px-4 py-2 text-sm font-semibold text-[#175e63] transition-colors hover:bg-[#f5f7fa]"
+            >
+              응답하기
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmitWithMissing}
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "var(--sa)" }}
+            >
+              제출하기
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   // ── 집중형 (editorial) ────────────────────────────────────────────
   if (viewMode === "step") {
@@ -488,6 +602,7 @@ export function QuestionStep({
 
     return (
       <div className={`${sessionClass} flex min-h-screen flex-col bg-[#fafbfc]`}>
+        {renderMissingConfirmModal()}
         {/* Top progress bar */}
         <div className="h-1 bg-[#edf0ef]">
           <div
@@ -520,7 +635,7 @@ export function QuestionStep({
             <button
               type="button"
               onClick={handleSubmitClick}
-              disabled={!allAnswered() || submitting}
+              disabled={!canSubmitNow() || submitting}
               className="rounded-lg px-5 py-1.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-30"
               style={{ backgroundColor: "var(--sa)" }}
             >
@@ -647,7 +762,7 @@ export function QuestionStep({
 
             {(error || (showMissingHighlight && !allAnswered())) && (
               <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-600">
-                {error || "모든 문항에 응답해주세요."}
+                {error || (allowUnansweredSubmission ? "미응답 문항을 확인해주세요." : "모든 문항에 응답해주세요.")}
               </div>
             )}
           </div>
@@ -707,6 +822,7 @@ export function QuestionStep({
   // ── 카드형 (cards) ────────────────────────────────────────────────
   return (
     <div className={`${sessionClass} min-h-screen bg-[#f0f2f5]`}>
+      {renderMissingConfirmModal()}
       {/* Compact sticky header */}
       <header className="sticky top-0 z-30 border-b border-[#e8ebee] bg-white/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
@@ -882,21 +998,23 @@ export function QuestionStep({
 
             {(error || (showMissingHighlight && !allAnswered())) && (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-600">
-                {error || "모든 문항에 응답해주세요."}
+                {error || (allowUnansweredSubmission ? "미응답 문항을 확인해주세요." : "모든 문항에 응답해주세요.")}
               </div>
             )}
 
             {/* Mobile submit button — visible only below lg breakpoint */}
             <div className="mt-4 lg:hidden">
               <button type="button" onClick={handleSubmitClick}
-                disabled={submitting || !allAnswered()}
+                disabled={submitting || !canSubmitNow()}
                 className="h-12 w-full rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-30"
                 style={{ backgroundColor: "var(--sa)" }}
               >
                 {submitting ? submittingLabel : submitLabel}
               </button>
               {!allAnswered() && (
-                <p className="mt-1.5 text-center text-xs text-[#b0bab7]">모든 문항 응답 후 제출</p>
+                <p className="mt-1.5 text-center text-xs text-[#b0bab7]">
+                  {allowUnansweredSubmission ? "미응답 확인 후 제출 가능" : "모든 문항 응답 후 제출"}
+                </p>
               )}
             </div>
           </div>
@@ -966,7 +1084,7 @@ export function QuestionStep({
                             data-quick-item-id={item.id}
                             data-quick-index={displayIndex}
                             onClick={() => {
-                              if (bundleIdx !== page) setPage(bundleIdx >= 0 ? bundleIdx : 0)
+                              moveToItem(item.id, { focus: true })
                             }}
                             className={`h-6 rounded text-[10px] font-semibold transition-all ${
                               answered(item.id)
@@ -1036,14 +1154,16 @@ export function QuestionStep({
               {/* 제출 */}
               <div className="mt-3 border-t border-[#f0f2f5] pt-3">
                 <button type="button" onClick={handleSubmitClick}
-                  disabled={submitting || !allAnswered()}
+                  disabled={submitting || !canSubmitNow()}
                   className="h-10 w-full rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-30"
                   style={{ backgroundColor: "var(--sa)" }}
                 >
                   {submitting ? submittingLabel : submitLabel}
                 </button>
                 {!allAnswered() && (
-                  <p className="mt-1.5 text-center text-[10px] text-[#b0bab7]">모든 문항 응답 후 제출</p>
+                  <p className="mt-1.5 text-center text-[10px] text-[#b0bab7]">
+                    {allowUnansweredSubmission ? "미응답 확인 후 제출 가능" : "모든 문항 응답 후 제출"}
+                  </p>
                 )}
               </div>
             </div>

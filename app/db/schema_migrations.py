@@ -57,6 +57,23 @@ def ensure_postgresql_boolean_columns() -> None:
             )
         conn.exec_driver_sql("ALTER TABLE child_test ALTER COLUMN requires_consent SET DEFAULT FALSE")
 
+        show_research_notice_type = column_type(conn, "child_test", "show_research_notice")
+        if show_research_notice_type is not None and show_research_notice_type != "boolean":
+            conn.exec_driver_sql("ALTER TABLE child_test ALTER COLUMN show_research_notice DROP DEFAULT")
+            conn.exec_driver_sql(
+                """
+                ALTER TABLE child_test
+                ALTER COLUMN show_research_notice TYPE BOOLEAN
+                USING CASE
+                    WHEN show_research_notice IS NULL THEN TRUE
+                    WHEN show_research_notice::text IN ('1', 'true', 't', 'yes', 'y') THEN TRUE
+                    ELSE FALSE
+                END
+                """
+            )
+        if show_research_notice_type is not None:
+            conn.exec_driver_sql("ALTER TABLE child_test ALTER COLUMN show_research_notice SET DEFAULT TRUE")
+
         is_deleted_type = column_type(conn, "child_test", "is_deleted")
         if is_deleted_type is not None and is_deleted_type != "boolean":
             conn.exec_driver_sql("ALTER TABLE child_test ALTER COLUMN is_deleted DROP DEFAULT")
@@ -459,6 +476,16 @@ def ensure_child_test_requires_consent_column() -> None:
             conn.exec_driver_sql(
                 "ALTER TABLE child_test ADD COLUMN requires_consent INTEGER NOT NULL DEFAULT 0"
             )
+
+
+def ensure_child_test_show_research_notice_column() -> None:
+    """child_test 테이블에 show_research_notice 컬럼 추가."""
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("child_test")}
+    with engine.begin() as conn:
+        if "show_research_notice" not in columns:
+            column_type = "BOOLEAN NOT NULL DEFAULT TRUE" if engine.dialect.name == "postgresql" else "INTEGER NOT NULL DEFAULT 1"
+            conn.exec_driver_sql(f"ALTER TABLE child_test ADD COLUMN show_research_notice {column_type}")
 
 
 def ensure_admin_settings_table() -> None:
@@ -1039,4 +1066,55 @@ def ensure_admin_client_relation_table() -> None:
         )
         conn.exec_driver_sql(
             "CREATE INDEX IF NOT EXISTS ix_admin_client_relation_client_id_b ON admin_client_relation (client_id_b)"
+        )
+
+
+def ensure_access_link_match_field_keys_column() -> None:
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("admin_custom_test_access_link")}
+    with engine.begin() as conn:
+        if "match_field_keys_json" not in columns:
+            conn.exec_driver_sql(
+                """
+                ALTER TABLE admin_custom_test_access_link
+                ADD COLUMN match_field_keys_json TEXT NOT NULL DEFAULT '["name"]'
+                """
+            )
+
+
+def ensure_access_link_allow_unanswered_submission_column() -> None:
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("admin_custom_test_access_link")}
+    with engine.begin() as conn:
+        if "allow_unanswered_submission" not in columns:
+            conn.exec_driver_sql(
+                """
+                ALTER TABLE admin_custom_test_access_link
+                ADD COLUMN allow_unanswered_submission BOOLEAN NOT NULL DEFAULT FALSE
+                """
+            )
+
+
+def ensure_assessment_link_pre_registered_client_table() -> None:
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        if "assessment_link_pre_registered_client" not in tables:
+            conn.exec_driver_sql(
+                """
+                CREATE TABLE assessment_link_pre_registered_client (
+                    id SERIAL PRIMARY KEY,
+                    access_link_id INTEGER NOT NULL REFERENCES admin_custom_test_access_link(id),
+                    admin_user_id INTEGER NOT NULL REFERENCES admin_user(id),
+                    profile_data_json TEXT NOT NULL DEFAULT '{}',
+                    provisional_client_id INTEGER REFERENCES admin_client(id),
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_alpr_access_link_id ON assessment_link_pre_registered_client (access_link_id)"
+        )
+        conn.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_alpr_admin_user_id ON assessment_link_pre_registered_client (admin_user_id)"
         )
