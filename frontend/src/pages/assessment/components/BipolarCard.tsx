@@ -88,7 +88,7 @@ export function BipolarCard({ item, options, answerState, onAnswer, globalIndex,
     return (
       <div className="flex flex-col gap-4">
         {renderType !== "bipolar_labels_only" && (
-          <p className="text-[15px] leading-relaxed text-[#161d1b]">{item.text}</p>
+          <p className="whitespace-pre-line text-[15px] leading-relaxed text-[#161d1b]">{item.text}</p>
         )}
         <BipolarOptions {...optProps} />
       </div>
@@ -107,7 +107,7 @@ export function BipolarCard({ item, options, answerState, onAnswer, globalIndex,
           <span className="shrink-0 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
             Q{globalIndex}
           </span>
-          <p className="text-[15px] leading-relaxed text-foreground">{item.text}</p>
+          <p className="whitespace-pre-line text-[15px] leading-relaxed text-foreground">{item.text}</p>
         </div>
       )}
       <BipolarOptions {...optProps} />

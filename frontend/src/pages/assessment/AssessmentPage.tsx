@@ -65,14 +65,18 @@ function completionStorageKey(token: string) {
   return `assessment_done_${token}`
 }
 
-function readCompletedSubmission(token: string): { submissionId: number; accessToken: string } | null {
+function readCompletedSubmission(token: string): { submissionId: number; accessToken: string; showReportResult: boolean } | null {
   try {
     const raw = sessionStorage.getItem(completionStorageKey(token))
     if (!raw) return null
     if (raw === "1") return null
-    const parsed = JSON.parse(raw) as { submission_id?: unknown; access_token?: unknown }
+    const parsed = JSON.parse(raw) as { submission_id?: unknown; access_token?: unknown; show_report_result?: unknown }
     if (typeof parsed.submission_id !== "number" || typeof parsed.access_token !== "string") return null
-    return { submissionId: parsed.submission_id, accessToken: parsed.access_token }
+    return {
+      submissionId: parsed.submission_id,
+      accessToken: parsed.access_token,
+      showReportResult: parsed.show_report_result !== false,
+    }
   } catch {
     return null
   }
@@ -176,6 +180,7 @@ export function AssessmentPage() {
   const [draftStatus, setDraftStatus] = React.useState<"idle" | "restored" | "saving" | "saved" | "error">("idle")
   const [completedSubmissionId, setCompletedSubmissionId] = React.useState<number | null>(null)
   const [completedReportAccessToken, setCompletedReportAccessToken] = React.useState<string | null>(null)
+  const [completedShowReportResult, setCompletedShowReportResult] = React.useState(true)
   const [error, setError] = React.useState("")
 
   // Ambiguous match state
@@ -248,11 +253,12 @@ export function AssessmentPage() {
           setStep("complete")
         } else {
           const storedSubmission = readCompletedSubmission(token)
-          if (storedSubmission !== null) {
-            setCompletedSubmissionId(storedSubmission.submissionId)
-            setCompletedReportAccessToken(storedSubmission.accessToken)
-            setStep("complete")
-          }
+            if (storedSubmission !== null) {
+              setCompletedSubmissionId(storedSubmission.submissionId)
+              setCompletedReportAccessToken(storedSubmission.accessToken)
+              setCompletedShowReportResult(storedSubmission.showReportResult)
+              setStep("complete")
+            }
         }
       } catch {
         // Ignore storage failures.
@@ -446,7 +452,7 @@ export function AssessmentPage() {
   }
 
   function handleViewExistingResult() {
-    if (!retakePrompt) return
+    if (!retakePrompt || initialPayload?.show_report_result === false) return
     const existing = retakePrompt.existingSubmission
     window.open(
       `/report/${existing.submission_id}?token=${encodeURIComponent(existing.access_token)}`,
@@ -470,7 +476,7 @@ export function AssessmentPage() {
     setSubmitting(true)
     setError("")
     try {
-      const result = await api<{ submission_id?: number; access_token?: string }>(`/api/assessment-links/${token}/submit`, {
+      const result = await api<{ submission_id?: number; access_token?: string; show_report_result?: boolean }>(`/api/assessment-links/${token}/submit`, {
         method: "POST",
         body: JSON.stringify({
           responder_name: "",
@@ -484,8 +490,10 @@ export function AssessmentPage() {
       })
       const submissionId = typeof result.submission_id === "number" ? result.submission_id : null
       const reportAccessToken = typeof result.access_token === "string" ? result.access_token : null
+      const showReportResult = result.show_report_result !== false
       setCompletedSubmissionId(submissionId)
       setCompletedReportAccessToken(reportAccessToken)
+      setCompletedShowReportResult(showReportResult)
       setActiveDraft(null)
       setDraftStatus("idle")
       if (draftSaveTimerRef.current !== null) {
@@ -497,7 +505,7 @@ export function AssessmentPage() {
           completionStorageKey(token),
           submissionId === null || reportAccessToken === null
             ? "1"
-            : JSON.stringify({ submission_id: submissionId, access_token: reportAccessToken })
+            : JSON.stringify({ submission_id: submissionId, access_token: reportAccessToken, show_report_result: showReportResult })
         )
       } catch {
         // Ignore storage failures.
@@ -637,7 +645,14 @@ export function AssessmentPage() {
   }
 
   if (step === "complete") {
-    return <CompleteStep onRestart={handleRestart} reportAccessToken={completedReportAccessToken} submissionId={completedSubmissionId} />
+    return (
+      <CompleteStep
+        onRestart={handleRestart}
+        reportAccessToken={completedReportAccessToken}
+        submissionId={completedSubmissionId}
+        showReportResult={completedShowReportResult}
+      />
+    )
   }
 
   return (
@@ -714,6 +729,7 @@ export function AssessmentPage() {
               retakeProfile={retakePrompt?.profile ?? null}
               onRetakeConfirm={handleRetakeConfirm}
               onViewExistingResult={handleViewExistingResult}
+              showReportResult={initialPayload.show_report_result !== false}
             />
           )}
 

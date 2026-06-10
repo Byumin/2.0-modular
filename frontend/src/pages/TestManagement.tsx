@@ -126,6 +126,7 @@ interface CreatePayload {
   requires_consent: boolean
   show_research_notice: boolean
   allow_unanswered_submission: boolean
+  show_report_result: boolean
   test_configs: Array<{
     test_id: string
     selected_scale_codes: string[]
@@ -378,6 +379,7 @@ export function TestManagement() {
   const [createRequiresConsent, setCreateRequiresConsent] = React.useState(false)
   const [createShowResearchNotice, setCreateShowResearchNotice] = React.useState(true)
   const [createAllowUnansweredSubmission, setCreateAllowUnansweredSubmission] = React.useState(false)
+  const [createShowReportResult, setCreateShowReportResult] = React.useState(true)
   const [createMessage, setCreateMessage] = React.useState<{ text: string; error: boolean } | null>(null)
   const [catalogMessage, setCatalogMessage] = React.useState("")
   const [creating, setCreating] = React.useState(false)
@@ -450,6 +452,7 @@ export function TestManagement() {
     setCreateRequiresConsent(false)
     setCreateShowResearchNotice(true)
     setCreateAllowUnansweredSubmission(false)
+    setCreateShowReportResult(true)
     setCreateMessage(null)
     setSelectedTestIds([])
     setExpandedTestIds(new Set())
@@ -770,6 +773,7 @@ export function TestManagement() {
         requires_consent: createRequiresConsent,
         show_research_notice: createShowResearchNotice,
         allow_unanswered_submission: createAllowUnansweredSubmission,
+        show_report_result: createShowReportResult,
         test_configs,
         session_configs,
         additional_profile_fields,
@@ -1204,6 +1208,19 @@ export function TestManagement() {
                           <span className="text-sm">미응답 문항이 있어도 제출 허용</span>
                         </label>
                         <p className="text-xs text-muted-foreground">허용하면 제출 전 미응답 문항 확인 모달을 보여주고, 그대로 제출할 수 있습니다.</p>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium">결과 제공</label>
+                        <label className="flex cursor-pointer items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={createShowReportResult}
+                            onChange={(e) => setCreateShowReportResult(e.target.checked)}
+                            className="size-4 rounded border-input"
+                          />
+                          <span className="text-sm">제출 완료 후 수검자에게 결과 보기 버튼 제공</span>
+                        </label>
+                        <p className="text-xs text-muted-foreground">끄면 제출은 저장되지만 완료 화면에서 결과 보기 버튼이 표시되지 않습니다.</p>
                       </div>
                     </div>
                   )}

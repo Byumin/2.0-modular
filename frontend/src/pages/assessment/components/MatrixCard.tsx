@@ -25,7 +25,7 @@ export function MatrixCard({ groupItems, options, answerState, onAnswer, startGl
           <span className="shrink-0 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
             Q{startGlobalIndex}–{startGlobalIndex + groupItems.length - 1}
           </span>
-          <p className="text-[15px] font-semibold leading-relaxed">{groupPrompt}</p>
+          <p className="whitespace-pre-line text-[15px] font-semibold leading-relaxed">{groupPrompt}</p>
         </div>
       </div>
 
@@ -52,7 +52,7 @@ export function MatrixCard({ groupItems, options, answerState, onAnswer, startGl
                   data-item-id={item.id}
                   className={`border-b transition-colors last:border-0 ${answered ? "bg-primary/5" : "hover:bg-muted/20"}`}
                 >
-                  <td className="px-4 py-2.5 text-sm">
+                  <td className="whitespace-pre-line px-4 py-2.5 text-sm">
                     <span className="text-[10px] text-muted-foreground mr-1">
                       {startGlobalIndex + rowIdx}.
                     </span>

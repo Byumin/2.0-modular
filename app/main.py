@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.db.schema_migrations import (
     ensure_access_link_allow_unanswered_submission_column,
+    ensure_access_link_show_report_result_column,
     ensure_access_link_match_field_keys_column,
     ensure_admin_client_assignment_unique_index,
     ensure_admin_client_birth_day_not_null,
@@ -23,6 +24,7 @@ from app.db.schema_migrations import (
     ensure_child_test_requires_consent_column,
     ensure_child_test_session_configs_column,
     ensure_child_test_show_research_notice_column,
+    ensure_child_test_show_report_result_column,
     ensure_child_test_soft_delete_columns,
     ensure_client_consent_record_table,
     ensure_postgresql_boolean_columns,
@@ -111,6 +113,7 @@ def on_startup() -> None:
     ensure_child_test_requires_consent_column()
     ensure_child_test_show_research_notice_column()
     ensure_child_test_allow_unanswered_submission_column()
+    ensure_child_test_show_report_result_column()
     ensure_admin_settings_table()
     ensure_client_consent_record_table()
     ensure_admin_assessment_draft_table()
@@ -124,5 +127,6 @@ def on_startup() -> None:
     ensure_admin_client_relation_table()
     ensure_access_link_match_field_keys_column()
     ensure_access_link_allow_unanswered_submission_column()
+    ensure_access_link_show_report_result_column()
     ensure_assessment_link_pre_registered_client_table()
     seed_default_admin()

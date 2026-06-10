@@ -21,6 +21,7 @@ interface TestDetail {
   requires_consent?: boolean
   show_research_notice?: boolean
   allow_unanswered_submission?: boolean
+  show_report_result?: boolean
   test_ids?: string[]
   session_configs?: SessionConfig[]
   created_at: string
@@ -139,6 +140,7 @@ export function TestDetail() {
   const [accessLink, setAccessLink] = React.useState("")
   const [accessToken, setAccessToken] = React.useState("")
   const [allowUnansweredSubmission, setAllowUnansweredSubmission] = React.useState(false)
+  const [showReportResult, setShowReportResult] = React.useState(true)
   const [savingLinkOptions, setSavingLinkOptions] = React.useState(false)
   const [generatingLink, setGeneratingLink] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
@@ -148,7 +150,6 @@ export function TestDetail() {
     { key: "gender", label: "성별" },
     { key: "birth_day", label: "생년월일" },
   ])
-  const [savingMatchKeys, setSavingMatchKeys] = React.useState(false)
   const [preRegisteredEntries, setPreRegisteredEntries] = React.useState<PreRegisteredEntry[]>([])
   const [loadingPreRegistered, setLoadingPreRegistered] = React.useState(false)
   const [addingEntry, setAddingEntry] = React.useState(false)
@@ -197,6 +198,7 @@ export function TestDetail() {
           setAccessLink(fullUrl)
           setAccessToken(item.access_token)
           setAllowUnansweredSubmission(Boolean(item.allow_unanswered_submission))
+          setShowReportResult(item.show_report_result !== false)
           if (mode === "pre_registered_only") {
             loadPreRegistered(item.access_token)
           }
@@ -311,6 +313,7 @@ export function TestDetail() {
       const token = data.access_token ?? ""
       setAccessToken(token)
       setAllowUnansweredSubmission(Boolean(data.allow_unanswered_submission))
+      setShowReportResult(data.show_report_result !== false)
       if (intakeMode === "pre_registered_only" && token) {
         await loadPreRegistered(token)
       }
@@ -321,21 +324,29 @@ export function TestDetail() {
     }
   }
 
-  const handleSaveMatchKeys = async () => {
-    if (!accessToken || savingMatchKeys) return
-    setSavingMatchKeys(true)
+  const saveMatchKeysToServer = async ({ clearEntryValues = false }: { clearEntryValues?: boolean } = {}) => {
+    if (!accessToken) throw new Error("실시 링크가 없습니다.")
+    if (matchFieldKeys.length === 0) throw new Error("확인 기준 필드를 하나 이상 선택해야 합니다.")
+
+    const res = await fetch(`/api/admin/access-links/${accessToken}/match-field-keys`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ match_field_keys: matchFieldKeys }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(typeof data.detail === "string" ? data.detail : "확인 기준 필드 저장에 실패했습니다.")
+    }
+    if (clearEntryValues) setNewEntryValues({})
+  }
+
+  const saveCurrentMatchKeysForEntry = async () => {
     try {
-      const res = await fetch(`/api/admin/access-links/${accessToken}/match-field-keys`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ match_field_keys: matchFieldKeys }),
-      })
-      if (!res.ok) throw new Error()
-      setNewEntryValues({})
-    } catch {
-      setError("확인 기준 필드 저장에 실패했습니다.")
-    } finally {
-      setSavingMatchKeys(false)
+      await saveMatchKeysToServer()
+      return true
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "확인 기준 필드 저장에 실패했습니다.")
+      return false
     }
   }
 
@@ -347,7 +358,10 @@ export function TestDetail() {
       const res = await fetch(`/api/admin/access-links/${accessToken}/response-options`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ allow_unanswered_submission: allowUnansweredSubmission }),
+        body: JSON.stringify({
+          allow_unanswered_submission: allowUnansweredSubmission,
+          show_report_result: showReportResult,
+        }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -371,6 +385,7 @@ export function TestDetail() {
     setAddingEntry(true)
     setError("")
     try {
+      if (!(await saveCurrentMatchKeysForEntry())) return
       const res = await fetch(`/api/admin/access-links/${accessToken}/pre-registered`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -409,6 +424,7 @@ export function TestDetail() {
     setUploadResult(null)
     setError("")
     try {
+      if (!(await saveCurrentMatchKeysForEntry())) return
       const buf = await file.arrayBuffer()
       const wb = XLSX.read(buf, { type: "array" })
       const ws = wb.Sheets[wb.SheetNames[0]]
@@ -588,6 +604,20 @@ export function TestDetail() {
                     className="size-4 rounded border-input"
                   />
                 </label>
+                <label className="flex cursor-pointer items-center justify-between gap-3">
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium">제출 후 결과 보기 제공</span>
+                    <span className="text-xs text-muted-foreground">
+                      끄면 수검자 제출 완료 화면에 결과 보기 버튼이 표시되지 않습니다.
+                    </span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={showReportResult}
+                    onChange={(event) => setShowReportResult(event.target.checked)}
+                    className="size-4 rounded border-input"
+                  />
+                </label>
                 <div className="flex justify-end">
                   <Button
                     type="button"
@@ -633,9 +663,9 @@ export function TestDetail() {
                     </label>
                   ))}
                 </div>
-                <Button size="sm" variant="outline" onClick={handleSaveMatchKeys} disabled={savingMatchKeys || matchFieldKeys.length === 0}>
-                  {savingMatchKeys ? "저장 중..." : "기준 필드 저장"}
-                </Button>
+                <p className="text-xs text-muted-foreground">
+                  선택한 기준은 내담자 추가와 엑셀 업로드 시 자동으로 반영됩니다.
+                </p>
               </div>
 
               <hr className="border-border" />

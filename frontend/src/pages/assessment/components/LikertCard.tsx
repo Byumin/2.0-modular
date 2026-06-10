@@ -76,7 +76,7 @@ export function LikertCard({ item, options, answerState, onAnswer, globalIndex, 
   if (hideHeader) {
     return (
       <div className="flex flex-col gap-4">
-        <p className="text-[15px] leading-relaxed text-[#161d1b]">{item.text}</p>
+        <p className="whitespace-pre-line text-[15px] leading-relaxed text-[#161d1b]">{item.text}</p>
         <OptionGrid item={item} itemOptions={itemOptions} answerState={answerState} onAnswer={onAnswer} />
       </div>
     )
@@ -93,7 +93,7 @@ export function LikertCard({ item, options, answerState, onAnswer, globalIndex, 
         <span className="shrink-0 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
           Q{globalIndex}
         </span>
-        <p className="text-[15px] leading-relaxed text-foreground">{item.text}</p>
+        <p className="whitespace-pre-line text-[15px] leading-relaxed text-foreground">{item.text}</p>
       </div>
       <OptionGrid item={item} itemOptions={itemOptions} answerState={answerState} onAnswer={onAnswer} />
     </article>

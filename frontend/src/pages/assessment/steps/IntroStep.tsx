@@ -17,6 +17,13 @@ const TIPS = [
   "모든 문항에 응답해야 결과를 확인할 수 있습니다.",
 ]
 
+const TIPS_WITHOUT_RESULT = [
+  "정답이나 오답이 없습니다. 평소 자신의 모습에 가장 가까운 응답을 선택하세요.",
+  "너무 오래 고민하지 마시고, 첫 번째 느낌으로 응답해주세요.",
+  "검사 도중 중단하더라도 응답은 자동 저장됩니다.",
+  "제출 전 응답 누락 여부를 확인한 뒤 완료해주세요.",
+]
+
 function formatEstimatedTime(totalQuestions: number) {
   if (totalQuestions <= 0) return "약 0분"
   const minMinutes = Math.ceil((totalQuestions * 20) / 60)
@@ -29,7 +36,7 @@ export function IntroStep({ payload, parts, session, onStart, sessionClass = "se
   const testName = payload.custom_test_name || payload.display_name || "검사"
   const sessionTitle = session?.title || "검사 안내"
   const sessionDescription = session?.description?.trim()
-  const guideItems = session?.guide_items?.length ? session.guide_items : TIPS
+  const guideItems = session?.guide_items?.length ? session.guide_items : (payload.show_report_result === false ? TIPS_WITHOUT_RESULT : TIPS)
   const totalQuestions = parts.reduce((s, p) => s + (p.item_count ?? p.items?.length ?? 0), 0)
   const estimatedMinutes = formatEstimatedTime(totalQuestions)
 

@@ -14,6 +14,11 @@ const BENEFIT_LINES: string[] = [
   "개발 중인 검사의 결과는 연구가 모두 끝난 뒤 작성해 주신 이메일로 따로 보내 드립니다.",
 ]
 
+const NO_IMMEDIATE_RESULT_LINES: string[] = [
+  "제출하신 응답은 연구와 검사 결과 산출을 위해 안전하게 저장됩니다.",
+  "필요한 안내는 담당자가 별도로 제공할 수 있습니다.",
+]
+
 const TESTS: { code: string; name: string; desc: string }[] = [
   {
     code: "PAT-2",
@@ -32,8 +37,9 @@ const TESTS: { code: string; name: string; desc: string }[] = [
   },
 ]
 
-export function ResearchNotice() {
+export function ResearchNotice({ showImmediateResult = true }: { showImmediateResult?: boolean }) {
   const [open, setOpen] = React.useState(false)
+  const benefitLines = showImmediateResult ? BENEFIT_LINES : NO_IMMEDIATE_RESULT_LINES
 
   return (
     <div className="mt-7 w-full max-w-[560px] rounded-[18px] border border-[#e7ede9] bg-white/80 p-7 shadow-[0_1px_2px_rgba(23,94,99,0.04),0_12px_32px_-16px_rgba(23,94,99,0.22)] backdrop-blur-sm [word-break:keep-all] lg:mx-auto lg:max-w-[600px] xl:max-w-[620px]">
@@ -59,7 +65,7 @@ export function ResearchNotice() {
           </span>
         </div>
         <ul className="mt-3 grid gap-2">
-          {BENEFIT_LINES.map((line) => (
+          {benefitLines.map((line) => (
             <li key={line} className="flex gap-2.5 text-[13px] leading-[1.7] text-[#3f4f4b]">
               <span className="mt-[7px] h-[7px] w-[7px] shrink-0 rounded-full bg-[#5ce1e6] shadow-[0_0_0_3px_rgba(92,225,230,0.22)]" />
               <span>{line}</span>

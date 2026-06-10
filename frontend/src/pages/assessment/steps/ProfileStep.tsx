@@ -63,6 +63,7 @@ interface Props {
   retakeProfile?: Profile | null
   onRetakeConfirm?: () => void
   onViewExistingResult?: () => void
+  showReportResult?: boolean
 }
 
 // subject_type별 섹션 라벨
@@ -123,7 +124,7 @@ function getLabel(fieldName: string, section: TestProfileSection): string {
   return defaults[fieldName] ?? fieldName
 }
 
-export function ProfileStep({ payload, onNext, loading, error, initialProfile, requiresConsent = false, consentText, scrollToHistory, retakeInfo, retakeProfile, onRetakeConfirm, onViewExistingResult }: Props) {
+export function ProfileStep({ payload, onNext, loading, error, initialProfile, requiresConsent = false, consentText, scrollToHistory, retakeInfo, retakeProfile, onRetakeConfirm, onViewExistingResult, showReportResult = true }: Props) {
   const testName = payload.custom_test_name || payload.display_name || "검사"
   const showResearchNotice = payload.show_research_notice !== false
 
@@ -520,7 +521,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                   검사 시작 전 본인 확인을 진행합니다. 응답은 제출 후 결과 산출과 관리자 확인에 사용됩니다.
                 </p>
               </div>
-              {showResearchNotice && <ResearchNotice />}
+              {showResearchNotice && <ResearchNotice showImmediateResult={showReportResult} />}
             </div>
           </section>
 
@@ -909,14 +910,16 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                           : "제출 정보 없음"}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={onViewExistingResult}
-                      disabled={loading}
-                      className="rounded-md border border-[#175e63] px-3 py-1.5 text-xs font-semibold text-[#175e63] hover:bg-[#e8f3f1] transition-colors"
-                    >
-                      결과 보기
-                    </button>
+                    {showReportResult && (
+                      <button
+                        type="button"
+                        onClick={onViewExistingResult}
+                        disabled={loading}
+                        className="rounded-md border border-[#175e63] px-3 py-1.5 text-xs font-semibold text-[#175e63] hover:bg-[#e8f3f1] transition-colors"
+                      >
+                        결과 보기
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="py-6 text-sm text-muted-foreground">
@@ -986,18 +989,22 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
             <div className="px-6 py-5">
               <h3 className="text-base font-semibold text-[#161d1b]">검사를 다시 실시하시겠습니까?</h3>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                기존 결과를 확인하거나, 새 응답으로 검사를 다시 실시할 수 있습니다.
+                {showReportResult
+                  ? "기존 결과를 확인하거나, 새 응답으로 검사를 다시 실시할 수 있습니다."
+                  : "이미 제출한 이력이 있습니다. 새 응답으로 검사를 다시 실시할 수 있습니다."}
               </p>
             </div>
             <div className="border-t border-[#edf0ef] px-6 py-4 flex flex-wrap justify-end gap-3">
-              <button
-                type="button"
-                onClick={onViewExistingResult}
-                disabled={loading}
-                className="mr-auto rounded-md border border-[#175e63] px-4 py-2 text-sm font-semibold text-[#175e63] hover:bg-[#e8f3f1] disabled:opacity-50"
-              >
-                기존 결과 보기
-              </button>
+              {showReportResult && (
+                <button
+                  type="button"
+                  onClick={onViewExistingResult}
+                  disabled={loading}
+                  className="mr-auto rounded-md border border-[#175e63] px-4 py-2 text-sm font-semibold text-[#175e63] hover:bg-[#e8f3f1] disabled:opacity-50"
+                >
+                  기존 결과 보기
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setRetakeConfirmOpen(false)}

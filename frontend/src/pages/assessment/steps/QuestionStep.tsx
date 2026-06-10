@@ -431,7 +431,15 @@ export function QuestionStep({
     const firstMissing = pendingMissingItems[0]?.item ?? missingItemsForState(answers)[0]?.item
     setMissingConfirmOpen(false)
     setPendingMissingItems([])
+    setShowMissingHighlight(true)
     if (firstMissing) moveToItem(firstMissing.id, { focus: true })
+  }
+
+  function handleMoveToMissingItem(item: QuestionItem) {
+    setMissingConfirmOpen(false)
+    setPendingMissingItems([])
+    setShowMissingHighlight(true)
+    moveToItem(item.id, { focus: true })
   }
 
   function handleSubmitWithMissing() {
@@ -550,18 +558,26 @@ export function QuestionStep({
     const hiddenCount = Math.max(0, pendingMissingItems.length - missingPreview.length)
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
-        <div className="w-full max-w-md rounded-xl border border-[#dfe5e3] bg-white p-5 shadow-xl">
+        <div className="w-full max-w-lg rounded-xl border border-[#dfe5e3] bg-white p-5 shadow-xl">
           <h3 className="text-lg font-semibold text-[#161d1b]">응답하지 않은 문항이 있습니다</h3>
           <p className="mt-2 text-sm text-[#5f6f73]">
-            아래 문항을 확인하거나, 현재 응답한 내용만 제출할 수 있습니다.
+            총 {pendingMissingItems.length}개 문항이 비어 있습니다. 문항 번호를 눌러 바로 응답하거나, 미응답으로 남기고 제출할 수 있습니다.
           </p>
-          <div className="mt-4 rounded-lg bg-[#f5f7fa] p-3">
-            <p className="text-xs font-semibold text-[#5f6f73]">미응답 문항</p>
-            <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+            미응답 {pendingMissingItems.length}개
+          </div>
+          <div className="mt-3 rounded-lg bg-[#f5f7fa] p-3">
+            <p className="text-xs font-semibold text-[#5f6f73]">미응답 문항 바로 이동</p>
+            <div className="mt-2 flex max-h-28 flex-wrap gap-2 overflow-y-auto pr-1">
               {missingPreview.map(({ item, globalIndex }) => (
-                <span key={item.id} className="rounded-md border border-[#dfe5e3] bg-white px-2.5 py-1 text-xs font-medium text-[#161d1b]">
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleMoveToMissingItem(item)}
+                  className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50"
+                >
                   {globalIndex}번
-                </span>
+                </button>
               ))}
               {hiddenCount > 0 && (
                 <span className="rounded-md border border-[#dfe5e3] bg-white px-2.5 py-1 text-xs font-medium text-[#5f6f73]">
@@ -576,7 +592,7 @@ export function QuestionStep({
               onClick={handleAnswerMissing}
               className="rounded-lg border border-[#dfe5e3] bg-white px-4 py-2 text-sm font-semibold text-[#175e63] transition-colors hover:bg-[#f5f7fa]"
             >
-              응답하기
+              첫 미응답으로 이동
             </button>
             <button
               type="button"
@@ -584,7 +600,7 @@ export function QuestionStep({
               className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
               style={{ backgroundColor: "var(--sa)" }}
             >
-              제출하기
+              미응답 {pendingMissingItems.length}개 남기고 제출
             </button>
           </div>
         </div>
@@ -662,7 +678,7 @@ export function QuestionStep({
               <>
                 <h2
                   key={currentItem.id}
-                  className="text-2xl font-semibold leading-relaxed text-[#161d1b] animate-[fadeSlide_0.3s_ease-out] sm:text-3xl"
+                  className="whitespace-pre-line text-2xl font-semibold leading-relaxed text-[#161d1b] animate-[fadeSlide_0.3s_ease-out] sm:text-3xl"
                 >
                   {currentItem.text}
                 </h2>
@@ -1013,7 +1029,7 @@ export function QuestionStep({
               </button>
               {!allAnswered() && (
                 <p className="mt-1.5 text-center text-xs text-[#b0bab7]">
-                  {allowUnansweredSubmission ? "미응답 확인 후 제출 가능" : "모든 문항 응답 후 제출"}
+                  {allowUnansweredSubmission ? `미응답 ${total - done}개 확인 후 제출 가능` : "모든 문항 응답 후 제출"}
                 </p>
               )}
             </div>
@@ -1162,7 +1178,7 @@ export function QuestionStep({
                 </button>
                 {!allAnswered() && (
                   <p className="mt-1.5 text-center text-[10px] text-[#b0bab7]">
-                    {allowUnansweredSubmission ? "미응답 확인 후 제출 가능" : "모든 문항 응답 후 제출"}
+                    {allowUnansweredSubmission ? `미응답 ${total - done}개 확인 후 제출 가능` : "모든 문항 응답 후 제출"}
                   </p>
                 )}
               </div>

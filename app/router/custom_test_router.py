@@ -36,6 +36,7 @@ class MatchFieldKeysIn(BaseModel):
 
 class AccessLinkResponseOptionsIn(BaseModel):
     allow_unanswered_submission: bool = False
+    show_report_result: bool = True
 from app.services.admin.custom_tests import (
     bulk_delete_admin_custom_tests,
     create_admin_custom_test_batch,
@@ -204,6 +205,7 @@ def put_access_link_response_options(
         admin_session,
         access_token,
         allow_unanswered_submission=payload.allow_unanswered_submission,
+        show_report_result=payload.show_report_result,
     )
 
 

@@ -1,4 +1,5 @@
 import json
+import re
 import secrets
 from datetime import date, datetime
 from typing import Any
@@ -52,6 +53,11 @@ from app.services.admin.common import (
 
 _SECONDARY_ROLES = {"parent", "teacher", "classmate", "guardian"}
 NO_RESPONSE_ANSWER_VALUE = "NO_RESPONSE"
+_HTML_LINE_BREAK_RE = re.compile(r"\s*<br\s*/?>\s*", re.IGNORECASE)
+
+
+def _normalize_item_display_text(value: Any) -> str:
+    return _HTML_LINE_BREAK_RE.sub("\n", str(value or "")).strip()
 
 
 def _resolve_subject_profile(profile: dict[str, Any]) -> dict[str, Any]:
@@ -571,7 +577,7 @@ def _build_item_text_and_matrix_meta(item_json: Any) -> tuple[dict[str, str], di
                     key=lambda x: (0, int(x)) if x.isdigit() else (1, x),
                 )
                 for row_idx, row_key in enumerate(row_keys, start=1):
-                    row_text = str(outer_value.get(row_key, "") or "").strip()
+                    row_text = _normalize_item_display_text(outer_value.get(row_key, ""))
                     if not row_text:
                         continue
                     item_map[row_key] = row_text
@@ -582,13 +588,13 @@ def _build_item_text_and_matrix_meta(item_json: Any) -> tuple[dict[str, str], di
                         "row_order": row_idx,
                     }
                 continue
-            value_text = str(outer_value or "").strip()
+            value_text = _normalize_item_display_text(outer_value)
             if not value_text:
                 continue
             item_map[outer_key_text] = value_text
         return item_map, matrix_row_meta
 
-    return _normalize_item_map(item_json), matrix_row_meta
+    return {key: _normalize_item_display_text(value) for key, value in _normalize_item_map(item_json).items()}, matrix_row_meta
 
 
 def _parse_item_response_options(item_template: str | None) -> dict[str, list[dict]]:
@@ -1055,6 +1061,7 @@ def generate_custom_test_access_link(db: Session, admin_session: str | None, cus
             custom_test_id=custom_test.id,
             access_token=secrets.token_urlsafe(24),
             allow_unanswered_submission=bool(getattr(custom_test, "allow_unanswered_submission", False)),
+            show_report_result=bool(getattr(custom_test, "show_report_result", True)),
         )
 
     return {
@@ -1063,6 +1070,7 @@ def generate_custom_test_access_link(db: Session, admin_session: str | None, cus
         "access_token": link.access_token,
         "assessment_url": f"/assessment/custom/{link.access_token}",
         "allow_unanswered_submission": bool(getattr(link, "allow_unanswered_submission", False)),
+        "show_report_result": bool(getattr(link, "show_report_result", True)),
     }
 
 def _derive_required_fields_for_test(test_id: str, test_configs: list[dict]) -> list[str]:
@@ -1201,6 +1209,7 @@ def get_custom_test_by_access_link(db: Session, access_token: str) -> dict:
     payload = _build_custom_assessment_profile_meta(custom_test, test_configs)
     payload["access_token"] = access_token
     payload["allow_unanswered_submission"] = bool(getattr(link, "allow_unanswered_submission", False))
+    payload["show_report_result"] = bool(getattr(link, "show_report_result", True))
     payload["profile_config"] = _load_test_profile_config(db, payload.get("test_ids") or [], test_configs)
     return payload
 
@@ -1714,7 +1723,8 @@ def submit_custom_test_by_access_link(
         "message": "검사가 제출되었습니다.",
         "submitted_item_count": len(cleaned_answers),
         "submission_id": submission.id,
-        "access_token": submission.access_token,
+        "access_token": submission.access_token if bool(getattr(link, "show_report_result", True)) else None,
+        "show_report_result": bool(getattr(link, "show_report_result", True)),
         "scoring_result_id": scoring_result.get("scoring_result_id"),
         "scoring_status": scoring_result.get("status"),
     }
@@ -1860,6 +1870,15 @@ def _match_key_labels(match_keys: list[str], available_fields: list[dict]) -> di
     return {key: labels.get(key) or _BASE_FIELD_LABELS.get(key) or key for key in match_keys}
 
 
+def _format_match_key_values(profile_data: dict[str, Any], match_keys: list[str], match_labels: dict[str, str]) -> str:
+    values: list[str] = []
+    for key in match_keys:
+        value = str(profile_data.get(key, "")).strip()
+        if value:
+            values.append(f"{match_labels.get(key, key)}={value}")
+    return ", ".join(values)
+
+
 def _available_profile_fields_for_link(
     db: Session,
     custom_test: AdminCustomTest,
@@ -1979,7 +1998,9 @@ def add_pre_registered_client_for_link(
         profile=profile_data,
     )
     if existing is not None:
-        raise HTTPException(status_code=409, detail="이미 등록된 내담자입니다.")
+        matched_values = _format_match_key_values(profile_data, match_keys, match_labels)
+        detail = f"이미 등록된 내담자입니다. ({matched_values})" if matched_values else "이미 등록된 내담자입니다."
+        raise HTTPException(status_code=409, detail=detail)
 
     entry = create_pre_registered_entry(
         db,
@@ -2033,13 +2054,16 @@ def update_link_response_options(
     access_token: str,
     *,
     allow_unanswered_submission: bool,
+    show_report_result: bool,
 ) -> dict:
     admin, link = _get_link_and_verify_admin(db, admin_session, access_token)
     link.allow_unanswered_submission = bool(allow_unanswered_submission)
+    link.show_report_result = bool(show_report_result)
     db.commit()
     return {
         "message": "실시 링크 응답 옵션이 저장되었습니다.",
         "allow_unanswered_submission": bool(link.allow_unanswered_submission),
+        "show_report_result": bool(link.show_report_result),
     }
 
 
@@ -2081,6 +2105,8 @@ def bulk_add_pre_registered_clients_for_link(
             db, access_link_id=link.id, match_keys=match_keys, profile=profile_data
         )
         if existing is not None:
+            matched_values = _format_match_key_values(profile_data, match_keys, match_labels)
+            errors.append(f"{i}행: 이미 등록된 내담자입니다. ({matched_values})" if matched_values else f"{i}행: 이미 등록된 내담자입니다.")
             skipped += 1
             continue
 

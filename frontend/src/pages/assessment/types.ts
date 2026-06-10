@@ -76,6 +76,7 @@ export interface InitialPayload {
   client_intake_mode: string
   show_research_notice?: boolean
   allow_unanswered_submission?: boolean
+  show_report_result?: boolean
   required_profile_fields: string[]
   profile_field_options?: Record<string, string[]>
   additional_profile_fields: Array<AdditionalProfileField | string>

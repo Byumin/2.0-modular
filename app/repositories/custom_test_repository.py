@@ -204,6 +204,7 @@ def create_access_link(
     custom_test_id: int,
     access_token: str,
     allow_unanswered_submission: bool = False,
+    show_report_result: bool = True,
 ) -> AdminCustomTestAccessLink:
     row = AdminCustomTestAccessLink(
         admin_user_id=admin_user_id,
@@ -211,6 +212,7 @@ def create_access_link(
         access_token=access_token,
         is_active=True,
         allow_unanswered_submission=allow_unanswered_submission,
+        show_report_result=show_report_result,
     )
     db.add(row)
     db.commit()

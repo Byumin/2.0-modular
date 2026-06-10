@@ -1108,6 +1108,32 @@ def ensure_child_test_allow_unanswered_submission_column() -> None:
             )
 
 
+def ensure_access_link_show_report_result_column() -> None:
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("admin_custom_test_access_link")}
+    with engine.begin() as conn:
+        if "show_report_result" not in columns:
+            conn.exec_driver_sql(
+                """
+                ALTER TABLE admin_custom_test_access_link
+                ADD COLUMN show_report_result BOOLEAN NOT NULL DEFAULT TRUE
+                """
+            )
+
+
+def ensure_child_test_show_report_result_column() -> None:
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("child_test")}
+    with engine.begin() as conn:
+        if "show_report_result" not in columns:
+            conn.exec_driver_sql(
+                """
+                ALTER TABLE child_test
+                ADD COLUMN show_report_result BOOLEAN NOT NULL DEFAULT TRUE
+                """
+            )
+
+
 def ensure_assessment_link_pre_registered_client_table() -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())

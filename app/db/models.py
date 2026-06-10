@@ -30,6 +30,7 @@ class AdminCustomTest(Base):
     requires_consent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     show_research_notice: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     allow_unanswered_submission: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    show_report_result: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -132,6 +133,7 @@ class AdminCustomTestAccessLink(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     match_field_keys_json: Mapped[str] = mapped_column(Text, nullable=False, default='["name"]')
     allow_unanswered_submission: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    show_report_result: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 

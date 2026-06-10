@@ -605,6 +605,7 @@ def create_admin_custom_test_batch(
         requires_consent=payload.requires_consent,
         show_research_notice=payload.show_research_notice,
         allow_unanswered_submission=payload.allow_unanswered_submission,
+        show_report_result=payload.show_report_result,
     )
     db.add(row)
     db.flush()
@@ -671,10 +672,12 @@ def get_admin_custom_test(db: Session, admin_session: str | None, custom_test_id
         "requires_consent": bool(getattr(row, "requires_consent", False)),
         "show_research_notice": bool(getattr(row, "show_research_notice", True)),
         "default_allow_unanswered_submission": bool(getattr(row, "allow_unanswered_submission", False)),
+        "default_show_report_result": bool(getattr(row, "show_report_result", True)),
         "scale_count": len(selected_scale_pairs),
         "created_at": row.created_at.isoformat(),
         "access_token": active_link.access_token if active_link else None,
         "allow_unanswered_submission": bool(getattr(active_link, "allow_unanswered_submission", False)) if active_link else False,
+        "show_report_result": bool(getattr(active_link, "show_report_result", True)) if active_link else bool(getattr(row, "show_report_result", True)),
     }
 
 

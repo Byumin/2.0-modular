@@ -2,9 +2,10 @@ interface Props {
   onRestart: () => void
   reportAccessToken?: string | null
   submissionId?: number | null
+  showReportResult?: boolean
 }
 
-export function CompleteStep({ onRestart, reportAccessToken, submissionId }: Props) {
+export function CompleteStep({ onRestart, reportAccessToken, submissionId, showReportResult = true }: Props) {
   return (
     <div className="hero-tint flex min-h-screen w-full items-center justify-center bg-[#eef2f4] px-4 py-10">
       <section className="w-full max-w-xl overflow-hidden rounded-2xl border border-[#dfe5e3] bg-white p-10 text-center assessment-card">
@@ -19,7 +20,7 @@ export function CompleteStep({ onRestart, reportAccessToken, submissionId }: Pro
           응답이 저장되었습니다.<br />안내받은 다음 절차가 있다면 그대로 진행해주세요.
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
-          {reportAccessToken && submissionId && (
+          {showReportResult && reportAccessToken && submissionId && (
             <button
               type="button"
               onClick={() => window.open(`/report/${submissionId}?token=${encodeURIComponent(reportAccessToken)}`, "_blank", "noopener,noreferrer")}
