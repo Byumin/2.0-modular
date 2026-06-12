@@ -74,7 +74,8 @@ check_ref() {
     ':(exclude)node_modules/**' \
     ':(exclude)frontend/node_modules/**' \
     ':(exclude)static/vendor/**' \
-    ':(exclude)docs/diagrams/*.svg' || true)
+    ':(exclude)docs/diagrams/*.svg' \
+    ':(exclude)scripts/security_git_guard.sh' || true)
   if [ -n "$content_matches" ]; then
     echo "Blocked sensitive content patterns in $target:" >&2
     echo "$content_matches" >&2
