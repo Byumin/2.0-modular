@@ -12,6 +12,7 @@
     "dev:frontend": "npm --prefix frontend run dev",
     "build:frontend": "npm --prefix frontend run build",
     "test": "echo \"Error: no test specified\" && exit 1",
+    "security:check": "bash scripts/security_git_guard.sh",
     "diagram:render:sequence": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/assessment-profile-runtime-sequence.mmd -o docs/diagrams/assessment-profile-runtime-sequence.svg -b transparent",
     "diagram:render:flow": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/assessment-profile-validate-flow.mmd -o docs/diagrams/assessment-profile-validate-flow.svg -b transparent",
     "diagram:render:create-sequence": "mmdc -p docs/diagrams/puppeteer-config.json -i docs/diagrams/custom-test-create-runtime-sequence.mmd -o docs/diagrams/custom-test-create-runtime-sequence.svg -b transparent",

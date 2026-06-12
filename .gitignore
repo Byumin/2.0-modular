@@ -22,6 +22,7 @@ playwright-report/
 .playwright-browsers/
 test-results/
 artifacts/
+frontend/artifacts/
 artifacts/screenshots/
 artifacts/test_refer/
 
