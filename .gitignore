@@ -1,19 +1,8 @@
 .venv/
 .venv-claude/
-.env
-.env.*
-env.*
-node_modules/
-frontend/node_modules/
-playwright-report/
-.playwright-browsers/
-test-results/
-artifacts/screenshots/
-claude/reviews/runs/
-node_modules/.bin/playwright
-node_modules/.bin/playwright-core
-node_modules/playwright/
-node_modules/playwright-core/
+.venv-*/
+
+# Python
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -22,13 +11,70 @@ __pycache__/
 .coverage
 htmlcov/
 coverage/
-.DS_Store
-logs/
-*.log
-*.log.*
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Playwright / test artifacts
+playwright-report/
+.playwright-browsers/
+test-results/
+artifacts/
+artifacts/screenshots/
+artifacts/test_refer/
+
+# Local databases
+app.db
+modular.db
+modular.db.bak
 *.db
 *.db.bak
 *.db-shm
 *.db-wal
 *.sqlite
 *.sqlite3
+*.dump
+*.backup
+
+# Local environment files
+.env
+.env.*
+env.*
+env.local.*
+env.ec2.*
+
+# Server/deploy local files
+deploy/
+Caddyfile
+docs/server_operations.md
+docs/operations/
+docs/exec-plans/
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+
+# Local assistant/tooling cache
+.claude/
+.claude/settings.local.json
+.claude/settings.local.json.bak
+claude/
+claude/reviews/runs/
+
+# Editor settings
+.vscode/
+docs/design/reference/
+
+# OS / logs
+.DS_Store
+logs/
+*.log
+*.log.*
+
+node_modules/.bin/playwright
+node_modules/.bin/playwright-core
+node_modules/playwright/
+node_modules/playwright-core/
