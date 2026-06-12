@@ -121,9 +121,9 @@ EC2 서버에 SSH로 들어간 뒤 EC2 안에서 실행한다.
 npm run ec2:api
 ```
 
-- 화면: `https://inpsyt-norm.com/admin`
+- 화면: `https://<production-domain>/admin`
 - DB: EC2에서 RDS 직접 접속
-- 확인: `https://inpsyt-norm.com/health` 결과가 `"db":"postgresql"`
+- 확인: `https://<production-domain>/health` 결과가 `"db":"postgresql"`
 
 ### `npm run dev`와 `npm run dev:api` 차이
 

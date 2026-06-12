@@ -113,7 +113,7 @@ npm run ec2:api
 ```
 
 - 실행 위치: EC2
-- 접속 화면: `https://inpsyt-norm.com/admin`
+- 접속 화면: `https://<production-domain>/admin`
 - DB: RDS 직접 접속
 - 환경 파일: EC2의 `env.ec2.prod`
 - 확인값: `/health` 응답의 `"db":"postgresql"`
