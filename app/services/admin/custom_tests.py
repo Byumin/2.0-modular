@@ -22,6 +22,7 @@ from app.repositories.parent_test_repository import (
 from app.schemas.custom_tests import CreateCustomTestBatchIn, UpdateCustomTestSettingsIn
 from app.services.admin.auth import get_current_admin
 from app.services.admin.common import (
+    SCHOOL_AGE_LABELS,
     _normalize_item_map,
     _parse_response_options,
     _sort_item_texts,
@@ -36,31 +37,6 @@ from app.services.admin.common import (
     serialize_additional_profile_payload,
     summarize_custom_test_ids,
 )
-
-SCHOOL_AGE_LABELS = [
-    "미취학",
-    "초등 1학년",
-    "초등 2학년",
-    "초등 3학년",
-    "초등 4학년",
-    "초등 5학년",
-    "초등 6학년",
-    "초등학교 졸업생",
-    "중등 1학년",
-    "중등 2학년",
-    "중등 3학년",
-    "중학교 졸업생",
-    "고등 1학년",
-    "고등 2학년",
-    "고등 3학년",
-    "고등학교 졸업생",
-    "대학생 신입생",
-    "대학생 재학생",
-    "대학생 졸업생",
-    "대학원 신입생",
-    "대학원 재학생",
-    "대학원 졸업생",
-]
 
 
 def _school_age_label_from_index(index: int) -> str:
@@ -603,6 +579,8 @@ def create_admin_custom_test_batch(
             normalized_fields,
         ),
         requires_consent=payload.requires_consent,
+        consent_text=payload.consent_text.strip(),
+        requires_security_notice=payload.requires_security_notice,
         show_research_notice=payload.show_research_notice,
         allow_unanswered_submission=payload.allow_unanswered_submission,
         show_report_result=payload.show_report_result,
@@ -670,6 +648,8 @@ def get_admin_custom_test(db: Session, admin_session: str | None, custom_test_id
         "selected_scale_codes": selected_scale_codes,
         "additional_profile_fields": additional_profile_fields,
         "requires_consent": bool(getattr(row, "requires_consent", False)),
+        "consent_text": getattr(row, "consent_text", "") or "",
+        "requires_security_notice": bool(getattr(row, "requires_security_notice", False)),
         "show_research_notice": bool(getattr(row, "show_research_notice", True)),
         "default_allow_unanswered_submission": bool(getattr(row, "allow_unanswered_submission", False)),
         "default_show_report_result": bool(getattr(row, "show_report_result", True)),
@@ -704,6 +684,8 @@ def update_admin_custom_test(
     row.custom_test_name = trimmed_name
     row.client_intake_mode = client_intake_mode
     row.requires_consent = payload.requires_consent
+    row.consent_text = payload.consent_text.strip()
+    row.requires_security_notice = payload.requires_security_notice
     row.show_research_notice = payload.show_research_notice
     if payload.session_configs is not None:
         test_configs = load_custom_test_configs(row)

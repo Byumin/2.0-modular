@@ -124,6 +124,8 @@ interface CreatePayload {
   custom_test_name: string
   client_intake_mode: string
   requires_consent: boolean
+  consent_text: string
+  requires_security_notice: boolean
   show_research_notice: boolean
   allow_unanswered_submission: boolean
   show_report_result: boolean
@@ -377,6 +379,8 @@ export function TestManagement() {
   const [createName, setCreateName] = React.useState("")
   const [createIntakeMode, setCreateIntakeMode] = React.useState("pre_registered_only")
   const [createRequiresConsent, setCreateRequiresConsent] = React.useState(false)
+  const [createConsentText, setCreateConsentText] = React.useState("")
+  const [createRequiresSecurityNotice, setCreateRequiresSecurityNotice] = React.useState(false)
   const [createShowResearchNotice, setCreateShowResearchNotice] = React.useState(true)
   const [createAllowUnansweredSubmission, setCreateAllowUnansweredSubmission] = React.useState(false)
   const [createShowReportResult, setCreateShowReportResult] = React.useState(true)
@@ -450,6 +454,8 @@ export function TestManagement() {
     setCreateName("")
     setCreateIntakeMode("pre_registered_only")
     setCreateRequiresConsent(false)
+    setCreateConsentText("")
+    setCreateRequiresSecurityNotice(false)
     setCreateShowResearchNotice(true)
     setCreateAllowUnansweredSubmission(false)
     setCreateShowReportResult(true)
@@ -771,6 +777,8 @@ export function TestManagement() {
         custom_test_name: createName.trim(),
         client_intake_mode: normalizeClientIntakeMode(createIntakeMode),
         requires_consent: createRequiresConsent,
+        consent_text: createConsentText.trim(),
+        requires_security_notice: createRequiresSecurityNotice,
         show_research_notice: createShowResearchNotice,
         allow_unanswered_submission: createAllowUnansweredSubmission,
         show_report_result: createShowReportResult,
@@ -1181,7 +1189,27 @@ export function TestManagement() {
                           />
                           <span className="text-sm">수검 전 개인정보 수집·이용 동의 받기</span>
                         </label>
-                        <p className="text-xs text-muted-foreground">동의서 내용은 설정 메뉴에서 관리합니다.</p>
+                        {createRequiresConsent ? (
+                          <div className="flex flex-col gap-1.5 rounded-md border bg-muted/20 p-3">
+                            <label htmlFor="create_consent_text" className="text-xs font-medium text-muted-foreground">
+                              이 검사에 표시할 개인정보 수집·이용 동의서 문구
+                            </label>
+                            <textarea
+                              id="create_consent_text"
+                              value={createConsentText}
+                              onChange={(event) => setCreateConsentText(event.target.value)}
+                              placeholder="비워두면 설정 메뉴의 기본 동의서 문구를 사용합니다."
+                              maxLength={10000}
+                              rows={8}
+                              className="min-h-40 resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              검사별 문구가 비어 있으면 관리자 설정의 기본 문구가 적용됩니다. Markdown 문법을 사용할 수 있습니다.
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">켜면 검사별 동의서 문구를 직접 입력할 수 있습니다.</p>
+                        )}
                       </div>
                       <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium">실시 링크 안내</label>
@@ -1195,6 +1223,21 @@ export function TestManagement() {
                           <span className="text-sm">첫 화면에 연구 참여 안내 카드 표시</span>
                         </label>
                         <p className="text-xs text-muted-foreground">검사 성격에 따라 연구 안내 카드를 숨길 수 있습니다.</p>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium">개인정보 보안관리 안내</label>
+                        <label className="flex cursor-pointer items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={createRequiresSecurityNotice}
+                            onChange={(e) => setCreateRequiresSecurityNotice(e.target.checked)}
+                            className="size-4 rounded border-input"
+                          />
+                          <span className="text-sm">수검 전 개인정보 보안관리 안내 확인 받기</span>
+                        </label>
+                        <p className="text-xs text-muted-foreground">
+                          켜면 수검자가 설정 메뉴의 보안관리 안내 문구를 확인해야 검사를 시작할 수 있습니다.
+                        </p>
                       </div>
                       <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium">응답 제출 방식</label>

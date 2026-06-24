@@ -296,7 +296,6 @@ export function QuestionStep({
 
   function allAnswered() { return allAnsweredValue }
   function partAllAnswered(pi: number) { return partAllAnsweredSet[pi] ?? false }
-  function canSubmitNow() { return allowUnansweredSubmission || allAnswered() }
 
   function missingItemsForState(state: AnswerState) {
     return flatItems
@@ -400,14 +399,8 @@ export function QuestionStep({
         return
       }
       setShowMissingHighlight(true)
-      const firstIncompletePart = parts.findIndex(p => (p.items ?? []).some(i => !answered(i.id)))
-      if (firstIncompletePart >= 0 && firstIncompletePart !== partIndex) {
-        partIndexRef.current = firstIncompletePart
-        pageRef.current = 0
-        pendingScrollRef.current = "first"
-        setPartIndex(firstIncompletePart)
-        setPage(0)
-      }
+      const firstMissing = firstMissingGlobal(answers)
+      if (firstMissing) moveToItem(firstMissing.item.id, { focus: true })
       return
     }
     const flat: AnswerState = {}
@@ -559,9 +552,11 @@ export function QuestionStep({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
         <div className="w-full max-w-lg rounded-xl border border-[#dfe5e3] bg-white p-5 shadow-xl">
-          <h3 className="text-lg font-semibold text-[#161d1b]">응답하지 않은 문항이 있습니다</h3>
-          <p className="mt-2 text-sm text-[#5f6f73]">
-            총 {pendingMissingItems.length}개 문항이 비어 있습니다. 문항 번호를 눌러 바로 응답하거나, 미응답으로 남기고 제출할 수 있습니다.
+          <h3 className="text-lg font-semibold text-[#161d1b]">미응답 문항이 있습니다</h3>
+          <p className="mt-2 text-sm leading-6 text-[#5f6f73]">
+            총 <strong className="font-semibold text-[#31413e]">{pendingMissingItems.length}개 문항</strong>에 응답하지 않았습니다.
+            <br />
+            문항 번호를 눌러 응답할 수 있고, 미응답인 상태로 제출 가능합니다.
           </p>
           <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
             미응답 {pendingMissingItems.length}개
@@ -592,7 +587,7 @@ export function QuestionStep({
               onClick={handleAnswerMissing}
               className="rounded-lg border border-[#dfe5e3] bg-white px-4 py-2 text-sm font-semibold text-[#175e63] transition-colors hover:bg-[#f5f7fa]"
             >
-              첫 미응답으로 이동
+              첫 미응답 이동
             </button>
             <button
               type="button"
@@ -600,7 +595,7 @@ export function QuestionStep({
               className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
               style={{ backgroundColor: "var(--sa)" }}
             >
-              미응답 {pendingMissingItems.length}개 남기고 제출
+              제출하기
             </button>
           </div>
         </div>
@@ -651,7 +646,7 @@ export function QuestionStep({
             <button
               type="button"
               onClick={handleSubmitClick}
-              disabled={!canSubmitNow() || submitting}
+              disabled={submitting}
               className="rounded-lg px-5 py-1.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-30"
               style={{ backgroundColor: "var(--sa)" }}
             >
@@ -1021,15 +1016,20 @@ export function QuestionStep({
             {/* Mobile submit button — visible only below lg breakpoint */}
             <div className="mt-4 lg:hidden">
               <button type="button" onClick={handleSubmitClick}
-                disabled={submitting || !canSubmitNow()}
+                disabled={submitting}
                 className="h-12 w-full rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-30"
                 style={{ backgroundColor: "var(--sa)" }}
               >
                 {submitting ? submittingLabel : submitLabel}
               </button>
-              {!allAnswered() && (
+              {!allAnswered() && allowUnansweredSubmission && (
                 <p className="mt-1.5 text-center text-xs text-[#b0bab7]">
-                  {allowUnansweredSubmission ? `미응답 ${total - done}개 확인 후 제출 가능` : "모든 문항 응답 후 제출"}
+                  {`미응답 ${total - done}개 확인 후 제출 가능`}
+                </p>
+              )}
+              {showMissingHighlight && !allAnswered() && !allowUnansweredSubmission && (
+                <p className="mt-1.5 text-center text-xs text-destructive">
+                  모든 문항 응답 후 제출
                 </p>
               )}
             </div>
@@ -1170,15 +1170,20 @@ export function QuestionStep({
               {/* 제출 */}
               <div className="mt-3 border-t border-[#f0f2f5] pt-3">
                 <button type="button" onClick={handleSubmitClick}
-                  disabled={submitting || !canSubmitNow()}
+                  disabled={submitting}
                   className="h-10 w-full rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-30"
                   style={{ backgroundColor: "var(--sa)" }}
                 >
                   {submitting ? submittingLabel : submitLabel}
                 </button>
-                {!allAnswered() && (
+                {!allAnswered() && allowUnansweredSubmission && (
                   <p className="mt-1.5 text-center text-[10px] text-[#b0bab7]">
-                    {allowUnansweredSubmission ? `미응답 ${total - done}개 확인 후 제출 가능` : "모든 문항 응답 후 제출"}
+                    {`미응답 ${total - done}개 확인 후 제출 가능`}
+                  </p>
+                )}
+                {showMissingHighlight && !allAnswered() && !allowUnansweredSubmission && (
+                  <p className="mt-1.5 text-center text-[10px] text-destructive">
+                    모든 문항 응답 후 제출
                   </p>
                 )}
               </div>

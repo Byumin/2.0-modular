@@ -28,6 +28,8 @@ class AdminCustomTest(Base):
     session_configs_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     additional_profile_fields_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     requires_consent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    consent_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    requires_security_notice: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     show_research_notice: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     allow_unanswered_submission: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     show_report_result: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -232,6 +234,7 @@ class AdminSettings(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     admin_user_id: Mapped[int] = mapped_column(ForeignKey("admin_user.id"), nullable=False, unique=True, index=True)
     consent_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    security_notice_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 

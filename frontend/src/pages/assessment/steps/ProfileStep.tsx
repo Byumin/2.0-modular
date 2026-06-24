@@ -1,5 +1,6 @@
 import * as React from "react"
 import { ResearchNotice } from "../components/ResearchNotice"
+import { SafeMarkdown } from "../components/SafeMarkdown"
 import type { InitialPayload, AdditionalProfileField, Profile, TestProfileSection } from "../types"
 
 const INFORMANT_LABELS: Record<string, string> = {
@@ -58,6 +59,8 @@ interface Props {
   initialProfile?: Profile | null
   requiresConsent?: boolean
   consentText?: string
+  requiresSecurityNotice?: boolean
+  securityNoticeText?: string
   scrollToHistory?: boolean
   retakeInfo?: { submission_id: number; access_token: string; submitted_at?: string } | null
   retakeProfile?: Profile | null
@@ -119,14 +122,15 @@ function getLabel(fieldName: string, section: TestProfileSection): string {
   const custom = section.fields?.[fieldName]?.label
   if (custom) return custom
   const defaults: Record<string, string> = {
-    name: "이름", birth_day: "생년월일", gender: "성별", school_age: "학령", informant: "관찰자",
+    name: "이름", birth_day: "생년월일", gender: "성별", school_age: "학령", school_age_range: "학령", informant: "관찰자",
   }
   return defaults[fieldName] ?? fieldName
 }
 
-export function ProfileStep({ payload, onNext, loading, error, initialProfile, requiresConsent = false, consentText, scrollToHistory, retakeInfo, retakeProfile, onRetakeConfirm, onViewExistingResult, showReportResult = true }: Props) {
+export function ProfileStep({ payload, onNext, loading, error, initialProfile, requiresConsent = false, consentText, requiresSecurityNotice = false, securityNoticeText, scrollToHistory, retakeInfo, retakeProfile, onRetakeConfirm, onViewExistingResult, showReportResult = true }: Props) {
   const testName = payload.custom_test_name || payload.display_name || "검사"
   const showResearchNotice = payload.show_research_notice !== false
+  const phoneInputRefs = React.useRef<Record<string, Array<HTMLInputElement | null>>>({})
 
   // profile_config에서 섹션 목록 추출
   const sections: TestProfileSection[] = React.useMemo(() => {
@@ -142,6 +146,8 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
   const [identityOpen, setIdentityOpen] = React.useState(() => Boolean(initialProfile))
   const [privacyAgreed, setPrivacyAgreed] = React.useState(() => Boolean(initialProfile) && requiresConsent)
   const [privacyModalOpen, setPrivacyModalOpen] = React.useState(false)
+  const [securityNoticeConfirmed, setSecurityNoticeConfirmed] = React.useState(() => Boolean(initialProfile) && requiresSecurityNotice)
+  const [securityNoticeModalOpen, setSecurityNoticeModalOpen] = React.useState(false)
   const [retakeConfirmOpen, setRetakeConfirmOpen] = React.useState(false)
   const historyRef = React.useRef<HTMLDivElement>(null)
 
@@ -252,6 +258,10 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
     const parts = splitPhoneParts(value)
     const placeholders = ["010", "1234", "5678"]
     const maxLengths = [3, 4, 4]
+    if (!phoneInputRefs.current[idPrefix]) {
+      phoneInputRefs.current[idPrefix] = []
+    }
+    const inputRefs = phoneInputRefs.current[idPrefix]
 
     return (
       <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2">
@@ -259,6 +269,9 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
           <React.Fragment key={`${idPrefix}_${index}`}>
             {index > 0 && <span className="text-center text-sm font-semibold text-muted-foreground">-</span>}
             <input
+              ref={(node) => {
+                inputRefs[index] = node
+              }}
               id={index === 0 ? idPrefix : undefined}
               type="tel"
               inputMode="numeric"
@@ -270,8 +283,12 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
               value={part}
               onChange={(event) => {
                 const next = [...parts] as [string, string, string]
-                next[index] = event.target.value.replace(/\D/g, "").slice(0, maxLengths[index])
+                const digits = event.target.value.replace(/\D/g, "").slice(0, maxLengths[index])
+                next[index] = digits
                 onChange(joinPhoneParts(next))
+                if (digits.length === maxLengths[index] && index < maxLengths.length - 1) {
+                  window.requestAnimationFrame(() => inputRefs[index + 1]?.focus())
+                }
               }}
             />
           </React.Fragment>
@@ -387,6 +404,10 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
     if (loading) return
     if (requiresConsent && !privacyAgreed) {
       setValidationError("개인정보 수집 및 이용에 동의해주세요.")
+      return
+    }
+    if (requiresSecurityNotice && !securityNoticeConfirmed) {
+      setValidationError("개인정보 보안관리 안내를 확인해주세요.")
       return
     }
     setValidationError("")
@@ -516,7 +537,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
             <div className="relative z-10 flex min-h-[48vh] flex-col justify-start px-6 py-8 sm:px-10 lg:min-h-screen lg:px-12 lg:py-12">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#2d7f8a]">Inpsyt Assessment</p>
-                <h1 className="mt-4 max-w-md text-3xl font-bold leading-tight sm:text-4xl">{testName}</h1>
+                <h1 className="assessment-korean-title mt-4 max-w-[40rem] text-3xl font-bold leading-tight sm:text-4xl">{testName}</h1>
                 <p className="mt-4 max-w-[40rem] text-sm leading-6 text-[#5f6f73]">
                   검사 시작 전 본인 확인을 진행합니다. 응답은 제출 후 결과 산출과 관리자 확인에 사용됩니다.
                 </p>
@@ -561,6 +582,27 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                   <button
                     type="button"
                     onClick={() => setPrivacyModalOpen(true)}
+                    className="ml-3 shrink-0 text-xs text-[#175e63] underline underline-offset-2 hover:text-[#124b4f]"
+                  >
+                    내용 보기
+                  </button>
+                </div>
+              )}
+
+              {requiresSecurityNotice && (
+                <div className="mt-3 flex items-center justify-between rounded-lg border border-[#dfe5e3] bg-white px-4 py-3">
+                  <label className="flex cursor-pointer items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={securityNoticeConfirmed}
+                      onChange={(e) => setSecurityNoticeConfirmed(e.target.checked)}
+                      className="h-4 w-4 cursor-pointer rounded border-[#c5d0ce] accent-[#175e63]"
+                    />
+                    <span className="text-sm text-[#3a4a47]">개인정보 보안관리 확인했습니다 <span className="text-destructive">*</span></span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setSecurityNoticeModalOpen(true)}
                     className="ml-3 shrink-0 text-xs text-[#175e63] underline underline-offset-2 hover:text-[#124b4f]"
                   >
                     내용 보기
@@ -693,7 +735,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                     }
 
                     // select: type=select 또는 school_age 기본 드롭다운
-                    if (type === "select" || (fieldName === "school_age" && options.length === 0)) {
+                    if (type === "select" || ((fieldName === "school_age" || fieldName === "school_age_range") && options.length === 0)) {
                       const selectOpts = options.length > 0 ? options : SCHOOL_AGE_OPTIONS
                       return (
                         <div key={fieldName} className="flex flex-col gap-1.5">
@@ -954,7 +996,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
               </button>
             </div>
             <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
-              <p className="whitespace-pre-wrap font-sans text-sm leading-7 text-[#3a4a47]">{consentText || PRIVACY_CONTENT}</p>
+              <SafeMarkdown text={consentText || PRIVACY_CONTENT} />
             </div>
             <div className="border-t border-[#edf0ef] px-6 py-4 flex justify-end gap-3">
               <button
@@ -970,6 +1012,53 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                 className="rounded-md bg-[#175e63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#124b4f]"
               >
                 동의하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 개인정보 보안관리 안내 모달 */}
+      {requiresSecurityNotice && securityNoticeModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setSecurityNoticeModalOpen(false)}
+        >
+          <div
+            className="assessment-modal-fit-wide rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#edf0ef] px-6 py-4">
+              <h3 className="text-base font-semibold text-[#161d1b]">개인정보 보안관리 안내</h3>
+              <button
+                type="button"
+                onClick={() => setSecurityNoticeModalOpen(false)}
+                className="text-muted-foreground hover:text-[#161d1b] text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
+              <SafeMarkdown text={securityNoticeText || "등록된 개인정보 보안관리 안내 문구가 없습니다."} />
+            </div>
+            <div className="border-t border-[#edf0ef] px-6 py-4 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setSecurityNoticeModalOpen(false)}
+                className="rounded-md border border-[#dfe5e3] px-4 py-2 text-sm font-medium text-[#3a4a47] hover:bg-[#f3f5f4]"
+              >
+                닫기
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSecurityNoticeConfirmed(true)
+                  setSecurityNoticeModalOpen(false)
+                  setValidationError("")
+                }}
+                className="rounded-md bg-[#175e63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#124b4f]"
+              >
+                확인했습니다
               </button>
             </div>
           </div>

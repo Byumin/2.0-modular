@@ -27,6 +27,8 @@
   - `session_configs_json` — 수검자 실시 세션 구성, 세션 안내 설명, 안내 항목. 구조 아래 참고.
   - `additional_profile_fields_json`
   - `requires_consent`
+  - `consent_text` — 검사별 개인정보 수집·이용 동의서 문구. 비어 있으면 `admin_settings.consent_text`를 fallback으로 사용.
+  - `requires_security_notice` — 수검 전 개인정보 보안관리 안내 확인 필요 여부.
   - `created_at`
 
 #### `child_test.sub_test_json` 구조
@@ -46,8 +48,9 @@
 }
 ```
 
-- `age_range` / `school_age_range`: 연령 범위. `start_inclusive`(포함), `end_exclusive`(미포함). 단위는 `[년, 월, 일]`.
-- `age_range`와 `school_age_range`는 같은 연령 축의 다른 표현으로, 한 구간에 둘 다 존재하지 않는다.
+- `age_range`: 생년월일 기반 만 연령 범위. `start_inclusive`(포함), `end_exclusive`(미포함). 단위는 `[년, 월, 일]`.
+- `school_age_range`: 학령 라벨 인덱스 범위. `start_inclusive[0]`(포함), `end_exclusive[0]`(미포함)을 `SCHOOL_AGE_LABELS` 인덱스로 비교한다.
+- `age_range`와 `school_age_range`는 다른 입력 축이므로, 한 구간에 둘 다 존재하지 않는다.
 - `informant`: 보고자 구분이 있는 검사(PAT-2 등)에서 유효한 보고자 값 목록.
 - 구간 산출 알고리즘 상세: [docs/features/custom-test-management.md](../features/custom-test-management.md) — **실시구간 산출 알고리즘** 섹션 참고.
 
@@ -227,6 +230,7 @@
   - `id`
   - `admin_user_id` (UNIQUE)
   - `consent_text`
+  - `security_notice_text`
   - `updated_at`
 
 ### `client_consent_record`
@@ -266,6 +270,10 @@
     "informant": {
       "type": "enum",
       "profile_field": "informant"
+    },
+    "school_age_range": {
+      "type": "school_age_index_range",
+      "profile_field": "school_age_range"
     }
   }
 }
@@ -273,8 +281,9 @@
 
 - `type: "age_range"`: `sub_test_json`의 `[년, 월, 일]` 범위를 `profile_field`의 생년월일로 계산한다.
 - `type: "enum"`: `sub_test_json`의 허용값 목록과 `profile_field` 값을 비교한다.
+- `type: "school_age_index_range"` 또는 `type: "school_age_range"`: `sub_test_json`의 학령 인덱스 범위를 `profile_field`의 학령 라벨/인덱스와 비교한다.
 - `as_of_field`: 나이 계산 기준일 필드다. 보통 `exam_date`를 사용한다.
-- 매핑이 없는 기존 검사는 런타임 fallback으로 `birth_day`, `gender`, `informant`, `school_age`를 사용한다.
+- 매핑이 없는 기존 검사는 런타임 fallback으로 `birth_day`, `gender`, `informant`, `school_age_range` 또는 `school_age`를 사용한다.
 - 예: `K-PSI-4-SF`는 `age_range -> parent_birth_day`, `PAT-2`와 `PCT`는 `age_range -> child_birth_day`로 매핑한다.
 
 ## Important Relationship Summary

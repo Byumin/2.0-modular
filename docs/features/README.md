@@ -8,6 +8,7 @@
 - `custom-test-management.md`: 커스텀 검사 생성, 조회, 수정, 삭제, 관리 화면 기능
 - `custom-test-management-tabs-spec.md`: 검사 관리 탭 구조 API/UI 상세 스펙
 - `assessment-link-flow.md`: 접근 링크 발급, 수검자 프로필 검증, 답변 제출, 검사 실시 중간 저장
+- `assessment-session-navigation-ux-questions.md`: 다중 세션 검사 실시에서 이전 세션 복귀, 세션 뛰어넘기, 전환 확인 모달 정책 질문/제안
 - `client-intake-policy.md`: 내담자 사전 등록, 자동 생성, 혼합 운영 정책
 - `client-management.md`: 내담자 생성, 배정, 그룹, 조회, 평가 로그 및 리포트 컨텍스트
 - `client-search-navigation-spec.md`: 내담자 검색/탐색 개선 API/UI 상세 스펙

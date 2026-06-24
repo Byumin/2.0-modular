@@ -571,8 +571,16 @@ def find_pre_registered_entry_by_match(
         normalized = _normalize_match_key(key)
         return "phone" in normalized or "phon" in normalized or "휴대" in key or "핸드폰" in key or "전화" in key or "연락처" in key
 
+    def _is_date_key(key: str) -> bool:
+        normalized = _normalize_match_key(key)
+        return "birth" in normalized or "date" in normalized or "생년월일" in key or "생일" in key or "출생" in key
+
     def _phone_digits(value: object) -> str:
         return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+    def _date_digits(value: object) -> str:
+        digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+        return digits if len(digits) == 8 else str(value or "").strip().lower()
 
     def _value_for_match(source: dict, key: str) -> str:
         direct = str(source.get(key, "")).strip()
@@ -617,6 +625,9 @@ def find_pre_registered_entry_by_match(
             if _is_phone_key(key):
                 stored_value = _phone_digits(stored_value)
                 profile_value = _phone_digits(profile_value)
+            elif _is_date_key(key):
+                stored_value = _date_digits(stored_value)
+                profile_value = _date_digits(profile_value)
             else:
                 stored_value = stored_value.lower()
                 profile_value = profile_value.lower()

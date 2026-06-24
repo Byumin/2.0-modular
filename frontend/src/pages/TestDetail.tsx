@@ -19,6 +19,8 @@ interface TestDetail {
   custom_test_name: string
   client_intake_mode?: string
   requires_consent?: boolean
+  consent_text?: string
+  requires_security_notice?: boolean
   show_research_notice?: boolean
   allow_unanswered_submission?: boolean
   show_report_result?: boolean
@@ -156,9 +158,14 @@ export function TestDetail() {
   const [newEntryValues, setNewEntryValues] = React.useState<Record<string, string>>({})
   const [uploadingExcel, setUploadingExcel] = React.useState(false)
   const [uploadResult, setUploadResult] = React.useState<{ added: number; skipped: number; errors: string[] } | null>(null)
+  const [preSearchQuery, setPreSearchQuery] = React.useState("")
+  const [preCurrentPage, setPreCurrentPage] = React.useState(1)
   const excelInputRef = React.useRef<HTMLInputElement>(null)
   const [nameValue, setNameValue] = React.useState("")
   const [intakeMode, setIntakeMode] = React.useState<ClientIntakeMode>("pre_registered_only")
+  const [requiresConsent, setRequiresConsent] = React.useState(false)
+  const [consentText, setConsentText] = React.useState("")
+  const [requiresSecurityNotice, setRequiresSecurityNotice] = React.useState(false)
   const [showResearchNotice, setShowResearchNotice] = React.useState(true)
   const [sessionConfigs, setSessionConfigs] = React.useState<SessionConfig[]>([])
   const [savingSettings, setSavingSettings] = React.useState(false)
@@ -191,6 +198,9 @@ export function TestDetail() {
         setNameValue(item.custom_test_name ?? "")
         const mode = normalizeClientIntakeMode(item.client_intake_mode)
         setIntakeMode(mode)
+        setRequiresConsent(Boolean(item.requires_consent))
+        setConsentText(item.consent_text ?? "")
+        setRequiresSecurityNotice(Boolean(item.requires_security_notice))
         setShowResearchNotice(item.show_research_notice !== false)
         setSessionConfigs(normalizeSessionConfigs(item.session_configs, item.test_ids ?? []))
         if (item.access_token) {
@@ -235,7 +245,9 @@ export function TestDetail() {
         body: JSON.stringify({
           custom_test_name: trimmedName,
           client_intake_mode: intakeMode,
-          requires_consent: Boolean(test.requires_consent),
+          requires_consent: requiresConsent,
+          consent_text: consentText.trim(),
+          requires_security_notice: requiresSecurityNotice,
           show_research_notice: showResearchNotice,
           session_configs: normalizedSessions,
         }),
@@ -250,6 +262,9 @@ export function TestDetail() {
         ...prev,
         custom_test_name: trimmedName,
         client_intake_mode: intakeMode,
+        requires_consent: requiresConsent,
+        consent_text: consentText.trim(),
+        requires_security_notice: requiresSecurityNotice,
         show_research_notice: showResearchNotice,
         session_configs: normalizedSessions,
       } : prev)
@@ -537,6 +552,54 @@ export function TestDetail() {
                   끄면 실시 링크 첫 화면의 왼쪽 안내 카드가 표시되지 않습니다.
                 </p>
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>개인정보동의</Label>
+                <label className="flex cursor-pointer items-center gap-2 rounded-md border bg-muted/20 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={requiresConsent}
+                    onChange={(event) => setRequiresConsent(event.target.checked)}
+                    className="size-4 rounded border-input"
+                  />
+                  <span className="text-sm">수검 전 개인정보 수집·이용 동의 받기</span>
+                </label>
+                {requiresConsent ? (
+                  <div className="flex flex-col gap-1.5 rounded-md border bg-muted/20 p-3">
+                    <Label htmlFor="detail_consent_text" className="text-xs text-muted-foreground">
+                      이 검사에 표시할 개인정보 수집·이용 동의서 문구
+                    </Label>
+                    <textarea
+                      id="detail_consent_text"
+                      value={consentText}
+                      onChange={(event) => setConsentText(event.target.value)}
+                      placeholder="비워두면 설정 메뉴의 기본 동의서 문구를 사용합니다."
+                      maxLength={10000}
+                      rows={8}
+                      className="min-h-40 resize-y rounded-md border border-input bg-background px-3 py-2 text-sm leading-6 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      검사별 문구가 비어 있으면 관리자 설정의 기본 문구가 적용됩니다. Markdown 문법을 사용할 수 있습니다.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">끄면 수검자는 동의 단계 없이 바로 검사 인적사항 입력으로 이동합니다.</p>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>개인정보 보안관리 안내</Label>
+                <label className="flex cursor-pointer items-center gap-2 rounded-md border bg-muted/20 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={requiresSecurityNotice}
+                    onChange={(event) => setRequiresSecurityNotice(event.target.checked)}
+                    className="size-4 rounded border-input"
+                  />
+                  <span className="text-sm">수검 전 개인정보 보안관리 안내 확인 받기</span>
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  켜면 수검자가 설정 메뉴의 보안관리 안내 문구를 확인해야 검사를 시작할 수 있습니다.
+                </p>
+              </div>
               <div className="flex items-center justify-between gap-3">
                 <Badge variant={intakeMode === "auto_create" ? "success" : "secondary"} className="text-xs">
                   {intakeModeLabels[intakeMode]}
@@ -747,55 +810,123 @@ export function TestDetail() {
                 <p className="rounded-md border border-dashed bg-muted/20 px-4 py-3 text-center text-xs text-muted-foreground">
                   등록된 내담자가 없습니다.
                 </p>
-              ) : (
-                <div className="rounded-md border border-border overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/30">
-                      <tr>
-                        {matchFieldKeys.map((key) => {
-                          const fieldDef = availableFields.find((f) => f.key === key)
-                          return (
-                            <th key={key} className="px-3 py-2 text-left font-medium text-muted-foreground">
-                              {fieldDef?.label ?? key}
-                            </th>
-                          )
-                        })}
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">등록일</th>
-                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">상태</th>
-                        <th className="px-3 py-2" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {preRegisteredEntries.map((entry) => (
-                        <tr key={entry.id} className="border-t border-border">
-                          {matchFieldKeys.map((key) => (
-                            <td key={key} className="px-3 py-2">{entry.profile_data[key] ?? "-"}</td>
+              ) : (() => {
+                const PAGE_SIZE = 10
+                const q = preSearchQuery.trim().toLowerCase()
+                const filtered = q
+                  ? preRegisteredEntries.filter((entry) =>
+                      matchFieldKeys.some((key) =>
+                        String(entry.profile_data[key] ?? "").toLowerCase().includes(q)
+                      )
+                    )
+                  : preRegisteredEntries
+                const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+                const safePage = Math.min(preCurrentPage, totalPages)
+                const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+                return (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={preSearchQuery}
+                        onChange={(e) => { setPreSearchQuery(e.target.value); setPreCurrentPage(1) }}
+                        placeholder="이름, 생년월일 등으로 검색"
+                        className="h-8 text-xs max-w-xs"
+                      />
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {filtered.length}명 / 전체 {preRegisteredEntries.length}명
+                      </span>
+                    </div>
+                    <div className="rounded-md border border-border overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            {matchFieldKeys.map((key) => {
+                              const fieldDef = availableFields.find((f) => f.key === key)
+                              return (
+                                <th key={key} className="px-3 py-2 text-left font-medium text-muted-foreground">
+                                  {fieldDef?.label ?? key}
+                                </th>
+                              )
+                            })}
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">등록일</th>
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">상태</th>
+                            <th className="px-3 py-2" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paged.map((entry) => (
+                            <tr key={entry.id} className="border-t border-border">
+                              {matchFieldKeys.map((key) => (
+                                <td key={key} className="px-3 py-2">{entry.profile_data[key] ?? "-"}</td>
+                              ))}
+                              <td className="px-3 py-2 text-muted-foreground">
+                                {entry.created_at ? new Date(entry.created_at).toLocaleDateString("ko-KR") : "-"}
+                              </td>
+                              <td className="px-3 py-2">
+                                {entry.has_provisional_client ? (
+                                  <Badge variant="success" className="text-[10px]">접속 이력 있음</Badge>
+                                ) : (
+                                  <Badge variant="secondary" className="text-[10px]">미접속</Badge>
+                                )}
+                              </td>
+                              <td className="px-3 py-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteEntry(entry.id)}
+                                  className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                >
+                                  <IconX className="size-3.5" />
+                                </button>
+                              </td>
+                            </tr>
                           ))}
-                          <td className="px-3 py-2 text-muted-foreground">
-                            {entry.created_at ? new Date(entry.created_at).toLocaleDateString("ko-KR") : "-"}
-                          </td>
-                          <td className="px-3 py-2">
-                            {entry.has_provisional_client ? (
-                              <Badge variant="success" className="text-[10px]">접속 이력 있음</Badge>
+                        </tbody>
+                      </table>
+                    </div>
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setPreCurrentPage((p) => Math.max(1, p - 1))}
+                          disabled={safePage === 1}
+                          className="rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-30"
+                        >
+                          이전
+                        </button>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                          .filter((p) => p === 1 || p === totalPages || Math.abs(p - safePage) <= 2)
+                          .reduce<(number | "...")[]>((acc, p, i, arr) => {
+                            if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("...")
+                            acc.push(p)
+                            return acc
+                          }, [])
+                          .map((p, i) =>
+                            p === "..." ? (
+                              <span key={`ellipsis-${i}`} className="px-1 text-xs text-muted-foreground">…</span>
                             ) : (
-                              <Badge variant="secondary" className="text-[10px]">미접속</Badge>
-                            )}
-                          </td>
-                          <td className="px-3 py-2">
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteEntry(entry.id)}
-                              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                            >
-                              <IconX className="size-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => setPreCurrentPage(p as number)}
+                                className={`rounded border px-2.5 py-1 text-xs ${safePage === p ? "border-primary bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted"}`}
+                              >
+                                {p}
+                              </button>
+                            )
+                          )}
+                        <button
+                          type="button"
+                          onClick={() => setPreCurrentPage((p) => Math.min(totalPages, p + 1))}
+                          disabled={safePage === totalPages}
+                          className="rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-30"
+                        >
+                          다음
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </CardContent>
           </Card>
         )}

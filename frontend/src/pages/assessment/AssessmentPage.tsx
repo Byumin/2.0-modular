@@ -173,7 +173,12 @@ export function AssessmentPage() {
   const [visibleStep, setVisibleStep] = React.useState<AssessmentStep>("profile")
   const [stepTransitionState, setStepTransitionState] = React.useState<"idle" | "out" | "in">("idle")
   const [loading, setLoading] = React.useState(true)
-  const [consentInfo, setConsentInfo] = React.useState<{ requires_consent: boolean; consent_text: string } | null>(null)
+  const [consentInfo, setConsentInfo] = React.useState<{
+    requires_consent: boolean
+    consent_text: string
+    requires_security_notice?: boolean
+    security_notice_text?: string
+  } | null>(null)
   const [profileLoading, setProfileLoading] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
   const [activeDraft, setActiveDraft] = React.useState<AssessmentDraft | null>(null)
@@ -267,7 +272,12 @@ export function AssessmentPage() {
       try {
         const [payload, consent] = await Promise.all([
           api<InitialPayload>(`/api/assessment-links/${token}`),
-          api<{ requires_consent: boolean; consent_text: string }>(`/api/assessment-links/${token}/consent`),
+          api<{
+            requires_consent: boolean
+            consent_text: string
+            requires_security_notice?: boolean
+            security_notice_text?: string
+          }>(`/api/assessment-links/${token}/consent`),
         ])
         if (!mounted) return
         setInitialPayload(payload)
@@ -671,7 +681,7 @@ export function AssessmentPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#175e63]">
                   {stepMeta[activeStep].label}
                 </p>
-                <h1 className="mt-1 text-xl font-bold tracking-tight text-foreground sm:text-2xl">{title}</h1>
+                <h1 className="assessment-korean-title mt-1 text-xl font-bold text-foreground sm:text-2xl">{title}</h1>
                 <p className="mt-1 text-sm text-muted-foreground">{stepMeta[activeStep].helper}</p>
               </div>
               <nav className="flex shrink-0 items-center gap-1.5 pt-0.5" aria-label="검사 단계">
@@ -724,6 +734,8 @@ export function AssessmentPage() {
               initialProfile={activeProfile}
               requiresConsent={consentInfo?.requires_consent ?? false}
               consentText={consentInfo?.consent_text}
+              requiresSecurityNotice={consentInfo?.requires_security_notice ?? false}
+              securityNoticeText={consentInfo?.security_notice_text}
               scrollToHistory={retakePrompt !== null}
               retakeInfo={retakePrompt?.existingSubmission ?? null}
               retakeProfile={retakePrompt?.profile ?? null}

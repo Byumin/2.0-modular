@@ -478,6 +478,27 @@ def ensure_child_test_requires_consent_column() -> None:
             )
 
 
+def ensure_child_test_consent_text_column() -> None:
+    """child_test 테이블에 검사별 consent_text 컬럼 추가."""
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("child_test")}
+    with engine.begin() as conn:
+        if "consent_text" not in columns:
+            conn.exec_driver_sql(
+                "ALTER TABLE child_test ADD COLUMN consent_text TEXT NOT NULL DEFAULT ''"
+            )
+
+
+def ensure_child_test_requires_security_notice_column() -> None:
+    """child_test 테이블에 requires_security_notice 컬럼 추가."""
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("child_test")}
+    with engine.begin() as conn:
+        if "requires_security_notice" not in columns:
+            column_type = "BOOLEAN NOT NULL DEFAULT FALSE" if engine.dialect.name == "postgresql" else "INTEGER NOT NULL DEFAULT 0"
+            conn.exec_driver_sql(f"ALTER TABLE child_test ADD COLUMN requires_security_notice {column_type}")
+
+
 def ensure_child_test_show_research_notice_column() -> None:
     """child_test 테이블에 show_research_notice 컬럼 추가."""
     inspector = inspect(engine)
@@ -500,9 +521,15 @@ def ensure_admin_settings_table() -> None:
                     id INTEGER PRIMARY KEY,
                     admin_user_id INTEGER NOT NULL UNIQUE,
                     consent_text TEXT NOT NULL DEFAULT '',
+                    security_notice_text TEXT NOT NULL DEFAULT '',
                     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """
+            )
+        columns = {column["name"] for column in inspector.get_columns("admin_settings")}
+        if "security_notice_text" not in columns:
+            conn.exec_driver_sql(
+                "ALTER TABLE admin_settings ADD COLUMN security_notice_text TEXT NOT NULL DEFAULT ''"
             )
         conn.exec_driver_sql(
             """
@@ -632,6 +659,11 @@ _CONDITION_PROFILE_MAP_SEED: dict[str, dict] = {
         "age_range": {"type": "age_range", "profile_field": "parent_birth_day", "as_of_field": "exam_date"},
         "gender": {"type": "enum", "profile_field": "parent_gender"},
     },
+    "GOLDEN": {
+        "age_range": {"type": "age_range", "profile_field": "birth_day", "as_of_field": "exam_date"},
+        "school_age_range": {"type": "school_age_index_range", "profile_field": "school_age_range"},
+        "gender": {"type": "enum", "profile_field": "gender"},
+    },
 }
 
 
@@ -662,7 +694,7 @@ _ESSENTIAL_SEED: dict[str, dict] = {
                     "birth_day":  {"label": "자녀 생년월일", "required": True, "type": "date"},
                     "gender":     {"label": "자녀 성별",    "required": True, "type": "radio"},
                     "region":     {"label": "자녀 거주지역", "required": True, "type": "select", "options": _REGIONS},
-                    "school_age": {"label": "소속/학년",    "required": True, "type": "select"},
+                    "school_age_range": {"label": "소속/학년",    "required": True, "type": "select"},
                 },
             },
         ],
