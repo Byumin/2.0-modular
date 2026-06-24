@@ -39,6 +39,7 @@ from app.services.admin.clients import (
     register_client_and_assign_for_public_assessment,
 )
 from app.services.admin.common import (
+    SCHOOL_AGE_LABELS,
     _derive_required_profile_fields,
     _normalize_item_map,
     _parse_response_options,
@@ -62,15 +63,15 @@ def _normalize_item_display_text(value: Any) -> str:
 
 def _resolve_subject_profile(profile: dict[str, Any]) -> dict[str, Any]:
     """mixed profile에서 child_ 접두사 키를 top-level 키로 복사한다 (버그픽스).
-    gender/birth_day/school_age 가 없을 때만 child_ 값을 사용한다.
+    gender/birth_day/school_age_range 가 없을 때만 child_ 값을 사용한다.
     """
     result = dict(profile)
     if not str(result.get("gender", "")).strip():
         result["gender"] = str(result.get("child_gender", "")).strip()
     if not str(result.get("birth_day", "")).strip():
         result["birth_day"] = str(result.get("child_birth_day", "")).strip()
-    if not str(result.get("school_age", "")).strip():
-        result["school_age"] = str(result.get("child_school_age", "")).strip()
+    if not str(result.get("school_age_range", "")).strip():
+        result["school_age_range"] = str(result.get("child_school_age", "")).strip()
     return result
 
 
@@ -331,6 +332,94 @@ def _matches_age_range_condition(raw_birth_day: Any, raw_as_of: Any, age_range: 
     return True
 
 
+def _school_age_index(raw_value: Any) -> int | None:
+    text = str(raw_value or "").strip()
+    if not text:
+        return None
+    try:
+        index = int(text)
+    except ValueError:
+        index = -1
+    if 0 <= index < len(SCHOOL_AGE_LABELS):
+        return index
+    try:
+        return SCHOOL_AGE_LABELS.index(text)
+    except ValueError:
+        return None
+
+
+def _matches_school_age_condition(raw_value: Any, raw_condition: Any) -> bool:
+    value = str(raw_value or "").strip()
+    value_index = _school_age_index(value)
+    if isinstance(raw_condition, list) and raw_condition:
+        for item in raw_condition:
+            allowed_value = str(item or "").strip()
+            if value and value == allowed_value:
+                return True
+            allowed_index = _school_age_index(allowed_value)
+            if value_index is not None and allowed_index == value_index:
+                return True
+        return False
+    if isinstance(raw_condition, str) and raw_condition.strip():
+        allowed_value = raw_condition.strip()
+        if value and value == allowed_value:
+            return True
+        allowed_index = _school_age_index(allowed_value)
+        return value_index is not None and allowed_index == value_index
+    if isinstance(raw_condition, dict) and raw_condition:
+        if value_index is None:
+            return False
+        start = _to_age_tuple(raw_condition.get("start_inclusive"), (0, 0, 0))[0]
+        end = _to_age_tuple(raw_condition.get("end_exclusive"), (999, 0, 0))[0]
+        return start <= value_index < end
+    return True
+
+
+def _match_age_range_condition(
+    profile: dict[str, Any],
+    condition_key: str,
+    condition_value: Any,
+    condition_profile_map: dict[str, dict] | None,
+) -> bool:
+    return _matches_age_range_condition(
+        _profile_value_for_condition(profile, condition_key, condition_profile_map, "birth_day"),
+        _as_of_value_for_condition(profile, condition_key, condition_profile_map),
+        condition_value,
+    )
+
+
+def _match_enum_condition(
+    profile: dict[str, Any],
+    condition_key: str,
+    condition_value: Any,
+    condition_profile_map: dict[str, dict] | None,
+) -> bool:
+    return _matches_enum_condition(
+        _profile_value_for_condition(profile, condition_key, condition_profile_map, condition_key),
+        condition_value,
+    )
+
+
+def _match_school_age_condition(
+    profile: dict[str, Any],
+    condition_key: str,
+    condition_value: Any,
+    condition_profile_map: dict[str, dict] | None,
+) -> bool:
+    return _matches_school_age_condition(
+        _profile_value_for_condition(profile, condition_key, condition_profile_map, "school_age_range"),
+        condition_value,
+    )
+
+
+_CONDITION_MATCHERS = {
+    "age_range": _match_age_range_condition,
+    "enum": _match_enum_condition,
+    "school_age_range": _match_school_age_condition,
+    "school_age_index_range": _match_school_age_condition,
+}
+
+
 def _profile_matches_sub_test(
     profile: dict[str, Any],
     sub_test_json: str,
@@ -348,21 +437,12 @@ def _profile_matches_sub_test(
         if condition_key not in parsed or not isinstance(mapping, dict):
             continue
         condition_type = str(mapping.get("type", "")).strip()
-        if condition_type == "age_range":
-            if not _matches_age_range_condition(
-                _profile_value_for_condition(profile, condition_key, condition_profile_map, "birth_day"),
-                _as_of_value_for_condition(profile, condition_key, condition_profile_map),
-                parsed.get(condition_key),
-            ):
-                return False
-            handled_keys.add(condition_key)
-        elif condition_type == "enum":
-            if not _matches_enum_condition(
-                _profile_value_for_condition(profile, condition_key, condition_profile_map, condition_key),
-                parsed.get(condition_key),
-            ):
-                return False
-            handled_keys.add(condition_key)
+        matcher = _CONDITION_MATCHERS.get(condition_type)
+        if matcher is None:
+            continue
+        if not matcher(profile, condition_key, parsed.get(condition_key), condition_profile_map):
+            return False
+        handled_keys.add(condition_key)
 
     if "gender" not in handled_keys:
         profile_gender = str(profile.get("gender", "")).strip().lower()
@@ -396,17 +476,9 @@ def _profile_matches_sub_test(
     )
     school_keys = {"school_ages", "school_age", "school_grades", "school_grade", "grades", "grade", "school_age_range"}
     if not handled_keys.intersection(school_keys):
-        profile_school_age = str(profile.get("school_age", "")).strip()
-        if isinstance(school_raw, list) and school_raw:
-            allowed_school = {str(x).strip() for x in school_raw if str(x).strip()}
-            if not profile_school_age or profile_school_age not in allowed_school:
-                return False
-        elif isinstance(school_raw, str) and school_raw.strip():
-            if not profile_school_age or profile_school_age != school_raw.strip():
-                return False
-        elif isinstance(school_raw, dict) and school_raw:
-            if not profile_school_age:
-                return False
+        profile_school_age = str(profile.get("school_age_range") or profile.get("school_age", "")).strip()
+        if not _matches_school_age_condition(profile_school_age, school_raw):
+            return False
 
     return True
 
@@ -1786,7 +1858,7 @@ _BASE_FIELD_LABELS: dict[str, str] = {
     "gender": "성별",
     "birth_day": "생년월일",
     "phone": "휴대폰 번호",
-    "school_age": "학령",
+    "school_age_range": "학령",
     "informant": "관찰자",
 }
 
@@ -1923,7 +1995,7 @@ def _available_profile_fields_for_link(
 
     # 2. _required_profile_fields_for_variants 기반 기본 필드 보완 (test_profile_config 없는 경우 대비)
     required_keys = set(_required_profile_fields_for_variants(test_configs))
-    for key in ["name", "gender", "birth_day", "phone", "school_age", "informant"]:
+    for key in ["name", "gender", "birth_day", "phone", "school_age_range", "informant"]:
         if key == "name" or key in required_keys:
             _add(key, _BASE_FIELD_LABELS.get(key, key))
 

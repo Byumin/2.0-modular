@@ -22,6 +22,7 @@ from app.repositories.parent_test_repository import (
 from app.schemas.custom_tests import CreateCustomTestBatchIn, UpdateCustomTestSettingsIn
 from app.services.admin.auth import get_current_admin
 from app.services.admin.common import (
+    SCHOOL_AGE_LABELS,
     _normalize_item_map,
     _parse_response_options,
     _sort_item_texts,
@@ -36,31 +37,6 @@ from app.services.admin.common import (
     serialize_additional_profile_payload,
     summarize_custom_test_ids,
 )
-
-SCHOOL_AGE_LABELS = [
-    "미취학",
-    "초등 1학년",
-    "초등 2학년",
-    "초등 3학년",
-    "초등 4학년",
-    "초등 5학년",
-    "초등 6학년",
-    "초등학교 졸업생",
-    "중등 1학년",
-    "중등 2학년",
-    "중등 3학년",
-    "중학교 졸업생",
-    "고등 1학년",
-    "고등 2학년",
-    "고등 3학년",
-    "고등학교 졸업생",
-    "대학생 신입생",
-    "대학생 재학생",
-    "대학생 졸업생",
-    "대학원 신입생",
-    "대학원 재학생",
-    "대학원 졸업생",
-]
 
 
 def _school_age_label_from_index(index: int) -> str:

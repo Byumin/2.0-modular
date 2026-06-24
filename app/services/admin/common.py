@@ -19,6 +19,31 @@ CLIENT_CREATED_SOURCES = {
     "assessment_link_provisional",
 }
 
+SCHOOL_AGE_LABELS = [
+    "미취학",
+    "초등 1학년",
+    "초등 2학년",
+    "초등 3학년",
+    "초등 4학년",
+    "초등 5학년",
+    "초등 6학년",
+    "초등학교 졸업생",
+    "중등 1학년",
+    "중등 2학년",
+    "중등 3학년",
+    "중학교 졸업생",
+    "고등 1학년",
+    "고등 2학년",
+    "고등 3학년",
+    "고등학교 졸업생",
+    "대학생 신입생",
+    "대학생 재학생",
+    "대학생 졸업생",
+    "대학원 신입생",
+    "대학원 재학생",
+    "대학원 졸업생",
+]
+
 
 def normalize_client_intake_mode(value: Any, default: str = "pre_registered_only") -> str:
     text = str(value or "").strip()
@@ -139,7 +164,7 @@ def _derive_required_profile_fields(sub_test_json: str) -> list[str]:
         or parsed.get("school_age_range")
     )
     if (isinstance(school_raw, dict) and school_raw) or (isinstance(school_raw, str) and school_raw.strip()):
-        required.append("school_age")
+        required.append("school_age_range")
     if isinstance(parsed.get("informant"), list) and parsed.get("informant"):
         required.append("informant")
     return required

@@ -632,6 +632,11 @@ _CONDITION_PROFILE_MAP_SEED: dict[str, dict] = {
         "age_range": {"type": "age_range", "profile_field": "parent_birth_day", "as_of_field": "exam_date"},
         "gender": {"type": "enum", "profile_field": "parent_gender"},
     },
+    "GOLDEN": {
+        "age_range": {"type": "age_range", "profile_field": "birth_day", "as_of_field": "exam_date"},
+        "school_age_range": {"type": "school_age_index_range", "profile_field": "school_age_range"},
+        "gender": {"type": "enum", "profile_field": "gender"},
+    },
 }
 
 
@@ -662,7 +667,7 @@ _ESSENTIAL_SEED: dict[str, dict] = {
                     "birth_day":  {"label": "자녀 생년월일", "required": True, "type": "date"},
                     "gender":     {"label": "자녀 성별",    "required": True, "type": "radio"},
                     "region":     {"label": "자녀 거주지역", "required": True, "type": "select", "options": _REGIONS},
-                    "school_age": {"label": "소속/학년",    "required": True, "type": "select"},
+                    "school_age_range": {"label": "소속/학년",    "required": True, "type": "select"},
                 },
             },
         ],
