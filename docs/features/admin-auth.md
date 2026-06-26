@@ -38,7 +38,7 @@
 - 앱 startup 시 `seed_default_admin()`이 실행되어 기본 관리자 계정을 보장한다.
 - 신규 관리자 계정을 생성해야 하는 빈 DB에서는 `DEFAULT_ADMIN_ID`, `DEFAULT_ADMIN_PW`가 반드시 필요하다.
 - 기존 관리자 계정이 이미 있으면 `DEFAULT_ADMIN_ID`, `DEFAULT_ADMIN_PW`가 없어도 새 기본 계정을 생성하지 않고 startup을 통과한다.
-- 운영 환경에서는 `admin/admin1234` 같은 코드 fallback 비밀번호를 사용하지 않는다.
+- 운영 환경에서는 `admin/<DEFAULT_ADMIN_PASSWORD>` 같은 코드 fallback 비밀번호를 사용하지 않는다.
 
 ## Notes
 - 현재 인증 상태는 DB 세션 테이블이 아니라 메모리 기반이다.

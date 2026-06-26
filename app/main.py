@@ -19,6 +19,7 @@ from app.db.schema_migrations import (
     ensure_admin_settings_table,
     ensure_admin_assessment_draft_table,
     ensure_assessment_link_pre_registered_client_table,
+    ensure_custom_test_restructure_tables,
     ensure_child_test_allow_unanswered_submission_column,
     ensure_child_test_client_intake_mode_column,
     ensure_child_test_consent_text_column,
@@ -121,6 +122,7 @@ def on_startup() -> None:
     ensure_admin_settings_table()
     ensure_client_consent_record_table()
     ensure_admin_assessment_draft_table()
+    ensure_custom_test_restructure_tables()
     if run_data_migrations:
         migrate_child_test_sub_test_json_to_structured()
         rotate_shared_submission_access_tokens()

@@ -59,7 +59,7 @@
 - Checked:
   - `npm run build:frontend` 성공.
   - `frontend/dist/assets/index-zbAEudw2-v2.css`에 `.assessment-korean-title`가 포함됨.
-  - `http://127.0.0.1:8120/assessment/custom/QBxWeYuN6Bivdn5h4_5Uk3sJtS9bZwvJ`가 새 JS/CSS 번들을 가리킴.
+  - `http://127.0.0.1:8120/assessment/custom/<ASSESSMENT_TOKEN>`가 새 JS/CSS 번들을 가리킴.
 - Not checked:
   - 실제 브라우저 스크린샷 비교. `node /tmp/capture_assessment_title.js ...`는 Playwright Chromium 미설치로 실패했고, `npx playwright install chromium`은 현재 `ubuntu26.04-x64` 미지원 오류로 실패했다.
 

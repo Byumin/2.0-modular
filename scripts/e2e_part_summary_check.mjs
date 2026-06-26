@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-const url = process.argv[2] || 'http://127.0.0.1:8012/assessment/custom/1Wubl4rkw8LYzdFNTSPm-bEXjwHYVeZB';
+const url = process.argv[2] || 'http://127.0.0.1:8012/assessment/custom/<ASSESSMENT_TOKEN>';
 
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });

@@ -26,6 +26,12 @@ from app.repositories.custom_test_repository import (
     update_pre_registered_provisional_client,
     upsert_assessment_draft,
 )
+from app.repositories.custom_test_restructure_repository import (
+    create_submission_custom_test_snapshot,
+    load_custom_test_configs_from_restructure,
+    load_custom_test_profile_fields_from_restructure,
+    load_custom_test_sessions_from_restructure,
+)
 from app.repositories.parent_test_repository import fetch_parent_item_bundle
 from app.schemas.values import normalize_gender_value
 from app.services.admin.auth import get_current_admin
@@ -544,10 +550,17 @@ def _collect_profile_field_options(test_configs: list[dict]) -> dict[str, list[s
 
 # custom_test_row의 test_configs에서 profile과 일치하는 검사 구간을 찾아서,
 # 해당 검사 구간에 맞는 문항 화면 payload를 반환
-def _build_custom_assessment_profile_meta(custom_test_row: AdminCustomTest, test_configs: list[dict]) -> dict:
+def _build_custom_assessment_profile_meta(
+    custom_test_row: AdminCustomTest,
+    test_configs: list[dict],
+    additional_profile_fields_override: list[dict] | None = None,
+) -> dict:
     test_ids, test_id_text = summarize_custom_test_ids(test_configs, custom_test_row.test_id)
-    raw_additional_payload = json.loads(getattr(custom_test_row, "additional_profile_fields_json", "[]") or "[]")
-    additional_profile_fields = normalize_additional_profile_fields(raw_additional_payload) # 커스텀 검사의 생성한 추가 인적사항 필드 정규화
+    if additional_profile_fields_override is not None:
+        additional_profile_fields = additional_profile_fields_override
+    else:
+        raw_additional_payload = json.loads(getattr(custom_test_row, "additional_profile_fields_json", "[]") or "[]")
+        additional_profile_fields = normalize_additional_profile_fields(raw_additional_payload) # 커스텀 검사의 생성한 추가 인적사항 필드 정규화
     return {
         "custom_test_id": custom_test_row.id,
         "custom_test_name": custom_test_row.custom_test_name,
@@ -1030,14 +1043,31 @@ def build_custom_assessment_question_payload(
     profile: dict[str, Any],
     db: Session | None = None,
 ) -> dict:
-    test_configs = load_custom_test_configs(custom_test_row)
+    test_configs = (
+        load_custom_test_configs_from_restructure(db, custom_test_id=custom_test_row.id)
+        if db is not None
+        else []
+    ) or load_custom_test_configs(custom_test_row)
     if not test_configs:
         raise HTTPException(status_code=404, detail="검사 구성 정보를 찾을 수 없습니다.")
 
-    base_payload = _build_custom_assessment_profile_meta(custom_test_row, test_configs)
+    additional_profile_fields = (
+        load_custom_test_profile_fields_from_restructure(db, custom_test_id=custom_test_row.id)
+        if db is not None
+        else []
+    )
+    base_payload = _build_custom_assessment_profile_meta(
+        custom_test_row,
+        test_configs,
+        additional_profile_fields_override=additional_profile_fields or None,
+    )
     condition_profile_maps = _load_condition_profile_maps(db, base_payload.get("test_ids") or []) if db is not None else {}
     resolved_variants = _resolve_active_variants(test_configs, profile or {}, condition_profile_maps)
-    session_configs = load_custom_test_session_configs(custom_test_row)
+    session_configs = (
+        load_custom_test_sessions_from_restructure(db, custom_test_id=custom_test_row.id)
+        if db is not None
+        else []
+    ) or load_custom_test_session_configs(custom_test_row)
     session_by_test_id: dict[str, dict] = {}
     for session in session_configs:
         for test_id in session.get("test_ids", []):
@@ -1274,11 +1304,16 @@ def get_custom_test_by_access_link(db: Session, access_token: str) -> dict:
     if custom_test is None:
         raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
 
-    test_configs = load_custom_test_configs(custom_test)
+    test_configs = load_custom_test_configs_from_restructure(db, custom_test_id=custom_test.id) or load_custom_test_configs(custom_test)
     if not test_configs:
         raise HTTPException(status_code=404, detail="검사 구성 정보를 찾을 수 없습니다.")
 
-    payload = _build_custom_assessment_profile_meta(custom_test, test_configs)
+    additional_profile_fields = load_custom_test_profile_fields_from_restructure(db, custom_test_id=custom_test.id)
+    payload = _build_custom_assessment_profile_meta(
+        custom_test,
+        test_configs,
+        additional_profile_fields_override=additional_profile_fields or None,
+    )
     payload["access_token"] = access_token
     payload["allow_unanswered_submission"] = bool(getattr(link, "allow_unanswered_submission", False))
     payload["show_report_result"] = bool(getattr(link, "show_report_result", True))
@@ -1744,6 +1779,13 @@ def submit_custom_test_by_access_link(
             ensure_ascii=False,
         ),
     )
+    create_submission_custom_test_snapshot(
+        db,
+        submission=submission,
+        custom_test=custom_test,
+        assessment_payload=assessment_payload,
+    )
+    db.commit()
 
     scoring_result = score_submission_by_id(
         db,

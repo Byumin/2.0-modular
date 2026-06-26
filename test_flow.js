@@ -9,7 +9,7 @@ const { chromium } = require('playwright');
   // 로그인
   await page.goto('http://127.0.0.1:8120/admin', { waitUntil: 'networkidle' });
   await page.fill('input[placeholder*="아이디"]', 'admin');
-  await page.fill('input[placeholder*="비밀번호"]', 'admin1234');
+  await page.fill('input[placeholder*="비밀번호"]', process.env.ADMIN_TEST_PASSWORD || 'CHANGE_ME');
   await page.click('button[type="submit"]');
   await page.waitForURL('**/admin/workspace', { timeout: 8000 }).catch(() => {});
 

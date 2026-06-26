@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import { chromium } from 'playwright';
 
 const base = process.argv[2] || 'http://127.0.0.1:8012';
-const token = process.argv[3] || 'n2TDWsV4qZmHZUuDLpX0YHH86D2XDnpV';
+const token = process.argv[3] || '<ASSESSMENT_TOKEN>';
 const outDir = path.join('artifacts', 'screenshots');
 const beforePath = path.join(outDir, 'custom-part-summary-before-profile.png');
 const afterPath = path.join(outDir, 'custom-part-summary-after-profile.png');

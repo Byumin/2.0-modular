@@ -34,7 +34,7 @@ for (const run of runs) {
 
   await page.goto(`${base}/admin`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.fill('#admin_id', 'admin');
-  await page.fill('#admin_pw', 'admin1234');
+  await page.fill('#admin_pw', process.env.ADMIN_TEST_PASSWORD || 'CHANGE_ME');
   await page.click('#adminLoginBtn');
   await page.waitForURL(/\/admin\//, { timeout: 60000 });
 

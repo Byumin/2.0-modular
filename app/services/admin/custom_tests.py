@@ -14,6 +14,13 @@ from app.repositories.custom_test_repository import (
     get_custom_test_ids_in,
     soft_delete_custom_test,
 )
+from app.repositories.custom_test_restructure_repository import (
+    load_custom_test_configs_from_restructure,
+    load_custom_test_profile_fields_from_restructure,
+    load_custom_test_sessions_from_restructure,
+    replace_custom_test_restructure_sessions,
+    replace_custom_test_restructure_sources,
+)
 from app.repositories.parent_test_repository import (
     fetch_parent_catalog_rows,
     fetch_parent_scale_rows_by_test,
@@ -567,6 +574,15 @@ def create_admin_custom_test_batch(
         for config in resolved_test_configs
     }
     session_configs_json = _build_session_configs_payload(payload, resolved_test_configs)
+    selected_scale_codes_by_test_id = {
+        str(config.test_id).strip(): [
+            str(code).strip()
+            for code in config.selected_scale_codes
+            if str(code).strip()
+        ]
+        for config in payload.test_configs
+        if str(config.test_id).strip()
+    }
     row = AdminCustomTest( # AdminCustomTest 관리자가 만든 커스텀 검사 1건을 나타내는 sqlalchemy 모델, 각 검사별로 하나의 행이 생성됨
         admin_user_id=admin.id,
         test_id=json.dumps(sorted(sys_test_ids), ensure_ascii=False), # 실시 가능한 모든 test_id를 JSON 배열 형태로 저장
@@ -587,6 +603,14 @@ def create_admin_custom_test_batch(
     )
     db.add(row)
     db.flush()
+    replace_custom_test_restructure_sources(
+        db,
+        custom_test_id=row.id,
+        resolved_test_configs=resolved_test_configs,
+        selected_scale_codes_by_test_id=selected_scale_codes_by_test_id,
+        session_configs=session_configs_json,
+        additional_profile_fields=normalized_fields,
+    )
     commit(db)
     return {
         "message": "Custom tests created.",
@@ -605,7 +629,7 @@ def get_admin_custom_test(db: Session, admin_session: str | None, custom_test_id
     if row is None:
         raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
 
-    test_configs = load_custom_test_configs(row)
+    test_configs = load_custom_test_configs_from_restructure(db, custom_test_id=row.id) or load_custom_test_configs(row)
     test_ids, test_id_text = summarize_custom_test_ids(test_configs, row.test_id)
     selected_scale_pairs = {
         (item["test_id"], code)
@@ -613,8 +637,10 @@ def get_admin_custom_test(db: Session, admin_session: str | None, custom_test_id
         for code in item["selected_scale_codes"]
     }
     selected_scale_codes = sorted({code for _, code in selected_scale_pairs})
-    raw_additional_payload = json.loads(getattr(row, "additional_profile_fields_json", "[]") or "[]")
-    additional_profile_fields = normalize_additional_profile_fields(raw_additional_payload)
+    additional_profile_fields = load_custom_test_profile_fields_from_restructure(db, custom_test_id=row.id)
+    if not additional_profile_fields:
+        raw_additional_payload = json.loads(getattr(row, "additional_profile_fields_json", "[]") or "[]")
+        additional_profile_fields = normalize_additional_profile_fields(raw_additional_payload)
     variant_configs = flatten_custom_test_variant_configs(test_configs)
     if variant_configs:
         sub_test_variants = [item["sub_test_json"] for item in variant_configs]
@@ -644,7 +670,7 @@ def get_admin_custom_test(db: Session, admin_session: str | None, custom_test_id
         "sub_test_variants": sub_test_variants,
         "sub_test_variant_configs": variant_configs,
         "test_configs": test_configs,
-        "session_configs": load_custom_test_session_configs(row),
+        "session_configs": load_custom_test_sessions_from_restructure(db, custom_test_id=row.id) or load_custom_test_session_configs(row),
         "selected_scale_codes": selected_scale_codes,
         "additional_profile_fields": additional_profile_fields,
         "requires_consent": bool(getattr(row, "requires_consent", False)),
@@ -688,7 +714,7 @@ def update_admin_custom_test(
     row.requires_security_notice = payload.requires_security_notice
     row.show_research_notice = payload.show_research_notice
     if payload.session_configs is not None:
-        test_configs = load_custom_test_configs(row)
+        test_configs = load_custom_test_configs_from_restructure(db, custom_test_id=row.id) or load_custom_test_configs(row)
         raw_sessions = [
             {
                 "session_id": session.session_id,
@@ -702,6 +728,11 @@ def update_admin_custom_test(
         row.session_configs_json = json.dumps(
             normalize_custom_test_session_configs(raw_sessions, test_configs),
             ensure_ascii=False,
+        )
+        replace_custom_test_restructure_sessions(
+            db,
+            custom_test_id=row.id,
+            session_configs=json.loads(row.session_configs_json or "[]"),
         )
     commit(db)
     return {"message": "검사 설정이 수정되었습니다."}

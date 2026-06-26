@@ -13,7 +13,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 await page.goto(`${BASE}/admin`, { waitUntil: 'networkidle', timeout: 30000 });
 await page.waitForTimeout(1500);
 await page.locator('#username').fill('admin');
-await page.locator('#password').fill('admin1234');
+await page.locator('#password').fill(process.env.ADMIN_TEST_PASSWORD || 'CHANGE_ME');
 await page.locator('button[type="submit"]').click();
 await page.waitForURL('**/admin/workspace', { timeout: 15000 });
 await page.waitForTimeout(1000);

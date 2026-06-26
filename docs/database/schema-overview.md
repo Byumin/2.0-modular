@@ -101,6 +101,192 @@
 
 기존 데이터 호환을 위해 런타임 loader는 `session_configs_json`이 비어 있을 때만 과거 `selected_scales_json.__sessions`를 fallback으로 읽는다.
 
+### `admin_custom_test_source`
+- `child_test`에 포함된 원형 검사 목록을 row 단위로 표현하는 expand-only 테이블이다.
+- 기존 `child_test.test_id` JSON 배열의 정규화 대상이다.
+- 1차 단계에서는 기존 JSON 경로와 병행하며, 원형 `test.id`는 문자열 `source_test_id`로 참조한다.
+- 주요 필드:
+  - `id`
+  - `custom_test_id` -> `child_test.id`
+  - `source_test_id`
+  - `source_order`
+  - `is_enabled`
+  - `created_at`
+- 주요 제약:
+  - `(custom_test_id, source_test_id)` unique
+
+### `admin_custom_test_scale_selection`
+- 관리자가 원형 검사별로 선택한 scale code 의도를 저장한다.
+- `available_scale_codes`나 실시구간별 `selected_scale_codes`는 원형 condition에서 계산되는 projection이므로 이 테이블의 원본 속성이 아니다.
+- 주요 필드:
+  - `id`
+  - `custom_test_source_id` -> `admin_custom_test_source.id`
+  - `scale_code`
+  - `selected_order`
+  - `created_at`
+- 주요 제약:
+  - `(custom_test_source_id, scale_code)` unique
+
+### `admin_custom_test_variant_projection`
+- 원형 `itemcondition`, `scalecondition`, `normcondition`의 교집합으로 산출된 현재 실시구간 projection이다.
+- source of truth가 아니라 재계산 가능한 파생 구조다.
+- 주요 필드:
+  - `id`
+  - `custom_test_source_id` -> `admin_custom_test_source.id`
+  - `condition_hash`
+  - `eligibility_condition_json`
+  - `generated_from_hash`
+  - `is_current`
+  - `status`
+  - `generated_at`
+- 주요 제약:
+  - `(custom_test_source_id, condition_hash, generated_from_hash)` unique
+
+### `admin_custom_test_source_dependency`
+- custom test source projection이 어떤 원형 condition/item/scale 상태를 관측했는지 hash로 기록한다.
+- 원형 검사 condition이 바뀌었을 때 stale projection을 찾는 기준이다.
+- 주요 필드:
+  - `id`
+  - `custom_test_source_id` -> `admin_custom_test_source.id`
+  - `dependency_type`
+  - `dependency_id`
+  - `dependency_hash`
+  - `observed_at`
+- 주요 제약:
+  - `(custom_test_source_id, dependency_type, dependency_id)` unique
+
+### `admin_custom_test_variant_scale_projection`
+- projection별 scale availability/selection 상태를 저장한다.
+- `admin_custom_test_scale_selection`과 원형 `scale.struct`를 조합해 재계산 가능한 파생 구조다.
+- 주요 필드:
+  - `id`
+  - `variant_projection_id` -> `admin_custom_test_variant_projection.id`
+  - `scale_code`
+  - `availability_status`
+  - `created_at`
+- 주요 제약:
+  - `(variant_projection_id, scale_code)` unique
+
+### `admin_custom_test_session`
+- custom test의 수검 세션 메타를 row 단위로 저장한다.
+- 기존 `child_test.session_configs_json`의 정규화 대상이다.
+- 주요 필드:
+  - `id`
+  - `custom_test_id` -> `child_test.id`
+  - `session_index`
+  - `title`
+  - `description`
+  - `guide_items_json`
+  - `created_at`
+- 주요 제약:
+  - `(custom_test_id, session_index)` unique
+
+### `admin_custom_test_session_source`
+- 세션과 원형 검사 source의 연결이다.
+- 원형 condition 변경으로 실시구간 variant가 늘거나 줄어도 세션에 어떤 원형 검사가 들어가는지라는 관리자 의도는 유지된다.
+- 주요 필드:
+  - `id`
+  - `session_id` -> `admin_custom_test_session.id`
+  - `custom_test_source_id` -> `admin_custom_test_source.id`
+  - `display_order`
+- 주요 제약:
+  - `(session_id, custom_test_source_id)` unique
+
+### `admin_custom_test_profile_field`
+- custom test 자체의 추가 profile field를 row 단위로 저장한다.
+- 기존 `child_test.additional_profile_fields_json`의 정규화 대상이다.
+- 주요 필드:
+  - `id`
+  - `custom_test_id` -> `child_test.id`
+  - `field_key`
+  - `label`
+  - `input_type`
+  - `required`
+  - `options_json`
+  - `display_order`
+  - `created_at`
+- 주요 제약:
+  - `(custom_test_id, field_key)` unique
+
+### Custom Test Restructure Result
+
+#### Layering
+
+기존 `child_test` row는 커스텀 검사 정의의 상위 호환 row로 유지한다. 새 테이블은 `child_test` 안에 섞여 있던 JSON 반복 구조를 아래 세 계층으로 분리한다.
+
+```text
+Source of truth:
+- admin_custom_test_source
+- admin_custom_test_scale_selection
+- admin_custom_test_session
+- admin_custom_test_session_source
+- admin_custom_test_profile_field
+
+Projection:
+- admin_custom_test_variant_projection
+- admin_custom_test_source_dependency
+- admin_custom_test_variant_scale_projection
+
+Snapshot:
+- submission_custom_test_snapshot
+```
+
+관리자가 직접 선택한 의도는 source-of-truth 계층에 저장한다. 원형 검사 `itemcondition`, `scalecondition`, `normcondition`, `scale`, `item`에서 계산되는 실시구간과 척도 가용성은 projection 계층에 저장한다. 제출 이후 의미가 바뀌면 안 되는 구성은 snapshot 계층에 저장한다.
+
+#### Table Responsibility
+
+| 테이블 | 목적 | 기존 JSON/text에서 분리한 내용 | 정규화 효과 |
+| --- | --- | --- | --- |
+| `admin_custom_test_source` | 커스텀 검사에 포함된 원형 검사 목록과 순서 | `child_test.test_id` JSON 배열 | 반복 그룹을 원형 검사별 row로 분해한다. |
+| `admin_custom_test_scale_selection` | 원형 검사별 관리자 scale 선택 의도 | `selected_scales_json` 안의 선택 scale | 선택 의도를 `(custom_test_source_id, scale_code)` 단위로 식별한다. |
+| `admin_custom_test_variant_projection` | 현재 원형 condition 기준으로 산출된 실시구간 | `sub_test_json`, variant condition | 계산 가능한 파생값을 source-of-truth에서 분리한다. |
+| `admin_custom_test_source_dependency` | projection 산출 시 관측한 원형 condition/item/scale hash | JSON 안에 명시되지 않던 원형 의존성 | 원형 검사 변경 감지 기준을 row 단위로 보존한다. |
+| `admin_custom_test_variant_scale_projection` | variant별 scale availability/selection 상태 | variant별 `available_scale_codes`, `selected_scale_codes` | variant와 scale의 다대다 상태를 독립 row로 표현한다. |
+| `admin_custom_test_session` | 세션 제목, 설명, 안내 항목 | `session_configs_json` | 세션 메타를 세션별 row로 분해한다. |
+| `admin_custom_test_session_source` | 세션과 원형 검사의 연결 | 세션 안의 `test_ids` 배열 | 세션-검사 다대다 관계를 연결 테이블로 분리한다. |
+| `admin_custom_test_profile_field` | 커스텀 검사 추가 인적사항 필드 | `additional_profile_fields_json` | 필드 key별 속성을 독립 row로 관리한다. |
+| `submission_custom_test_snapshot` | 제출 당시 검사 구성과 profile/scale/session snapshot | 제출 시점의 runtime payload | 이후 설정 변경과 원형 condition 변경으로부터 과거 제출 의미를 보존한다. |
+
+#### Normal Form Impact
+
+1NF 관점에서는 `child_test.test_id`, `selected_scales_json`, `session_configs_json`, `additional_profile_fields_json`에 들어 있던 배열과 중첩 JSON 반복 그룹을 row 단위로 분해했다. 이로써 한 컬럼에 여러 원형 검사, 여러 scale, 여러 session, 여러 profile field가 함께 들어가는 구조를 줄였다.
+
+2NF 관점에서는 `child_test.id` 하나에 묶여 있던 속성 중 실제 결정자가 더 작은 값을 분리했다. scale 선택은 `child_test.id` 전체보다 `custom_test_source_id`와 `scale_code` 조합에 의존한다. 세션과 원형 검사의 연결은 `session_id`와 `custom_test_source_id` 조합에 의존한다. variant별 scale 상태는 `variant_projection_id`와 `scale_code` 조합에 의존한다.
+
+3NF 관점에서는 관리자 선택 의도와 원형 검사에서 유도되는 파생값을 분리했다. `admin_custom_test_scale_selection`은 관리자가 고른 scale 의도만 저장하고, variant별 available/selected 상태는 `admin_custom_test_variant_scale_projection`에 projection으로 저장한다. `admin_custom_test_source_dependency`는 projection의 원형 의존성을 hash로 보존해 원형 검사 변경 시 stale projection을 찾는 기준이 된다.
+
+#### Anomaly Reduction
+
+삽입 이상은 줄어든다. 예전에는 원형 검사 하나나 추가 profile field 하나만 추가해도 큰 JSON 구조 전체를 올바른 shape로 만들어 저장해야 했다. 새 구조에서는 source, scale selection, session, profile field를 필요한 row 단위로 추가할 수 있다.
+
+갱신 이상은 줄어든다. 세션 제목 하나, 특정 원형 검사의 scale 선택 하나, profile field의 required 여부 하나를 바꿀 때 JSON 전체를 파싱하고 다시 직렬화하지 않아도 된다. 또한 원형 condition 변경으로 재계산되어야 하는 값과 관리자가 직접 선택한 값이 분리되어 있어, projection만 갱신하는 경로를 만들 수 있다.
+
+삭제 이상은 줄어든다. 특정 세션에서 원형 검사를 제외하는 일은 `admin_custom_test_session_source` row 삭제로 표현되고, 커스텀 검사에서 원형 검사 자체를 제외하는 일은 `admin_custom_test_source` 계층 삭제로 표현된다. 이미 제출된 결과는 `submission_custom_test_snapshot`에 고정되므로 현재 custom test 구성을 정리해도 과거 제출 의미가 함께 사라지지 않는다.
+
+#### Performance And Operational Effect
+
+조회 조인은 증가한다. 대신 JSON 컬럼 전체를 반복 파싱하고 의미를 추론하던 비용을 row 조회와 projection 조회로 옮긴다. 특히 custom test source, scale, session, profile field는 인덱스와 unique constraint를 가진 row 단위로 접근할 수 있다.
+
+원형 검사 condition 변경 영향 분석은 `admin_custom_test_source_dependency`의 dependency hash 비교로 좁힐 수 있다. 전체 `child_test` JSON을 모두 열어 비교하는 대신, 어떤 custom test source가 어떤 원형 dependency를 관측했는지 기준으로 stale projection 후보를 찾을 수 있다.
+
+수검 payload 생성은 새 projection read path를 우선 사용하고, 새 구조가 비어 있으면 기존 JSON으로 fallback한다. 이 단계적 read path는 운영 호환성을 유지하면서 projection 기반 조립으로 이동하기 위한 완충 장치다.
+
+운영 RDS 백필 결과 기준 row 수는 아래와 같다.
+
+| 테이블 | row 수 |
+| --- | ---: |
+| `admin_custom_test_source` | 82 |
+| `admin_custom_test_scale_selection` | 426 |
+| `admin_custom_test_variant_projection` | 352 |
+| `admin_custom_test_source_dependency` | 10555 |
+| `admin_custom_test_variant_scale_projection` | 3570 |
+| `admin_custom_test_session` | 45 |
+| `admin_custom_test_session_source` | 82 |
+| `admin_custom_test_profile_field` | 1 |
+| `submission_custom_test_snapshot` | 69 |
+
+이 row 수는 기존 운영 RDS의 `child_test`와 제출 데이터를 새 구조에 백필한 결과다. 기존 `child_test` JSON 컬럼은 삭제하지 않았고, 현재 런타임은 새 구조 우선 조회와 legacy JSON fallback을 병행한다.
+
 ### `admin_client`
 - 내담자 정보
 - 주요 필드:
@@ -191,6 +377,24 @@
   - `responder_name`
   - `answers_json`
   - `created_at`
+
+### `submission_custom_test_snapshot`
+- 제출 당시 custom test 구성과 원형 condition dependency 상태를 고정하는 snapshot 테이블이다.
+- 현재 custom test projection은 원형 검사 condition 변경 영향을 받지만, 이미 제출된 보고서/채점 의미는 이 snapshot을 기준으로 보존한다.
+- 주요 필드:
+  - `id`
+  - `submission_id` -> `admin_custom_test_submission.id`
+  - `custom_test_id` -> `child_test.id`
+  - `source_test_ids_snapshot_json`
+  - `variant_projection_snapshot_json`
+  - `selected_scales_snapshot_json`
+  - `session_configs_snapshot_json`
+  - `profile_fields_snapshot_json`
+  - `source_dependency_hash_snapshot`
+  - `snapshot_source`
+  - `created_at`
+- 주요 제약:
+  - `submission_id` unique
 
 ### `admin_client_identity_review`
 - 애매 매칭 케이스에서 수검자 선택과 관리자 사후 검토를 기록한다.

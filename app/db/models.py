@@ -38,6 +38,130 @@ class AdminCustomTest(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class AdminCustomTestSource(Base):
+    __tablename__ = "admin_custom_test_source"
+    __table_args__ = (
+        UniqueConstraint("custom_test_id", "source_test_id", name="uq_custom_test_source"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    custom_test_id: Mapped[int] = mapped_column(ForeignKey("child_test.id"), nullable=False, index=True)
+    source_test_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    source_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AdminCustomTestScaleSelection(Base):
+    __tablename__ = "admin_custom_test_scale_selection"
+    __table_args__ = (
+        UniqueConstraint("custom_test_source_id", "scale_code", name="uq_custom_test_scale_selection"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    custom_test_source_id: Mapped[int] = mapped_column(ForeignKey("admin_custom_test_source.id"), nullable=False, index=True)
+    scale_code: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    selected_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AdminCustomTestVariantProjection(Base):
+    __tablename__ = "admin_custom_test_variant_projection"
+    __table_args__ = (
+        UniqueConstraint(
+            "custom_test_source_id",
+            "condition_hash",
+            "generated_from_hash",
+            name="uq_custom_test_variant_projection_hash",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    custom_test_source_id: Mapped[int] = mapped_column(ForeignKey("admin_custom_test_source.id"), nullable=False, index=True)
+    condition_hash: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    eligibility_condition_json: Mapped[str] = mapped_column(Text, nullable=False)
+    generated_from_hash: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="current")
+    generated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AdminCustomTestSourceDependency(Base):
+    __tablename__ = "admin_custom_test_source_dependency"
+    __table_args__ = (
+        UniqueConstraint(
+            "custom_test_source_id",
+            "dependency_type",
+            "dependency_id",
+            name="uq_custom_test_source_dependency",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    custom_test_source_id: Mapped[int] = mapped_column(ForeignKey("admin_custom_test_source.id"), nullable=False, index=True)
+    dependency_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    dependency_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    dependency_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AdminCustomTestVariantScaleProjection(Base):
+    __tablename__ = "admin_custom_test_variant_scale_projection"
+    __table_args__ = (
+        UniqueConstraint("variant_projection_id", "scale_code", name="uq_custom_test_variant_scale_projection"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    variant_projection_id: Mapped[int] = mapped_column(ForeignKey("admin_custom_test_variant_projection.id"), nullable=False, index=True)
+    scale_code: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    availability_status: Mapped[str] = mapped_column(String(40), nullable=False, default="selected", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AdminCustomTestSession(Base):
+    __tablename__ = "admin_custom_test_session"
+    __table_args__ = (
+        UniqueConstraint("custom_test_id", "session_index", name="uq_custom_test_session_index"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    custom_test_id: Mapped[int] = mapped_column(ForeignKey("child_test.id"), nullable=False, index=True)
+    session_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    title: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    guide_items_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class AdminCustomTestSessionSource(Base):
+    __tablename__ = "admin_custom_test_session_source"
+    __table_args__ = (
+        UniqueConstraint("session_id", "custom_test_source_id", name="uq_custom_test_session_source"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("admin_custom_test_session.id"), nullable=False, index=True)
+    custom_test_source_id: Mapped[int] = mapped_column(ForeignKey("admin_custom_test_source.id"), nullable=False, index=True)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class AdminCustomTestProfileField(Base):
+    __tablename__ = "admin_custom_test_profile_field"
+    __table_args__ = (
+        UniqueConstraint("custom_test_id", "field_key", name="uq_custom_test_profile_field"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    custom_test_id: Mapped[int] = mapped_column(ForeignKey("child_test.id"), nullable=False, index=True)
+    field_key: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    label: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    input_type: Mapped[str] = mapped_column(String(40), nullable=False, default="text")
+    required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    options_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class AdminClient(Base):
     __tablename__ = "admin_client"
 
@@ -160,6 +284,25 @@ class AdminCustomTestSubmission(Base):
     access_token: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     responder_name: Mapped[str] = mapped_column(String(80), nullable=False, default="")
     answers_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class SubmissionCustomTestSnapshot(Base):
+    __tablename__ = "submission_custom_test_snapshot"
+    __table_args__ = (
+        UniqueConstraint("submission_id", name="uq_submission_custom_test_snapshot_submission"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    submission_id: Mapped[int] = mapped_column(ForeignKey("admin_custom_test_submission.id"), nullable=False, index=True)
+    custom_test_id: Mapped[int] = mapped_column(ForeignKey("child_test.id"), nullable=False, index=True)
+    source_test_ids_snapshot_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    variant_projection_snapshot_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    selected_scales_snapshot_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    session_configs_snapshot_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    profile_fields_snapshot_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    source_dependency_hash_snapshot: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    snapshot_source: Mapped[str] = mapped_column(String(40), nullable=False, default="submission_time")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 

@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const browser = await chromium.launch();
 const page = await browser.newPage();
 await page.setViewportSize({ width: 1280, height: 900 });
-await page.goto("http://localhost:5120/assessment/custom/0ayiGgFcfQjuvjZECmvzBA0VmMilYIJ6");
+await page.goto("http://localhost:5120/assessment/custom/<ASSESSMENT_TOKEN>");
 await page.waitForTimeout(2000);
 
 const consent = page.locator("input[type=checkbox]").first();

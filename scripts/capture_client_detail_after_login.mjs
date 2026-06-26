@@ -17,7 +17,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
   await page.goto(`${baseUrl}/admin`, { waitUntil: "networkidle", timeout: 60000 });
   await page.fill("#admin_id", "admin");
-  await page.fill("#admin_pw", "admin1234");
+  await page.fill("#admin_pw", process.env.ADMIN_TEST_PASSWORD || "CHANGE_ME");
   await page.click("#adminLoginBtn");
   await page.waitForURL("**/admin/workspace", { timeout: 30000 });
   await page.goto(`${baseUrl}/admin/client-detail?id=${encodeURIComponent(clientId)}`, { waitUntil: "networkidle", timeout: 60000 });

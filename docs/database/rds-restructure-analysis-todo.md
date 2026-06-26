@@ -160,70 +160,51 @@ consent_policy_version
 ### Proposed Shape
 
 ```text
-admin_custom_test
-- id
-- admin_user_id
-- title
-- status
-- show_report_result
-- allow_unanswered_submission
-- created_at
-- deleted_at
+Source of truth:
+- child_test: 기존 custom test 상위 row. 1차 expand 단계에서는 유지한다.
+- admin_custom_test_source: custom test에 포함된 원형 검사 source_test_id와 순서.
+- admin_custom_test_scale_selection: 관리자가 선택한 scale_code 의도.
+- admin_custom_test_session: 수검 세션 메타.
+- admin_custom_test_session_source: 세션과 원형 검사 연결.
+- admin_custom_test_profile_field: custom test 자체의 추가 profile field.
 
-admin_custom_test_component
-- id
-- custom_test_id
-- source_test_id
-- component_order
+Projection:
+- admin_custom_test_variant_projection: 원형 item/scale/norm condition 교집합으로 계산된 현재 실시구간.
+- admin_custom_test_source_dependency: projection이 관측한 원형 condition/scale/item dependency hash.
+- admin_custom_test_variant_scale_projection: projection별 available/selected/unavailable scale 상태.
 
-admin_custom_test_variant
-- id
-- component_id
-- sub_test_json
-- variant_label
-- variant_order
-
-admin_custom_test_variant_scale
-- variant_id
-- scale_code
-
-admin_custom_test_session
-- id
-- custom_test_id
-- session_index
-- title
-- description
-
-admin_custom_test_session_component
-- session_id
-- component_id
-- display_order
-
-admin_custom_test_profile_field
-- id
-- custom_test_id
-- field_key
-- label
-- input_type
-- required
-- options_json
-- display_order
+Snapshot:
+- submission_custom_test_snapshot: 제출 당시 custom test 구성과 dependency hash snapshot.
 ```
+
+#### Dependency Rule
+
+`sub_test_json`, `available_scale_codes`, variant별 `selected_scale_codes`는 원형 검사 condition에서 계산된 결과다. 따라서 source of truth로 영구 저장하지 않고 projection으로 관리한다.
+
+```text
+관리자가 직접 선택한 의도 = 저장
+원형 검사 condition에서 계산 가능한 결과 = projection/recompute
+제출 당시 의미 = snapshot
+```
+
+원형 `itemcondition`, `scalecondition`, `normcondition`, `scale`, `item`이 바뀌면 `admin_custom_test_source_dependency.dependency_hash`를 비교해 stale projection을 찾고 재계산한다. 이미 제출된 결과는 `submission_custom_test_snapshot`을 기준으로 보존한다.
 
 ### TODO
 
-- [ ] active `child_test` 8건의 JSON 구조를 표본으로 분해 규칙 작성
+- [ ] active `child_test` 8건의 JSON 구조를 표본으로 source/selection/session/profile backfill 규칙 작성
 - [ ] deleted `child_test` 32건은 운영 이력 보존용으로만 backfill할지 결정
-- [ ] `selected_scales_json`에서 variant와 scale을 추출하는 idempotent backfill 함수 설계
-- [ ] `session_configs_json`에서 session/component 관계를 추출하는 규칙 설계
+- [ ] `selected_scales_json`에서 관리자 scale selection만 추출하는 idempotent backfill 함수 설계
+- [ ] 원형 condition hash 산출 규칙과 stale projection 판정 기준 설계
+- [ ] `session_configs_json`에서 session/source 관계를 추출하는 규칙 설계
 - [ ] 기존 `/api/admin/custom-tests` 응답과 새 구조 조립 응답을 비교하는 shadow check 작성
 - [ ] 수검자 `/api/assessment-links/{access_token}` payload 조립 성능 측정
 
 ### Trade-Off
 
 - 조회 조인이 증가한다.
-- 대신 검사 구성 변경, 검증, 검색, backfill, 마이그레이션이 SQL row 단위로 가능해진다.
-- 수검 시작 payload는 read model이나 repository 조립으로 완충한다.
+- 대신 관리자 선택 의도와 원형 검사 condition 파생값을 분리할 수 있다.
+- 원형 condition 변경은 현재 projection에 반영하고, 제출 당시 의미는 snapshot으로 보존한다.
+- 수검 시작 payload는 projection table 또는 repository 조립으로 완충한다.
 
 ## P1. Pre-Registered Profile Match Field Structure
 
