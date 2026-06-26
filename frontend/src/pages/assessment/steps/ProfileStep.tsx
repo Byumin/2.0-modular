@@ -563,7 +563,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h2 className="text-3xl font-bold tracking-tight text-[#161d1b]">검사 실시하기</h2>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">인적사항 입력을 완료하면 검사 문항이 시작됩니다.</p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">인적사항 입력을 완료하면 검사가 시작됩니다.</p>
                 </div>
                 <span className="w-fit rounded-full border border-[#d8e3df] bg-white px-3 py-1 text-[11px] font-semibold text-[#175e63]">실시 가능</span>
               </div>
