@@ -844,7 +844,7 @@ export function QuestionStep({
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-[#161d1b]">{testName}</p>
-              {userSummary && <p className="text-[11px] text-[#8a9a96]">{userSummary} · {activePart?.title}</p>}
+              {userSummary && <p className="text-[11px] text-[#8a9a96]">{userSummary}</p>}
             </div>
           </div>
 
