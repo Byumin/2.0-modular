@@ -47,11 +47,16 @@ export interface AdditionalProfileField {
   options: string[]
 }
 
+export interface ProfileFieldOption {
+  value: string
+  label: string
+}
+
 export interface TestProfileFieldConfig {
   label?: string
   required?: boolean
   type?: 'text' | 'radio' | 'select' | 'long_text' | 'number' | 'date' | 'phone' | 'phon' | 'phon_num_input' | 'email'
-  options?: string[]
+  options?: Array<string | ProfileFieldOption>
 }
 
 export interface TestProfileSection {
@@ -68,6 +73,15 @@ export interface TestProfileConfig {
   optional_fields?: Record<string, TestProfileFieldConfig>
 }
 
+export interface TestTypeSelectionConfig {
+  enabled?: boolean
+  field_key?: string
+  heading?: string
+  description?: string
+  default_value?: string
+  options: string[]
+}
+
 export interface InitialPayload {
   custom_test_name: string
   display_name?: string
@@ -78,11 +92,12 @@ export interface InitialPayload {
   allow_unanswered_submission?: boolean
   show_report_result?: boolean
   required_profile_fields: string[]
-  profile_field_options?: Record<string, string[]>
+  profile_field_options?: Record<string, Array<string | ProfileFieldOption>>
   additional_profile_fields: Array<AdditionalProfileField | string>
   sub_test_json?: string
   access_token: string
   profile_config?: TestProfileConfig
+  test_type_selection?: TestTypeSelectionConfig | null
 }
 
 export interface AssessmentPayload {
@@ -104,7 +119,7 @@ export interface Profile {
 
 export type AnswerState = Record<string, string>
 
-export type AssessmentStep = 'consent' | 'profile' | 'intro' | 'question' | 'complete'
+export type AssessmentStep = 'consent' | 'test_type' | 'profile' | 'intro' | 'question' | 'complete'
 
 export interface AssessmentDraft {
   client_id: number

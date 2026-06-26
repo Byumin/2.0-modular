@@ -41,6 +41,7 @@ def validate_profile(
         selected_client_id=payload.client_id,
         responder_choice=payload.responder_choice,
         allow_retake=payload.allow_retake,
+        selected_test_type=payload.selected_test_type,
     )
 
 

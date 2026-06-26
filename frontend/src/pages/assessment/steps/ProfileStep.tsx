@@ -1,7 +1,7 @@
 import * as React from "react"
 import { ResearchNotice } from "../components/ResearchNotice"
 import { SafeMarkdown } from "../components/SafeMarkdown"
-import type { InitialPayload, AdditionalProfileField, Profile, TestProfileSection } from "../types"
+import type { InitialPayload, AdditionalProfileField, Profile, ProfileFieldOption, TestProfileSection } from "../types"
 
 const INFORMANT_LABELS: Record<string, string> = {
   mother: "어머니",
@@ -33,6 +33,18 @@ const SCHOOL_AGE_OPTIONS = [
   "대학원 재학생",
   "대학원 졸업생",
 ]
+
+function normalizeSelectOptions(options: Array<string | ProfileFieldOption>) {
+  return options
+    .map((option) => {
+      if (typeof option === "string") return { value: option, label: option }
+      return {
+        value: String(option.value ?? "").trim(),
+        label: String(option.label ?? option.value ?? "").trim(),
+      }
+    })
+    .filter((option) => option.value && option.label)
+}
 
 const PRIVACY_CONTENT = `개인정보 수집 및 이용 동의
 
@@ -736,7 +748,11 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
 
                     // select: type=select 또는 school_age 기본 드롭다운
                     if (type === "select" || ((fieldName === "school_age" || fieldName === "school_age_range") && options.length === 0)) {
-                      const selectOpts = options.length > 0 ? options : SCHOOL_AGE_OPTIONS
+                      const selectOpts = normalizeSelectOptions(
+                        options.length > 0
+                          ? options
+                          : SCHOOL_AGE_OPTIONS.map((label, index) => ({ value: String(index), label }))
+                      )
                       return (
                         <div key={fieldName} className="flex flex-col gap-1.5">
                           <label className="text-sm font-medium">{label} {reqMark}</label>
@@ -744,7 +760,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                             onChange={(e) => setSectionValue(key, e.target.value)}
                             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30">
                             <option value="" disabled>{label} 선택</option>
-                            {selectOpts.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                            {selectOpts.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                           </select>
                         </div>
                       )
@@ -752,17 +768,18 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
 
                     // radio: type=radio with options
                     if (type === "radio" && options.length > 0) {
+                      const radioOpts = normalizeSelectOptions(options)
                       return (
                         <div key={fieldName} className="flex flex-col gap-1.5">
                           <span className="text-sm font-medium">{label} {reqMark}</span>
                           <div className="flex gap-2 flex-wrap" role="radiogroup">
-                            {options.map((opt) => (
-                              <label key={opt} className={`flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors
-                                ${sectionValues[key] === opt ? "border-[#175e63] bg-[#e8f3f1] text-[#175e63]" : "border-input bg-background hover:bg-accent"}`}>
-                                <input type="radio" name={`field_${key}`} value={opt}
-                                  checked={sectionValues[key] === opt}
-                                  onChange={() => setSectionValue(key, opt)} className="sr-only" />
-                                {INFORMANT_LABELS[opt] ?? opt}
+                            {radioOpts.map((opt) => (
+                              <label key={opt.value} className={`flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors
+                                ${sectionValues[key] === opt.value ? "border-[#175e63] bg-[#e8f3f1] text-[#175e63]" : "border-input bg-background hover:bg-accent"}`}>
+                                <input type="radio" name={`field_${key}`} value={opt.value}
+                                  checked={sectionValues[key] === opt.value}
+                                  onChange={() => setSectionValue(key, opt.value)} className="sr-only" />
+                                {INFORMANT_LABELS[opt.value] ?? opt.label}
                               </label>
                             ))}
                           </div>
@@ -830,6 +847,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                     {Object.entries(optFields).map(([key, cfg]) => {
                       const label = cfg.label ?? key
                       const options = cfg.options ?? []
+                      const normalizedOptions = normalizeSelectOptions(options)
 
                       if (cfg.type === "long_text") {
                         return (
@@ -846,19 +864,19 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                         )
                       }
 
-                      if (options.length > 0 && options.length <= 4) {
+                      if (normalizedOptions.length > 0 && normalizedOptions.length <= 4) {
                         return (
                           <div key={key} className="flex flex-col gap-1.5">
                             <span className="text-sm font-medium">{label}</span>
                             <div className="flex gap-2 flex-wrap" role="radiogroup">
-                              {options.map((opt) => (
-                                <label key={opt} className={`flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors
-                                  ${sectionValues[key] === opt ? "border-[#175e63] bg-[#e8f3f1] text-[#175e63]" : "border-input bg-background hover:bg-accent"}`}>
-                                  <input type="radio" name={`opt_${key}`} value={opt}
-                                    checked={sectionValues[key] === opt}
-                                    onChange={() => setSectionValue(key, opt)}
+                              {normalizedOptions.map((opt) => (
+                                <label key={opt.value} className={`flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors
+                                  ${sectionValues[key] === opt.value ? "border-[#175e63] bg-[#e8f3f1] text-[#175e63]" : "border-input bg-background hover:bg-accent"}`}>
+                                  <input type="radio" name={`opt_${key}`} value={opt.value}
+                                    checked={sectionValues[key] === opt.value}
+                                    onChange={() => setSectionValue(key, opt.value)}
                                     className="sr-only" />
-                                  {opt}
+                                  {opt.label}
                                 </label>
                               ))}
                             </div>
@@ -866,7 +884,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                         )
                       }
 
-                      if (options.length > 4) {
+                      if (normalizedOptions.length > 4) {
                         return (
                           <div key={key} className="flex flex-col gap-1.5">
                             <label className="text-sm font-medium">{label}</label>
@@ -876,7 +894,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30"
                             >
                               <option value="">{label} 선택</option>
-                              {options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                              {normalizedOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                             </select>
                           </div>
                         )

@@ -29,6 +29,7 @@ class ValidateAssessmentProfileIn(BaseModel):
     client_id: int | None = None
     responder_choice: Literal["existing", "new"] | None = None
     allow_retake: bool = False
+    selected_test_type: str | None = Field(default=None, max_length=80)
 
 
 class RegisterAssessmentClientIn(BaseModel):

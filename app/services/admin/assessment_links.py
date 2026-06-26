@@ -1,4 +1,5 @@
 import json
+import hashlib
 import re
 import secrets
 from datetime import date, datetime
@@ -61,6 +62,59 @@ from app.services.admin.common import (
 _SECONDARY_ROLES = {"parent", "teacher", "classmate", "guardian"}
 NO_RESPONSE_ANSWER_VALUE = "NO_RESPONSE"
 _HTML_LINE_BREAK_RE = re.compile(r"\s*<br\s*/?>\s*", re.IGNORECASE)
+_SEAT_PCS_DEMO_TEST_TYPE_ACCESS_TOKEN_SHA256 = "906fa5955a5cab53f7e4c361000d4f4229750ad2abd279deb3f0e4aedca5234a"
+_SEAT_PCS_DEMO_TEST_TYPE_OPTIONS = ("표준형", "단축형")
+
+
+def _test_type_selection_for_access_token(access_token: str) -> dict[str, Any] | None:
+    token_hash = hashlib.sha256(str(access_token or "").encode("utf-8")).hexdigest()
+    if token_hash != _SEAT_PCS_DEMO_TEST_TYPE_ACCESS_TOKEN_SHA256:
+        return None
+    return {
+        "enabled": True,
+        "field_key": "test_type",
+        "heading": "검사 유형 선택하기",
+        "description": "다음 중 원하는 검사 실시 형태를 선택해 주세요.",
+        "default_value": _SEAT_PCS_DEMO_TEST_TYPE_OPTIONS[0],
+        "options": list(_SEAT_PCS_DEMO_TEST_TYPE_OPTIONS),
+    }
+
+
+def _normalize_selected_test_type(value: Any) -> str:
+    normalized = str(value or "").strip()
+    if normalized in _SEAT_PCS_DEMO_TEST_TYPE_OPTIONS:
+        return normalized
+    return ""
+
+
+def _without_profile_field(profile_config: Any, field_key: str) -> Any:
+    if not isinstance(profile_config, dict) or not field_key:
+        return profile_config
+    sanitized = dict(profile_config)
+    fields = sanitized.get("fields")
+    if isinstance(fields, dict) and field_key in fields:
+        sanitized["fields"] = {key: value for key, value in fields.items() if key != field_key}
+    optional_fields = sanitized.get("optional_fields")
+    if isinstance(optional_fields, dict) and field_key in optional_fields:
+        sanitized["optional_fields"] = {key: value for key, value in optional_fields.items() if key != field_key}
+    sections = sanitized.get("sections")
+    if isinstance(sections, list):
+        next_sections: list[Any] = []
+        for section in sections:
+            if not isinstance(section, dict):
+                next_sections.append(section)
+                continue
+            next_section = dict(section)
+            section_fields = next_section.get("fields")
+            if isinstance(section_fields, dict) and field_key in section_fields:
+                next_section["fields"] = {
+                    key: value
+                    for key, value in section_fields.items()
+                    if key != field_key
+                }
+            next_sections.append(next_section)
+        sanitized["sections"] = next_sections
+    return sanitized
 
 
 def _normalize_item_display_text(value: Any) -> str:
@@ -354,9 +408,21 @@ def _school_age_index(raw_value: Any) -> int | None:
         return None
 
 
-def _matches_school_age_condition(raw_value: Any, raw_condition: Any) -> bool:
+def _is_school_age_boundary_tuple(raw_value: Any) -> bool:
+    return (
+        isinstance(raw_value, list)
+        and len(raw_value) >= 3
+        and all(isinstance(item, int) for item in raw_value[:3])
+    )
+
+
+def _matches_school_age_condition(raw_value: Any, raw_condition: Any, *, condition_key: str = "") -> bool:
     value = str(raw_value or "").strip()
     value_index = _school_age_index(value)
+    if condition_key in {"school_age_range", "school_age_index_range"} and _is_school_age_boundary_tuple(raw_condition):
+        if value_index is None:
+            return False
+        return raw_condition[0] <= value_index < len(SCHOOL_AGE_LABELS)
     if isinstance(raw_condition, list) and raw_condition:
         for item in raw_condition:
             allowed_value = str(item or "").strip()
@@ -415,6 +481,7 @@ def _match_school_age_condition(
     return _matches_school_age_condition(
         _profile_value_for_condition(profile, condition_key, condition_profile_map, "school_age_range"),
         condition_value,
+        condition_key=condition_key,
     )
 
 
@@ -471,19 +538,17 @@ def _profile_matches_sub_test(
         if not _matches_age_range_condition(profile.get("birth_day"), profile.get("exam_date"), age_range):
             return False
 
-    school_raw = (
-        parsed.get("school_ages")
-        or parsed.get("school_age")
-        or parsed.get("school_grades")
-        or parsed.get("school_grade")
-        or parsed.get("grades")
-        or parsed.get("grade")
-        or parsed.get("school_age_range")
-    )
+    school_raw = None
+    school_key = ""
+    for key in ("school_ages", "school_age", "school_grades", "school_grade", "grades", "grade", "school_age_range"):
+        if key in parsed and parsed.get(key) not in (None, "", []):
+            school_key = key
+            school_raw = parsed.get(key)
+            break
     school_keys = {"school_ages", "school_age", "school_grades", "school_grade", "grades", "grade", "school_age_range"}
     if not handled_keys.intersection(school_keys):
         profile_school_age = str(profile.get("school_age_range") or profile.get("school_age", "")).strip()
-        if not _matches_school_age_condition(profile_school_age, school_raw):
+        if not _matches_school_age_condition(profile_school_age, school_raw, condition_key=school_key):
             return False
 
     return True
@@ -533,8 +598,48 @@ def _required_profile_fields_for_variants(test_configs: list[dict]) -> list[str]
                 required.append(key)
     return required
 
-def _collect_profile_field_options(test_configs: list[dict]) -> dict[str, list[str]]:
+def _school_age_boundary_index(raw_value: Any, fallback: int) -> int:
+    if isinstance(raw_value, list) and raw_value and isinstance(raw_value[0], int):
+        return raw_value[0]
+    if isinstance(raw_value, int):
+        return raw_value
+    try:
+        return int(str(raw_value).strip())
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _school_age_option_entries_from_condition(raw_condition: Any, *, condition_key: str = "") -> list[dict[str, str]]:
+    allowed_indexes: set[int] = set()
+    if condition_key in {"school_age_range", "school_age_index_range"} and _is_school_age_boundary_tuple(raw_condition):
+        start = max(0, min(raw_condition[0], len(SCHOOL_AGE_LABELS)))
+        allowed_indexes.update(range(start, len(SCHOOL_AGE_LABELS)))
+    elif isinstance(raw_condition, dict) and raw_condition:
+        start = _school_age_boundary_index(raw_condition.get("start_inclusive"), 0)
+        end = _school_age_boundary_index(raw_condition.get("end_exclusive"), len(SCHOOL_AGE_LABELS))
+        start = max(0, min(start, len(SCHOOL_AGE_LABELS)))
+        end = max(start, min(end, len(SCHOOL_AGE_LABELS)))
+        allowed_indexes.update(range(start, end))
+    elif isinstance(raw_condition, list):
+        for item in raw_condition:
+            index = _school_age_index(item)
+            if index is not None:
+                allowed_indexes.add(index)
+    else:
+        index = _school_age_index(raw_condition)
+        if index is not None:
+            allowed_indexes.add(index)
+
+    return [
+        {"value": str(index), "label": SCHOOL_AGE_LABELS[index]}
+        for index in sorted(allowed_indexes)
+        if 0 <= index < len(SCHOOL_AGE_LABELS)
+    ]
+
+
+def _collect_profile_field_options(test_configs: list[dict]) -> dict[str, list[Any]]:
     informant_options: set[str] = set()
+    school_age_options_by_value: dict[str, dict[str, str]] = {}
     for variant in flatten_custom_test_variant_configs(test_configs):
         try:
             parsed = json.loads(variant["sub_test_json"] or "{}")
@@ -543,9 +648,23 @@ def _collect_profile_field_options(test_configs: list[dict]) -> dict[str, list[s
         informants = parsed.get("informant")
         if isinstance(informants, list):
             informant_options.update(str(x) for x in informants if x)
-    result: dict[str, list[str]] = {}
+        school_raw = None
+        school_key = ""
+        for key in ("school_ages", "school_age", "school_grades", "school_grade", "grades", "grade", "school_age_range"):
+            if key in parsed and parsed.get(key) not in (None, "", []):
+                school_key = key
+                school_raw = parsed.get(key)
+                break
+        for option in _school_age_option_entries_from_condition(school_raw, condition_key=school_key):
+            school_age_options_by_value[option["value"]] = option
+    result: dict[str, list[Any]] = {}
     if informant_options:
         result["informant"] = sorted(informant_options)
+    if school_age_options_by_value:
+        result["school_age_range"] = [
+            school_age_options_by_value[value]
+            for value in sorted(school_age_options_by_value, key=lambda raw: int(raw))
+        ]
     return result
 
 # custom_test_row의 test_configs에서 profile과 일치하는 검사 구간을 찾아서,
@@ -1042,6 +1161,7 @@ def build_custom_assessment_question_payload(
     custom_test_row: AdminCustomTest,
     profile: dict[str, Any],
     db: Session | None = None,
+    selected_test_type: str | None = None,
 ) -> dict:
     test_configs = (
         load_custom_test_configs_from_restructure(db, custom_test_id=custom_test_row.id)
@@ -1062,7 +1182,11 @@ def build_custom_assessment_question_payload(
         additional_profile_fields_override=additional_profile_fields or None,
     )
     condition_profile_maps = _load_condition_profile_maps(db, base_payload.get("test_ids") or []) if db is not None else {}
-    resolved_variants = _resolve_active_variants(test_configs, profile or {}, condition_profile_maps)
+    match_profile = dict(profile or {})
+    normalized_test_type = _normalize_selected_test_type(selected_test_type)
+    if normalized_test_type:
+        match_profile["test_type"] = normalized_test_type
+    resolved_variants = _resolve_active_variants(test_configs, match_profile, condition_profile_maps)
     session_configs = (
         load_custom_test_sessions_from_restructure(db, custom_test_id=custom_test_row.id)
         if db is not None
@@ -1187,7 +1311,7 @@ def _derive_required_fields_for_test(test_id: str, test_configs: list[dict]) -> 
     return sorted(required)
 
 
-def _build_profile_section(cfg: dict, sub_test_required: set) -> dict:
+def _build_profile_section(cfg: dict, sub_test_required: set, profile_field_options: dict[str, list[Any]] | None = None) -> dict:
     section: dict = {"subject_type": cfg.get("subject_type", "self")}
     if cfg.get("section_hint"):
         section["section_hint"] = cfg["section_hint"]
@@ -1199,6 +1323,10 @@ def _build_profile_section(cfg: dict, sub_test_required: set) -> dict:
             fields[f] = {"required": True}
         else:
             fields[f].setdefault("required", True)
+    for field_key, options in (profile_field_options or {}).items():
+        if field_key in fields and options:
+            fields[field_key]["options"] = options
+            fields[field_key].setdefault("type", "select")
     if fields:
         section["fields"] = fields
     return section
@@ -1280,8 +1408,9 @@ def _load_test_profile_config(db: Session, test_ids: list[str], test_configs: li
             group_required[st].update(sub_test_required)
             group_required[st].update(_explicit_required(src_fields))
 
+    profile_field_options = _collect_profile_field_options(test_configs or [])
     sections = [
-        _build_profile_section(groups[st], group_required[st])
+        _build_profile_section(groups[st], group_required[st], profile_field_options)
         for st in seen
     ]
 
@@ -1318,6 +1447,10 @@ def get_custom_test_by_access_link(db: Session, access_token: str) -> dict:
     payload["allow_unanswered_submission"] = bool(getattr(link, "allow_unanswered_submission", False))
     payload["show_report_result"] = bool(getattr(link, "show_report_result", True))
     payload["profile_config"] = _load_test_profile_config(db, payload.get("test_ids") or [], test_configs)
+    test_type_selection = _test_type_selection_for_access_token(access_token)
+    if test_type_selection is not None:
+        payload["profile_config"] = _without_profile_field(payload.get("profile_config"), test_type_selection["field_key"])
+        payload["test_type_selection"] = test_type_selection
     return payload
 
 # access token으로 링크 조회, 내담자 매칭(단일/모호/없음) 처리 후 검사 문항 payload 반환
@@ -1328,6 +1461,7 @@ def validate_custom_test_profile_by_access_link(
     selected_client_id: int | None = None,
     responder_choice: str | None = None,
     allow_retake: bool = False,
+    selected_test_type: str | None = None,
 ) -> dict:
     profile = _resolve_subject_profile(profile)
 
@@ -1343,7 +1477,17 @@ def validate_custom_test_profile_by_access_link(
     if custom_test is None:
         raise HTTPException(status_code=404, detail="검사를 찾을 수 없습니다.")
 
-    assessment_payload = build_custom_assessment_question_payload(custom_test, profile or {}, db=db)
+    scoped_selected_test_type = (
+        selected_test_type
+        if _test_type_selection_for_access_token(access_token) is not None
+        else None
+    )
+    assessment_payload = build_custom_assessment_question_payload(
+        custom_test,
+        profile or {},
+        db=db,
+        selected_test_type=scoped_selected_test_type,
+    )
     client_intake_mode = normalize_client_intake_mode(getattr(custom_test, "client_intake_mode", ""))
 
     is_ambiguous_match = False

@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useParams } from "react-router-dom"
 import { ProfileStep } from "./steps/ProfileStep"
+import { TestTypeStep } from "./steps/TestTypeStep"
 import { IntroStep } from "./steps/IntroStep"
 import { QuestionStep } from "./steps/QuestionStep"
 import { CompleteStep } from "./steps/CompleteStep"
@@ -158,6 +159,11 @@ function profileSummary(profile: Profile) {
   return entries.filter(Boolean).join(" / ") || "입력 정보 없음"
 }
 
+function shouldShowTestTypeStep(payload: InitialPayload | null): boolean {
+  const config = payload?.test_type_selection
+  return Boolean(config?.enabled && Array.isArray(config.options) && config.options.length >= 2)
+}
+
 export function AssessmentPage() {
   const { accessToken } = useParams()
   const token = accessToken ?? ""
@@ -169,6 +175,7 @@ export function AssessmentPage() {
   const [sessionAnswers, setSessionAnswers] = React.useState<AnswerState>({})
   const sessionAnswersRef = React.useRef<AnswerState>({})
   const [activeProfile, setActiveProfile] = React.useState<Profile | null>(null)
+  const [selectedTestType, setSelectedTestType] = React.useState<string | null>(null)
   const [step, setStep] = React.useState<AssessmentStep>("profile")
   const [visibleStep, setVisibleStep] = React.useState<AssessmentStep>("profile")
   const [stepTransitionState, setStepTransitionState] = React.useState<"idle" | "out" | "in">("idle")
@@ -253,9 +260,11 @@ export function AssessmentPage() {
         return
       }
 
+      let shouldStayComplete = false
       try {
         if (sessionStorage.getItem(completionStorageKey(token)) === "1") {
           setStep("complete")
+          shouldStayComplete = true
         } else {
           const storedSubmission = readCompletedSubmission(token)
             if (storedSubmission !== null) {
@@ -263,6 +272,7 @@ export function AssessmentPage() {
               setCompletedReportAccessToken(storedSubmission.accessToken)
               setCompletedShowReportResult(storedSubmission.showReportResult)
               setStep("complete")
+              shouldStayComplete = true
             }
         }
       } catch {
@@ -281,6 +291,11 @@ export function AssessmentPage() {
         ])
         if (!mounted) return
         setInitialPayload(payload)
+        if (!shouldStayComplete && shouldShowTestTypeStep(payload)) {
+          const defaultValue = payload.test_type_selection?.default_value || payload.test_type_selection?.options[0] || null
+          setSelectedTestType(defaultValue)
+          setStep("test_type")
+        }
         setConsentInfo(consent)
       } catch (err) {
         if (!mounted) return
@@ -328,6 +343,7 @@ export function AssessmentPage() {
             client_id: client_id ?? null,
             responder_choice: responder_choice ?? null,
             allow_retake,
+            selected_test_type: selectedTestType,
           }),
         }
       )
@@ -597,6 +613,10 @@ export function AssessmentPage() {
       label: "개인정보동의",
       helper: "개인정보 수집·이용 동의 여부를 선택해주세요.",
     },
+    test_type: {
+      label: "검사 유형",
+      helper: "검사 시작 전 진행할 유형을 선택합니다.",
+    },
     profile: {
       label: "인적사항",
       helper: "검사 대상 확인과 결과 연결에 필요한 정보를 입력합니다.",
@@ -616,11 +636,14 @@ export function AssessmentPage() {
   }
   const activeStep = visibleStep
   const shellWidthClass =
-    activeStep === "profile" ? "w-full max-w-none"
+    activeStep === "test_type" ? "w-full max-w-none"
+    : activeStep === "profile" ? "w-full max-w-none"
     : activeStep === "question" ? "w-full"
     : activeStep === "intro" ? "w-full max-w-none"
     : "w-full max-w-5xl"
-  const progressSteps: Exclude<AssessmentStep, "consent">[] = ["profile", "intro", "question", "complete"]
+  const progressSteps: Exclude<AssessmentStep, "consent">[] = shouldShowTestTypeStep(initialPayload)
+    ? ["test_type", "profile", "intro", "question", "complete"]
+    : ["profile", "intro", "question", "complete"]
   const currentStepIndex = progressSteps.findIndex((itemStep) => itemStep === activeStep)
   const stepForProgress: AssessmentStep = activeStep
   const stepTransitionClass =
@@ -667,13 +690,14 @@ export function AssessmentPage() {
 
   return (
     <main className={
-      activeStep === "profile" ? "min-h-screen bg-[#f4f6f5] transition-colors duration-300 ease-out"
+      activeStep === "test_type" ? "min-h-screen bg-[#f4f6f5] transition-colors duration-300 ease-out"
+      : activeStep === "profile" ? "min-h-screen bg-[#f4f6f5] transition-colors duration-300 ease-out"
       : activeStep === "question" ? "min-h-screen transition-colors duration-300 ease-out"
       : activeStep === "intro" ? "min-h-screen bg-[#eef2f4] transition-colors duration-300 ease-out"
       : "hero-tint min-h-screen bg-[#eef2f4] px-4 py-6 transition-colors duration-300 ease-out sm:py-8"
     }>
       <div className={`relative mx-auto flex ${shellWidthClass} flex-col gap-4`}>
-        {activeStep !== "profile" && activeStep !== "question" && activeStep !== "intro" && (
+        {activeStep !== "test_type" && activeStep !== "profile" && activeStep !== "question" && activeStep !== "intro" && (
           <header className="overflow-hidden rounded-xl border border-[#d8e3df] bg-white assessment-card">
             <div className="h-[3px] bg-[#175e63]" />
             <div className="flex flex-col gap-4 px-5 py-4 sm:px-6 sm:py-5 md:flex-row md:items-start md:justify-between">
@@ -725,6 +749,20 @@ export function AssessmentPage() {
         )}
 
         <div className={`assessment-step-frame ${stepTransitionClass}`} data-assessment-step={activeStep}>
+          {activeStep === "test_type" && initialPayload && initialPayload.test_type_selection && (
+            <TestTypeStep
+              testName={initialPayload.custom_test_name || initialPayload.display_name || "검사"}
+              heading={initialPayload.test_type_selection.heading}
+              description={initialPayload.test_type_selection.description}
+              options={initialPayload.test_type_selection.options}
+              value={selectedTestType}
+              onNext={(value) => {
+                setSelectedTestType(value)
+                setStep("profile")
+              }}
+            />
+          )}
+
           {activeStep === "profile" && initialPayload && (
             <ProfileStep
               payload={initialPayload}
