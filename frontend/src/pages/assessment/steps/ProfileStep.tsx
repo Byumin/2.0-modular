@@ -1,13 +1,8 @@
 import * as React from "react"
+import { INFORMANT_LABELS, informantOrderIndex } from "@/lib/profileOptions"
 import { ResearchNotice } from "../components/ResearchNotice"
 import { SafeMarkdown } from "../components/SafeMarkdown"
 import type { InitialPayload, AdditionalProfileField, Profile, ProfileFieldOption, TestProfileSection } from "../types"
-
-const INFORMANT_LABELS: Record<string, string> = {
-  mother: "어머니",
-  father: "아버지",
-  etc: "기타",
-}
 
 const SCHOOL_AGE_OPTIONS = [
   "미취학",
@@ -44,6 +39,14 @@ function normalizeSelectOptions(options: Array<string | ProfileFieldOption>) {
       }
     })
     .filter((option) => option.value && option.label)
+}
+
+function sortProfileOptions(fieldName: string, options: Array<{ value: string; label: string }>) {
+  if (fieldName !== "informant") return options
+  return [...options].sort((a, b) => {
+    const orderDiff = informantOrderIndex(a.value) - informantOrderIndex(b.value)
+    return orderDiff || a.label.localeCompare(b.label, "ko")
+  })
 }
 
 const PRIVACY_CONTENT = `개인정보 수집 및 이용 동의
@@ -753,6 +756,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                           ? options
                           : SCHOOL_AGE_OPTIONS.map((label, index) => ({ value: String(index), label }))
                       )
+                      const sortedSelectOpts = sortProfileOptions(fieldName, selectOpts)
                       return (
                         <div key={fieldName} className="flex flex-col gap-1.5">
                           <label className="text-sm font-medium">{label} {reqMark}</label>
@@ -760,7 +764,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
                             onChange={(e) => setSectionValue(key, e.target.value)}
                             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175e63]/30">
                             <option value="" disabled>{label} 선택</option>
-                            {selectOpts.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            {sortedSelectOpts.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                           </select>
                         </div>
                       )
@@ -768,7 +772,7 @@ export function ProfileStep({ payload, onNext, loading, error, initialProfile, r
 
                     // radio: type=radio with options
                     if (type === "radio" && options.length > 0) {
-                      const radioOpts = normalizeSelectOptions(options)
+                      const radioOpts = sortProfileOptions(fieldName, normalizeSelectOptions(options))
                       return (
                         <div key={fieldName} className="flex flex-col gap-1.5">
                           <span className="text-sm font-medium">{label} {reqMark}</span>

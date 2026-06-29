@@ -51,6 +51,7 @@ from app.services.admin.common import (
     _normalize_item_map,
     _parse_response_options,
     flatten_custom_test_variant_configs,
+    informant_option_entries,
     load_custom_test_configs,
     load_custom_test_session_configs,
     normalize_client_intake_mode,
@@ -659,7 +660,7 @@ def _collect_profile_field_options(test_configs: list[dict]) -> dict[str, list[A
             school_age_options_by_value[option["value"]] = option
     result: dict[str, list[Any]] = {}
     if informant_options:
-        result["informant"] = sorted(informant_options)
+        result["informant"] = informant_option_entries(informant_options)
     if school_age_options_by_value:
         result["school_age_range"] = [
             school_age_options_by_value[value]

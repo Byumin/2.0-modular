@@ -288,14 +288,7 @@ export function QuestionStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [parts, answers]
   )
-  const partAllAnsweredSet = React.useMemo(
-    () => parts.map(p => (p.items ?? []).every(i => answered(i.id))),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [parts, answers]
-  )
-
   function allAnswered() { return allAnsweredValue }
-  function partAllAnswered(pi: number) { return partAllAnsweredSet[pi] ?? false }
 
   function missingItemsForState(state: AnswerState) {
     return flatItems
@@ -910,14 +903,9 @@ export function QuestionStep({
           <div className="flex flex-col gap-4">
             {/* Page indicator row */}
             <div className="flex items-center justify-between">
-              <div className="flex items-baseline gap-2">
-                <span className="text-sm font-semibold" style={{ color: "var(--sa)" }}>
-                  {activePart?.title || "파트"}
-                </span>
-                <span className="text-xs text-[#b0bab7]">
-                  페이지 {page + 1} / {totalPages}
-                </span>
-              </div>
+              <span className="text-sm font-semibold" style={{ color: "var(--sa)" }}>
+                페이지 {page + 1} / {totalPages}
+              </span>
               {/* Desktop hint */}
               <div className="hidden items-center gap-1.5 text-xs text-[#8a9a96] lg:flex">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5">
@@ -1124,28 +1112,6 @@ export function QuestionStep({
                   </div>
                 </div>
               </div>
-
-              {/* 파트 이동 (멀티파트만) */}
-              {parts.length > 1 && (
-                <div className="mt-3 border-t border-[#f0f2f5] pt-3">
-                  <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[#b0bab7]">파트 이동</p>
-                  <div className="flex flex-wrap gap-1">
-                    {parts.map((part, pi) => (
-                      <button key={pi} type="button"
-                        onClick={() => { setPartIndex(pi); setPage(0); setShowMissingHighlight(false) }}
-                        className={`rounded-md px-2 py-1 text-[10px] font-semibold transition-colors ${
-                          pi === partIndex ? "text-white"
-                          : partAllAnswered(pi) ? "bg-green-50 text-green-600"
-                          : "bg-[#f5f7fa] text-[#8a9a96] hover:bg-[#edf0ef]"
-                        }`}
-                        style={pi === partIndex ? { backgroundColor: "var(--sa)" } : undefined}
-                      >
-                        {part.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* 응답 방식 */}
               <div className="mt-3 border-t border-[#f0f2f5] pt-3">

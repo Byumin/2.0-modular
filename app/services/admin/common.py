@@ -44,6 +44,25 @@ SCHOOL_AGE_LABELS = [
     "대학원 졸업생",
 ]
 
+INFORMANT_OPTIONS = [
+    {"value": "mother", "label": "어머니"},
+    {"value": "father", "label": "아버지"},
+    {"value": "etc", "label": "기타"},
+]
+
+INFORMANT_LABELS = {option["value"]: option["label"] for option in INFORMANT_OPTIONS}
+INFORMANT_ORDER = [option["value"] for option in INFORMANT_OPTIONS]
+
+
+def informant_option_entries(raw_values: set[str] | list[str] | tuple[str, ...]) -> list[dict[str, str]]:
+    values = {str(value).strip() for value in raw_values if str(value).strip()}
+    ordered = [value for value in INFORMANT_ORDER if value in values]
+    ordered.extend(sorted(value for value in values if value not in INFORMANT_LABELS))
+    return [
+        {"value": value, "label": INFORMANT_LABELS.get(value, value)}
+        for value in ordered
+    ]
+
 
 def normalize_client_intake_mode(value: Any, default: str = "pre_registered_only") -> str:
     text = str(value or "").strip()

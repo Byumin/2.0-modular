@@ -18,6 +18,9 @@ import {
   type AssessmentStep,
   type InitialPayload,
   type Profile,
+  type ProfileFieldOption,
+  type TestProfileFieldConfig,
+  type TestProfileSection,
 } from "./types"
 
 interface ApiError extends Error {
@@ -148,15 +151,139 @@ function normalizeAssessmentSessions(payload: AssessmentPayload, parts: Assessme
   ]
 }
 
-function profileSummary(profile: Profile) {
-  const entries = [
-    profile.name && `이름: ${profile.name}`,
-    profile.gender &&
-      `성별: ${profile.gender === "male" ? "남" : profile.gender === "female" ? "여" : profile.gender}`,
-    profile.birth_day && `생년월일: ${profile.birth_day}`,
-    profile.school_age && `학령: ${profile.school_age}`,
-  ]
-  return entries.filter(Boolean).join(" / ") || "입력 정보 없음"
+const SUBJECT_HEADER_LABELS: Record<string, string> = {
+  self: "본인",
+  child: "아동",
+  parent: "보호자",
+  teacher: "교사",
+  classmate: "친구/동료",
+  guardian: "보호자",
+}
+
+const SCHOOL_AGE_LABELS = [
+  "미취학",
+  "초등 1학년",
+  "초등 2학년",
+  "초등 3학년",
+  "초등 4학년",
+  "초등 5학년",
+  "초등 6학년",
+  "초등학교 졸업생",
+  "중등 1학년",
+  "중등 2학년",
+  "중등 3학년",
+  "중학교 졸업생",
+  "고등 1학년",
+  "고등 2학년",
+  "고등 3학년",
+  "고등학교 졸업생",
+  "대학교 재학생",
+  "대학교 졸업생",
+  "대학원 재학생",
+  "대학원 졸업생",
+]
+
+function profileFieldKey(name: string, subjectType: string, isMixed: boolean): string {
+  if (!isMixed || name === "informant") return name
+  if (subjectType === "self" || (subjectType === "child" && name === "name")) return name
+  return `${subjectType}_${name}`
+}
+
+function profileSections(payload: InitialPayload | null): TestProfileSection[] {
+  const config = payload?.profile_config
+  if (!config) return [{ subject_type: "self", fields: {} }]
+  if (config.subject_type === "mixed" && Array.isArray(config.sections)) return config.sections
+  return [config as TestProfileSection]
+}
+
+function stringProfileValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean).join(", ")
+  return String(value ?? "").trim()
+}
+
+function optionLabel(options: Array<string | ProfileFieldOption> | undefined, value: string): string {
+  const normalized = value.trim()
+  if (!normalized) return ""
+  for (const option of options ?? []) {
+    if (typeof option === "string") {
+      if (option === normalized) return option
+      continue
+    }
+    if (String(option.value) === normalized) return String(option.label || option.value)
+  }
+  return normalized
+}
+
+function formatProfileSummaryValue(fieldName: string, fieldConfig: TestProfileFieldConfig | undefined, value: string): string {
+  if (!value) return ""
+  if (fieldName === "gender") {
+    if (value === "male") return "남"
+    if (value === "female") return "여"
+  }
+  if (fieldName === "school_age" || fieldName === "school_age_range") {
+    const fromOptions = optionLabel(fieldConfig?.options, value)
+    if (fromOptions !== value) return fromOptions
+    const index = Number(value)
+    if (Number.isInteger(index) && index >= 0 && index < SCHOOL_AGE_LABELS.length) return SCHOOL_AGE_LABELS[index]
+  }
+  return optionLabel(fieldConfig?.options, value)
+}
+
+function findSchoolSummary(profile: Profile, sections: TestProfileSection[], isMixed: boolean): string {
+  const candidates: Array<{ key: string; config?: TestProfileFieldConfig }> = []
+  for (const section of sections) {
+    for (const fieldName of ["school_age_range", "school_age"]) {
+      candidates.push({
+        key: profileFieldKey(fieldName, section.subject_type, isMixed),
+        config: section.fields?.[fieldName],
+      })
+    }
+  }
+  candidates.push(
+    { key: "school_age_range" },
+    { key: "school_age" },
+    { key: "child_school_age_range" },
+    { key: "child_school_age" },
+  )
+
+  const seen = new Set<string>()
+  for (const candidate of candidates) {
+    if (seen.has(candidate.key)) continue
+    seen.add(candidate.key)
+    const value = stringProfileValue(profile[candidate.key])
+    if (!value) continue
+    return `소속: ${formatProfileSummaryValue(candidate.key.includes("range") ? "school_age_range" : "school_age", candidate.config, value)}`
+  }
+  return ""
+}
+
+function profileSummary(profile: Profile, payload: InitialPayload | null) {
+  const sections = profileSections(payload)
+  const isMixed = sections.length > 1
+  const entries: string[] = []
+
+  if (isMixed) {
+    for (const section of sections) {
+      const value = stringProfileValue(profile[profileFieldKey("name", section.subject_type, true)])
+      if (!value) continue
+      const label = SUBJECT_HEADER_LABELS[section.subject_type] ?? section.subject_type
+      entries.push(`${label}: ${value}`)
+      if (entries.length >= 2) break
+    }
+    const school = findSchoolSummary(profile, sections, true)
+    if (school) entries.push(school)
+  } else {
+    const section = sections[0] ?? { subject_type: "self", fields: {} }
+    const name = stringProfileValue(profile.name)
+    if (name) entries.push(`이름: ${name}`)
+    const gender = stringProfileValue(profile.gender)
+    if (gender) entries.push(`성별: ${formatProfileSummaryValue("gender", section.fields?.gender, gender)}`)
+    const school = findSchoolSummary(profile, sections, false)
+    if (school) entries.push(school)
+  }
+
+  if (!entries.length) return "입력 정보 없음"
+  return entries.slice(0, 3).join(" / ")
 }
 
 function shouldShowTestTypeStep(payload: InitialPayload | null): boolean {
@@ -803,7 +930,7 @@ export function AssessmentPage() {
               submitting={submitting}
               error={error}
               testName={activeSession?.title ? `${title} · ${activeSession.title}` : title}
-              userSummary={profileSummary(activeProfile)}
+              userSummary={profileSummary(activeProfile, initialPayload)}
               saveStatusText={draftStatusText}
               submitLabel={activeSessionIndex < sessions.length - 1 ? "다음 세션 안내" : "제출하기"}
               submittingLabel={activeSessionIndex < sessions.length - 1 ? "이동 중..." : "제출 중..."}

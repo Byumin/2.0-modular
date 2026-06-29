@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { INFORMANT_LABELS } from "@/lib/profileOptions"
 
 interface CustomTest {
   id: number
@@ -178,18 +179,12 @@ function isOptionType(type: FieldType) {
   return type === "select" || type === "multi_select"
 }
 
-const INFORMANT_LABEL: Record<string, string> = {
-  mother: "어머니",
-  father: "아버지",
-  etc: "기타",
-}
-
 function informantSuffix(subTestJson: string): string {
   try {
     const parsed = JSON.parse(subTestJson)
     const informants: string[] = parsed?.informant ?? []
     if (informants.length === 0) return ""
-    const labels = informants.map((v) => INFORMANT_LABEL[v] ?? v)
+    const labels = informants.map((v) => INFORMANT_LABELS[v] ?? v)
     return ` (관찰자: ${labels.join("·")})`
   } catch {
     return ""
